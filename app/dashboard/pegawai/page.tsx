@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, UserRoundPlus, Eye, Pencil, UserRoundX } from "lucide-react";
+import { UserRoundPlus, Eye, Pencil, UserRoundX } from "lucide-react";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
@@ -9,6 +9,7 @@ import { use_mutation } from "@/lib/api/use_mutation";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/input";
+import { DataTable } from "@/components/table/DataTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { readSession, SESSION_COOKIE } from "@/lib/auth";
 
@@ -130,52 +131,7 @@ export default function PegawaiPage() {
         )}
       </header>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Daftar pegawai</CardTitle>
-        </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <label className="relative min-w-56 flex-1">
-              <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                aria-label="Cari pegawai"
-                placeholder="Cari nama atau NIP/NIK"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </label>
-            <select
-              aria-label="Tipe pegawai"
-              className="h-10 rounded-md border bg-background px-3 text-sm"
-              value={tipe}
-              onChange={(e) => {
-                setTipe(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">Semua tipe</option>
-              {["PNS", "ASN", "OUTSOURCING", "TA"].map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-            <select
-              aria-label="Status pegawai"
-              className="h-10 rounded-md border bg-background px-3 text-sm"
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">Semua status</option>
-              <option>AKTIF</option>
-              <option>NONAKTIF</option>
-            </select>
-          </div>
           {list.isLoading ? (
             <p role="status" className="py-8 text-center text-sm text-muted-foreground">
               Memuat data pegawai…
@@ -185,77 +141,67 @@ export default function PegawaiPage() {
               Data gagal dimuat. Periksa koneksi API.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    {["NIP/NIK", "Nama", "Tipe", "Jabatan", "Unit kerja", "Status", "Aksi"].map((x) => (
-                      <th key={x} className="px-3 py-3 font-medium">
-                        {x}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r: any) => (
-                    <tr key={r.id} className="border-b last:border-0">
-                      <td className="px-3 py-3">{r.nip_nik ?? "—"}</td>
-                      <td className="px-3 py-3 font-medium">{r.nama}</td>
-                      <td className="px-3 py-3">{r.tipe_pegawai}</td>
-                      <td className="px-3 py-3">{r.jabatan ?? "—"}</td>
-                      <td className="px-3 py-3">{r.nama_unit_kerja ?? "—"}</td>
-                      <td className="px-3 py-3">{r.status_aktif}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" aria-label={`Detail ${r.nama}`} onClick={() => setSelected(r)}>
-                            <Eye className="size-4" />
+            <DataTable
+              columns={[
+                { key: "nip_nik", header: "NIP/NIK", render: (r: any) => r.nip_nik ?? "—" },
+                { key: "nama", header: "Nama", render: (r: any) => <span className="font-medium">{r.nama}</span> },
+                { key: "tipe_pegawai", header: "Tipe", render: (r: any) => r.tipe_pegawai },
+                { key: "jabatan", header: "Jabatan", render: (r: any) => r.jabatan ?? "—" },
+                { key: "nama_unit_kerja", header: "Unit kerja", render: (r: any) => r.nama_unit_kerja ?? "—" },
+                { key: "status_aktif", header: "Status", render: (r: any) => r.status_aktif },
+                {
+                  key: "actions",
+                  header: "Aksi",
+                  filterable: false,
+                  render: (r: any) => (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" aria-label={`Detail ${r.nama}`} onClick={() => setSelected(r)}>
+                        <Eye className="size-4" />
+                      </Button>
+                      {canEdit && (
+                        <>
+                          <Button variant="ghost" size="icon" aria-label={`Edit ${r.nama}`} onClick={() => openEdit(r)}>
+                            <Pencil className="size-4" />
                           </Button>
-                          {canEdit && (
-                            <>
-                              <Button variant="ghost" size="icon" aria-label={`Edit ${r.nama}`} onClick={() => openEdit(r)}>
-                                <Pencil className="size-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Nonaktifkan ${r.nama}`}
-                                onClick={() => {
-                                  if (confirm(`Nonaktifkan ${r.nama}?`)) deactivate.mutate(String(r.id));
-                                }}
-                              >
-                                <UserRoundX className="size-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {!rows.length && (
-                    <tr>
-                      <td colSpan={7} className="py-10 text-center text-muted-foreground">
-                        Tidak ada data pegawai.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Nonaktifkan ${r.nama}`}
+                            onClick={() => {
+                              if (confirm(`Nonaktifkan ${r.nama}?`)) deactivate.mutate(String(r.id));
+                            }}
+                          >
+                            <UserRoundX className="size-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+              rows={rows}
+              rowKey={(r: any) => r.id}
+              searchValue={search}
+              searchPlaceholder="Cari nama atau NIP/NIK"
+              onSearchChange={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
+              filters={[
+                { field: "tipe_pegawai", label: "Tipe pegawai", options: ["PNS", "ASN", "OUTSOURCING", "TA"].map((value) => ({ label: value, value })) },
+                { field: "status_aktif", label: "Status pegawai", options: ["AKTIF", "NONAKTIF"].map((value) => ({ label: value, value })) },
+              ]}
+              filterValues={{ tipe_pegawai: tipe || "__all", status_aktif: status || "__all" }}
+              onFilterChange={(field, value) => {
+                if (field === "tipe_pegawai") setTipe(value === "__all" ? "" : value);
+                if (field === "status_aktif") setStatus(value === "__all" ? "" : value);
+                setPage(1);
+              }}
+              remoteSearch
+              pagination={{ page, pageSize: 10, total: pagination.total_datas ?? rows.length, totalPages: pagination.total_pages ?? 1, onPageChange: setPage, onPageSizeChange: () => undefined }}
+              emptyMessage="Tidak ada data pegawai."
+            />
           )}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Total {pagination.total_datas ?? rows.length} pegawai</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Sebelumnya
-              </Button>
-              <span className="px-2 py-2">
-                Halaman {page} dari {pagination.total_pages ?? 1}
-              </span>
-              <Button variant="outline" size="sm" disabled={page >= (pagination.total_pages ?? 1)} onClick={() => setPage((p) => p + 1)}>
-                Berikutnya
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
       {formOpen && (

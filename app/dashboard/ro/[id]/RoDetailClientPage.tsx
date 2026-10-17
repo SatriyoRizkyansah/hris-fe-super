@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -228,13 +229,13 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   const balance = Number(ro.sisa_saldo ?? totalPlafon - totalUsed);
   const percent = totalPlafon ? Math.min(100, (totalUsed / totalPlafon) * 100) : 0;
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="hris-page space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
         <div>
           <Button variant="ghost" size="sm" className="mb-2" render={<Link href="/dashboard/ro" />}>
             <ArrowLeft size={16} /> Semua RO
           </Button>
-          <h1 className="text-2xl font-semibold">{ro.nama_ro}</h1>
+          <h1 className="text-2xl font-bold">{ro.nama_ro}</h1>
           <p className="text-sm text-muted-foreground">
             {String(ro.kode_mak ?? ro.kode_ro)} · Tahun {ro.tahun_fiscal} · {String(ro.nama_proyek ?? "—")}
           </p>
@@ -247,7 +248,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
             </Button>
           )}
         </div>
-      </div>
+      </header>
       {incomplete.length > 0 && (
         <Alert>
           <AlertTitle>Data RO belum lengkap</AlertTitle>
@@ -260,23 +261,23 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         </Alert>
       )}
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border p-4">
+        <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
           <p className="text-xs text-muted-foreground">Plafon Awal</p>
           <p className="mt-1 text-lg font-semibold">{formatRupiah(totalPlafon)}</p>
         </div>
-        <div className="rounded-xl border p-4">
-          <p className="text-xs text-muted-foreground">Total Pengeluaran</p>
+        <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Pengeluaran</p>
           <p className="mt-1 text-lg font-semibold text-destructive">{formatRupiah(totalUsed)}</p>
           <div className="mt-2 h-2 overflow-hidden rounded bg-muted">
             <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
           </div>
         </div>
-        <div className="rounded-xl border p-4">
-          <p className="text-xs text-muted-foreground">Sisa Saldo</p>
+        <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sisa Saldo</p>
           <p className="mt-1 text-lg font-semibold">{formatRupiah(balance)}</p>
         </div>
       </div>
-      <section className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-3">
+      <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-3">
         <p>
           <span className="block text-xs text-muted-foreground">Unit Koordinator</span>
           {String(ro.nama_unit_koordinator ?? "—")}
@@ -291,29 +292,31 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         </p>
       </section>
       {canManage && (
-        <section className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-medium">
-            Dokumen RAB (PDF/XLS/XLSX)
-            <Input type="file" accept=".pdf,.xls,.xlsx" onChange={(event) => setRabFile(event.target.files?.[0] ?? null)} />
-          </label>
-          <div className="flex items-end">
-            <Button disabled={!rabFile || uploadKind !== null} onClick={() => upload("rab")}>
-              {uploadKind === "rab" && <LoaderCircle size={16} className="animate-spin" />} <Upload size={16} /> Upload RAB
-            </Button>
-          </div>
-          <label className="grid gap-1.5 text-sm font-medium">
-            Dokumen SK (PDF)
-            <Input type="file" accept=".pdf" onChange={(event) => setSkFile(event.target.files?.[0] ?? null)} />
-          </label>
-          <div className="flex items-end">
-            <Button disabled={!skFile || uploadKind !== null} onClick={() => upload("sk")}>
-              {uploadKind === "sk" && <LoaderCircle size={16} className="animate-spin" />} <Upload size={16} /> Upload SK
-            </Button>
-          </div>
+        <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-2">
+          <DocumentUploadField
+            label="Dokumen RAB"
+            accept=".pdf,.xls,.xlsx"
+            value={rabFile}
+            onChange={setRabFile}
+            onUpload={() => upload("rab")}
+            currentFile={typeof ro.file_rab === "string" ? ro.file_rab : null}
+            pending={uploadKind === "rab"}
+            disabled={uploadKind !== null && uploadKind !== "rab"}
+          />
+          <DocumentUploadField
+            label="Dokumen SK"
+            accept=".pdf"
+            value={skFile}
+            onChange={setSkFile}
+            onUpload={() => upload("sk")}
+            currentFile={typeof ro.file_sk === "string" ? ro.file_sk : null}
+            pending={uploadKind === "sk"}
+            disabled={uploadKind !== null && uploadKind !== "sk"}
+          />
         </section>
       )}
-      <section className="rounded-xl border bg-card">
-        <div className="flex items-center justify-between border-b">
+      <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+        <div className="flex items-center justify-between border-b bg-muted/40">
           <div className="flex">
             <button className={`px-4 py-3 text-sm font-medium ${tab === "ledger" ? "border-b-2 border-primary" : "text-muted-foreground"}`} onClick={() => setTab("ledger")}>
               Ledger ({ledgerRows.length})
@@ -328,7 +331,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
             </Button>
           )}
         </div>
-        <div className="overflow-x-auto p-4">
+        <div className="overflow-x-auto p-5">
           {tab === "ledger" ? (
             <table className="w-full min-w-[48rem] text-sm">
               <thead>
@@ -402,7 +405,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         </div>
       </section>
       {identity.role === "superadmin" && ro.status_ro === "AKTIF" && !ro.parent_ro_id && (
-        <section className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
           <p className="font-medium">SILPA</p>
           <p className="mt-1 text-sm text-muted-foreground">Tutup RO aktif dan buat RO tahun fiskal berikutnya pada proyek sama. Jumlah mengikuti aturan backend.</p>
           <Button className="mt-3" variant="outline" disabled={silpa.isPending} onClick={() => setConfirmSilpa(true)}>
@@ -527,6 +530,6 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </section>
   );
 }

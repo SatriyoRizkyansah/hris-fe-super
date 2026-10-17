@@ -5,6 +5,7 @@ import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
 import { DataTable } from "@/components/table";
+import { Card, CardContent } from "@/components/ui/card";
 
 type Props = {
   title: string;
@@ -56,43 +57,46 @@ export function HrisResourcePage({ title, description, group, method, searchPlac
         <h1 className="text-2xl font-bold">{title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </header>
-      {result.isLoading ? (
-        <p role="status" className="py-8 text-center text-sm text-muted-foreground">
-          Memuat {title.toLocaleLowerCase("id-ID")}…
-        </p>
-      ) : null}
-      {result.isError ? (
-        <p role="alert" className="py-8 text-center text-sm text-destructive">
-          Gagal memuat data. Periksa koneksi API dan hak akses.
-        </p>
-      ) : null}
-      {!result.isLoading && !result.isError ? (
-        <DataTable
-          title={title}
-          rows={rows}
-          columns={tableColumns}
-          rowKey={(row, index) => String(row.id ?? index)}
-          remoteSearch
-          searchValue={search}
-          searchPlaceholder={searchPlaceholder ?? `Cari ${title.toLocaleLowerCase("id-ID")}…`}
-          onSearchChange={(value) => {
-            setSearch(value);
-            setPage(1);
-          }}
-          emptyMessage={`Belum ada data ${title.toLocaleLowerCase("id-ID")}.`}
-          pagination={{
-            page,
-            pageSize,
-            total: meta.total_datas ?? rows.length,
-            totalPages: meta.total_pages ?? 1,
-            onPageChange: setPage,
-            onPageSizeChange: (size) => {
-              setPageSize(size);
-              setPage(1);
-            },
-          }}
-        />
-      ) : null}
+      <Card>
+        <CardContent className="pt-4">
+          {result.isLoading ? (
+            <p role="status" className="py-8 text-center text-sm text-muted-foreground">
+              Memuat {title.toLocaleLowerCase("id-ID")}…
+            </p>
+          ) : null}
+          {result.isError ? (
+            <p role="alert" className="py-8 text-center text-sm text-destructive">
+              Gagal memuat data. Periksa koneksi API dan hak akses.
+            </p>
+          ) : null}
+          {!result.isLoading && !result.isError ? (
+            <DataTable
+              rows={rows}
+              columns={tableColumns}
+              rowKey={(row, index) => String(row.id ?? index)}
+              remoteSearch
+              searchValue={search}
+              searchPlaceholder={searchPlaceholder ?? `Cari ${title.toLocaleLowerCase("id-ID")}…`}
+              onSearchChange={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
+              emptyMessage={`Belum ada data ${title.toLocaleLowerCase("id-ID")}.`}
+              pagination={{
+                page,
+                pageSize,
+                total: meta.total_datas ?? rows.length,
+                totalPages: meta.total_pages ?? 1,
+                onPageChange: setPage,
+                onPageSizeChange: (size) => {
+                  setPageSize(size);
+                  setPage(1);
+                },
+              }}
+            />
+          ) : null}
+        </CardContent>
+      </Card>
     </section>
   );
 }

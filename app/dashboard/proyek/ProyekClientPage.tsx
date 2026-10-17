@@ -5,9 +5,11 @@ import { useMemo, useState } from "react";
 import { Eye, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { DataTable } from "@/components/table/DataTable";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
@@ -156,11 +158,11 @@ export default function ProyekClientPage() {
 
   const years = Array.from({ length: 4 }, (_, index) => String(currentYear - index));
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <section className="hris-page space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Proyek</h1>
-          <p className="text-sm text-muted-foreground">Pengajuan proyek, RO awal, dan rencana termin.</p>
+          <h1 className="text-2xl font-bold">Proyek</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Pengajuan proyek, RO awal, dan rencana termin.</p>
         </div>
         {canCreate && (
           <Button
@@ -172,86 +174,89 @@ export default function ProyekClientPage() {
             <Plus size={16} /> Ajukan Proyek
           </Button>
         )}
-      </div>
-      {list.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Gagal memuat proyek</AlertTitle>
-          <AlertDescription>{apiErrorMessage(list.error)}</AlertDescription>
-        </Alert>
-      )}
-      <DataTable
-        columns={[
-          {
-            key: "kode",
-            header: "Kode / Proyek",
-            render: (row: ProyekItemDto) => (
-              <div>
-                <p className="font-medium">{row.kode_proyek}</p>
-                <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
-              </div>
-            ),
-          },
-          { key: "tahun", header: "Tahun", render: (row: ProyekItemDto) => row.tahun_fiscal },
-          {
-            key: "pengaju",
-            header: "Pengaju",
-            render: (row: ProyekItemDto) => (
-              <div className="text-sm">
-                {String(row.nama_pengaju ?? "—")}
-                <p className="text-xs text-muted-foreground">{String(row.nama_unit_pengaju ?? "")}</p>
-              </div>
-            ),
-          },
-          { key: "kontrak", header: "Nilai Kontrak", className: "text-right", render: (row: ProyekItemDto) => <span className="whitespace-nowrap">{formatRupiah(row.nilai_kontrak)}</span> },
-          {
-            key: "ro",
-            header: "RO",
-            render: (row: ProyekItemDto) => (
-              <span>
-                {row.jumlah_ro ?? 0} · {formatRupiah(row.total_plafon_ro)}
-              </span>
-            ),
-          },
-          { key: "status", header: "Status", render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{humanizeStatus(row.status_proyek)}</StatusBadge> },
-          {
-            key: "aksi",
-            header: "Aksi",
-            render: (row: ProyekItemDto) => (
-              <Button variant="ghost" size="sm" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
-                <Eye size={15} /> Detail
-              </Button>
-            ),
-          },
-        ]}
-        rows={projects}
-        rowKey={(row) => row.id}
-        title="Daftar Proyek"
-        searchValue={search}
-        onSearchChange={(value) => {
-          setSearch(value);
-          setPage(1);
-        }}
-        remoteSearch
-        rowsPerPageOptions={[10, 25, 50]}
-        filters={[{ field: "tahun", label: "Tahun Fiscal", options: [{ label: "Semua Tahun", value: "__all" }, ...years.map((value) => ({ label: value, value }))] }]}
-        filterValues={{ tahun }}
-        onFilterChange={(_, value) => {
-          setTahun(value);
-          setPage(1);
-        }}
-        pagination={{
-          page,
-          pageSize,
-          total: pagination?.total_datas ?? projects.length,
-          totalPages: pagination?.total_pages,
-          onPageChange: setPage,
-          onPageSizeChange: (value) => {
-            setPageSize(value);
-            setPage(1);
-          },
-        }}
-        emptyMessage={list.isLoading ? "Memuat proyek..." : "Belum ada proyek."}
-      />
+      </header>
+      <Card>
+        <CardContent className="pt-4">
+          {list.error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>Gagal memuat proyek</AlertTitle>
+              <AlertDescription>{apiErrorMessage(list.error)}</AlertDescription>
+            </Alert>
+          )}
+          <DataTable
+            columns={[
+              {
+                key: "kode",
+                header: "Kode / Proyek",
+                render: (row: ProyekItemDto) => (
+                  <div>
+                    <p className="font-medium">{row.kode_proyek}</p>
+                    <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
+                  </div>
+                ),
+              },
+              { key: "tahun", header: "Tahun", render: (row: ProyekItemDto) => row.tahun_fiscal },
+              {
+                key: "pengaju",
+                header: "Pengaju",
+                render: (row: ProyekItemDto) => (
+                  <div className="text-sm">
+                    {String(row.nama_pengaju ?? "—")}
+                    <p className="text-xs text-muted-foreground">{String(row.nama_unit_pengaju ?? "")}</p>
+                  </div>
+                ),
+              },
+              { key: "kontrak", header: "Nilai Kontrak", className: "text-right", render: (row: ProyekItemDto) => <span className="whitespace-nowrap">{formatRupiah(row.nilai_kontrak)}</span> },
+              {
+                key: "ro",
+                header: "RO",
+                render: (row: ProyekItemDto) => (
+                  <span>
+                    {row.jumlah_ro ?? 0} · {formatRupiah(row.total_plafon_ro)}
+                  </span>
+                ),
+              },
+              { key: "status", header: "Status", render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{humanizeStatus(row.status_proyek)}</StatusBadge> },
+              {
+                key: "aksi",
+                header: "Aksi",
+                render: (row: ProyekItemDto) => (
+                  <Button variant="ghost" size="sm" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
+                    <Eye size={15} /> Detail
+                  </Button>
+                ),
+              },
+            ]}
+            rows={projects}
+            rowKey={(row) => row.id}
+            searchValue={search}
+            onSearchChange={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
+            remoteSearch
+            rowsPerPageOptions={[10, 25, 50]}
+            filters={[{ field: "tahun", label: "Tahun Fiscal", options: [{ label: "Semua Tahun", value: "__all" }, ...years.map((value) => ({ label: value, value }))] }]}
+            filterValues={{ tahun }}
+            onFilterChange={(_, value) => {
+              setTahun(value);
+              setPage(1);
+            }}
+            pagination={{
+              page,
+              pageSize,
+              total: pagination?.total_datas ?? projects.length,
+              totalPages: pagination?.total_pages,
+              onPageChange: setPage,
+              onPageSizeChange: (value) => {
+                setPageSize(value);
+                setPage(1);
+              },
+            }}
+            emptyMessage={list.isLoading ? "Memuat proyek..." : "Belum ada proyek."}
+          />
+        </CardContent>
+      </Card>
       <Dialog
         open={open}
         onOpenChange={(value) => {
@@ -326,14 +331,8 @@ export default function ProyekClientPage() {
             <p className={termsTotal === 100 ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total termin: {termsTotal}% / 100%.</p>
           </section>
           <section className="grid gap-3 border-t pt-4 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-medium">
-              SK proyek (PDF)
-              <Input type="file" accept=".pdf" onChange={(event) => setSk(event.target.files?.[0] ?? null)} />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              RAB proyek (PDF/XLS/XLSX)
-              <Input type="file" accept=".pdf,.xls,.xlsx" onChange={(event) => setRab(event.target.files?.[0] ?? null)} />
-            </label>
+            <DocumentUploadField label="SK Proyek" accept=".pdf" value={sk} onChange={setSk} />
+            <DocumentUploadField label="RAB Proyek" accept=".pdf,.xls,.xlsx" value={rab} onChange={setRab} />
           </section>
           {formError && (
             <Alert variant="destructive">
@@ -350,6 +349,6 @@ export default function ProyekClientPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </section>
   );
 }

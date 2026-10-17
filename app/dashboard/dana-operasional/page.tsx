@@ -1,4 +1,5 @@
-import { HrisResourcePage } from "@/components/hris/HrisResourcePage";
+import DanaOperasionalClientPage from "./DanaOperasionalClientPage";
+
 export default function Page() {
-  return <HrisResourcePage title="Dana Operasional" description="Daftar dana operasional dan statusnya." group="masterDanaOperasional" method="danaOperasionalControllerGetData" />;
+  return <DanaOperasionalClientPage />;
 }

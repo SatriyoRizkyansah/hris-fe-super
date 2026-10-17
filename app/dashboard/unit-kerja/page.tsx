@@ -7,6 +7,7 @@ import { use_query } from "@/lib/api/use_query";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { Button } from "@/components/ui/Button";
+import { DataTable } from "@/components/table/DataTable";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -140,107 +141,80 @@ export default function UnitKerjaPage() {
         <CardContent>{treeQuery.isLoading ? <p role="status">Memuat struktur organisasi…</p> : tree ? <Tree node={tree} /> : <p className="text-sm text-muted-foreground">Belum ada data unit kerja.</p>}</CardContent>
       </Card>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Daftar Unit Kerja</CardTitle>
-        </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Input
-              className="min-w-56 flex-1"
-              aria-label="Cari unit kerja"
-              placeholder="Cari kode atau nama unit"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
-            <select
-              aria-label="Tipe unit"
-              className="h-10 rounded-md border bg-background px-3"
-              value={type}
-              onChange={(e) => {
-                setType(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">Semua tipe</option>
-              <option value="KOORDINATOR">Koordinator</option>
-              <option value="SUB_KOORDINATOR">Sub Koordinator</option>
-            </select>
-          </div>
           {list.isLoading ? (
             <p role="status">Memuat unit kerja…</p>
           ) : list.isError ? (
             <p role="alert">Gagal memuat unit kerja.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    {["Kode", "Nama Unit", "Tipe", "Kepala Unit", "Pegawai Aktif", "Status", "Aksi"].map((x) => (
-                      <th key={x} className="px-3 py-2">
-                        {x}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row: any) => (
-                    <tr key={row.id} className="border-b">
-                      <td className="px-3 py-3">{row.kode_unit}</td>
-                      <td className="px-3 py-3">
-                        <b>{row.nama_unit}</b>
-                        <p className="text-xs text-muted-foreground">{row.deskripsi}</p>
-                      </td>
-                      <td className="px-3 py-3">{row.tipe_unit}</td>
-                      <td className="px-3 py-3">{row.kepala_unit_nama ?? "—"}</td>
-                      <td className="px-3 py-3">{row.jumlah_pegawai_aktif ?? 0}</td>
-                      <td className="px-3 py-3">{row.status_aktif}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
-                            Ubah
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={remove.isPending}
-                            onClick={() => {
-                              if (confirm(`Nonaktifkan unit ${row.nama_unit}?`)) remove.mutate(String(row.id));
-                            }}
-                          >
-                            Nonaktifkan
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {!rows.length && (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                        Tidak ada data unit kerja.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={[
+                { key: "kode_unit", header: "Kode", render: (row: any) => row.kode_unit },
+                {
+                  key: "nama_unit",
+                  header: "Nama Unit",
+                  render: (row: any) => (
+                    <>
+                      <b>{row.nama_unit}</b>
+                      <p className="text-xs text-muted-foreground">{row.deskripsi}</p>
+                    </>
+                  ),
+                },
+                { key: "tipe_unit", header: "Tipe", render: (row: any) => row.tipe_unit },
+                { key: "kepala_unit_nama", header: "Kepala Unit", render: (row: any) => row.kepala_unit_nama ?? "—" },
+                { key: "jumlah_pegawai_aktif", header: "Pegawai Aktif", render: (row: any) => row.jumlah_pegawai_aktif ?? 0 },
+                { key: "status_aktif", header: "Status", render: (row: any) => row.status_aktif },
+                {
+                  key: "actions",
+                  header: "Aksi",
+                  filterable: false,
+                  render: (row: any) => (
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
+                        Ubah
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={remove.isPending}
+                        onClick={() => {
+                          if (confirm(`Nonaktifkan unit ${row.nama_unit}?`)) remove.mutate(String(row.id));
+                        }}
+                      >
+                        Nonaktifkan
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+              rows={rows}
+              rowKey={(row: any) => row.id}
+              searchValue={search}
+              searchPlaceholder="Cari kode atau nama unit"
+              onSearchChange={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
+              filters={[
+                {
+                  field: "tipe_unit",
+                  label: "Tipe unit",
+                  options: [
+                    { label: "Koordinator", value: "KOORDINATOR" },
+                    { label: "Sub Koordinator", value: "SUB_KOORDINATOR" },
+                  ],
+                },
+              ]}
+              filterValues={{ tipe_unit: type || "__all" }}
+              onFilterChange={(field, value) => {
+                if (field === "tipe_unit") setType(value === "__all" ? "" : value);
+                setPage(1);
+              }}
+              remoteSearch
+              pagination={{ page, pageSize: 10, total: pagination.total_datas ?? rows.length, totalPages: pagination.total_pages ?? 1, onPageChange: setPage, onPageSizeChange: () => undefined }}
+              emptyMessage="Tidak ada data unit kerja."
+            />
           )}
-          <div className="flex items-center justify-between text-sm">
-            <span>Total {pagination.total_datas ?? rows.length}</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Sebelumnya
-              </Button>
-              <span>
-                Halaman {page} dari {pagination.total_pages ?? 1}
-              </span>
-              <Button size="sm" variant="outline" disabled={page >= (pagination.total_pages ?? 1)} onClick={() => setPage((p) => p + 1)}>
-                Berikutnya
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
       {formOpen && (
