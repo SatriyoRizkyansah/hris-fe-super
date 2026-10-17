@@ -1,4 +1,5 @@
-import { HrisResourcePage } from "@/components/hris/HrisResourcePage";
+import RoClientPage from "./RoClientPage";
+
 export default function Page() {
-  return <HrisResourcePage title="RO" description="Daftar rekening operasional." group="masterRo" method="roControllerGetData" />;
+  return <RoClientPage />;
 }

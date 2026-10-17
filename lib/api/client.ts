@@ -5,7 +5,7 @@ import { Api } from "./generated/api-generated";
 /** Create request-scoped server API client; pass session token only on server. */
 export function createServerApiClient(token?: string): Api<string> {
   const api = new Api<string>({
-    baseUrl: process.env.LEMIGAS_API_URL ?? "http://localhost:3001",
+    baseUrl: process.env.LEMIGAS_API_URL ?? "http://localhost:3002",
     securityWorker: (securityData) => (securityData ? { headers: { Authorization: `Bearer ${securityData}` } } : {}),
   });
 

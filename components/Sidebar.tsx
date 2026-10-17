@@ -28,7 +28,7 @@ const sections = [
       { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "keuangan"] },
       { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "koordinator", "keuangan"] },
       { href: "/dashboard/rekening", label: "Rekening Bank", icon: Landmark, roles: finance },
-      { href: "/dashboard/mak", label: "MAK", icon: FileText, roles: ["superadmin", "keuangan", "koordinator"] },
+      { href: "/dashboard/mak", label: "MAK", icon: FileText, roles: finance },
       { href: "/dashboard/rekonsiliasi-bank", label: "Rekonsiliasi Bank", icon: ClipboardCheck, roles: finance },
       { href: "/dashboard/pengaturan-margin", label: "Pengaturan Margin", icon: Settings, roles: ["superadmin"] },
     ],
