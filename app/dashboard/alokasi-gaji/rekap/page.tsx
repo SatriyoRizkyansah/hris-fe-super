@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
@@ -9,14 +9,13 @@ export default function Page() {
   const [page, setPage] = useState(1),
     [pageSize, setPageSize] = useState(10),
     [search, setSearch] = useState("");
-  const params = useMemo(() => ({ page, limit: pageSize, query: search || undefined }) as any, [page, pageSize, search]);
   const query = use_query({
     tag: "alokasiGajiTa",
     method: "alokasiRekapControllerGetRekap",
-    params,
-    queryFn: async (p) => {
+    params: {},
+    queryFn: async () => {
       setBrowserToken();
-      return browserApi.alokasiGajiTa.alokasiRekapControllerGetRekap(p) as any;
+      return browserApi.alokasiGajiTa.alokasiRekapControllerGetRekap(undefined, { format: "json" }) as any;
     },
   });
   const response = (query.data as any)?.data ?? query.data;

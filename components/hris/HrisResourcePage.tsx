@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
@@ -22,8 +22,9 @@ type Props = {
   description: string;
   group: string;
   method: string;
+  methodHasQuery?: boolean;
   searchPlaceholder?: string;
-  columns?: { key: string; header: string }[];
+  columns?: { key: string; header: string; render?: (value: unknown, row: Record<string, any>) => ReactNode }[];
   query?: Record<string, unknown>;
   create?: { method: string; fields: { name: string; label: string; required?: boolean }[] };
 };
@@ -35,7 +36,7 @@ const display = (value: unknown) => {
   return String(value);
 };
 
-export function HrisResourcePage({ title, description, group, method, searchPlaceholder, columns: configuredColumns, query: initialQuery = {}, create }: Props) {
+export function HrisResourcePage({ title, description, group, method, methodHasQuery = true, searchPlaceholder, columns: configuredColumns, query: initialQuery = {}, create }: Props) {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -67,7 +68,7 @@ export function HrisResourcePage({ title, description, group, method, searchPlac
     queryFn: async (input) => {
       setBrowserToken();
       const api = (browserApi as any)[group];
-      return apiData(api[method]({ ...input, format: "json" }));
+      return apiData(methodHasQuery ? api[method](input, { format: "json" }) : api[method]({ format: "json" }));
     },
   });
   let payload: any = result.data;
@@ -87,13 +88,13 @@ export function HrisResourcePage({ title, description, group, method, searchPlac
     }
     payload = nested;
   }
-  const keys =
+  const keys: NonNullable<Props["columns"]> =
     configuredColumns ??
     Object.keys(rows[0] ?? {})
       .filter((key) => !["id", "created_at", "updated_at", "deleted_at"].includes(key))
       .slice(0, 7)
       .map((key) => ({ key, header: humanize(key) }));
-  const tableColumns = keys.map(({ key, header }) => ({ key, header, render: (row: Record<string, any>) => <span>{display(row[key])}</span> }));
+  const tableColumns = keys.map(({ key, header, render }) => ({ key, header, render: (row: Record<string, any>) => <span>{render ? render(row[key], row) : display(row[key])}</span> }));
 
   return (
     <section className="hris-page space-y-5">

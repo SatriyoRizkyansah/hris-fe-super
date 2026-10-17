@@ -58,19 +58,12 @@ export type ModalProps = {
 export function Modal({ open, onClose, title, description, children, footer, size = "md", bodyClassName, contentClassName }: ModalProps) {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent
-        className={cn(
-          "!top-4 !translate-y-0 !grid !grid-rows-[auto_minmax(0,1fr)_auto] h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-xl border bg-background p-0 shadow-xl",
-          sizeClasses[size],
-          contentClassName,
-        )}
-        showCloseButton
-      >
-        <DialogHeader className="min-h-0 border-b bg-background px-5 py-4 text-left sm:px-6">
+      <DialogContent className={cn("!h-auto !grid !grid-rows-[auto_auto_auto] max-h-[90dvh] w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-xl border bg-background p-0 shadow-xl", sizeClasses[size], contentClassName)} showCloseButton>
+        <DialogHeader className="border-b bg-background px-5 py-4 text-left sm:px-6">
           <DialogTitle className="text-base font-semibold tracking-tight">{title}</DialogTitle>
           {description ? <DialogDescription className="text-sm leading-relaxed">{description}</DialogDescription> : null}
         </DialogHeader>
-        <div className={cn("min-h-0 overflow-y-auto px-5 py-4 text-sm text-foreground sm:px-6", bodyClassName)}>{children}</div>
+        <div className={cn("max-h-[calc(90dvh-8rem)] overflow-y-auto px-5 py-4 text-sm text-foreground sm:px-6", bodyClassName)}>{children}</div>
         {footer ? <div className="relative z-10 flex min-h-14 items-center justify-end gap-2 border-t bg-background px-5 py-3 sm:px-6">{footer}</div> : null}
       </DialogContent>
     </Dialog>

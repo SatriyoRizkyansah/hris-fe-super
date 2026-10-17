@@ -15,6 +15,7 @@ type ApiQueryOptions<TData, TError, TParams> = Omit<UseQueryOptions<TData, TErro
 export function use_query<TData, TError = Error, TParams = void>({ tag, method, queryFn, params, queryKey, ...options }: ApiQueryOptions<TData, TError, TParams>): UseQueryResult<TData, TError> {
   return useQuery<TData, TError, TData, readonly unknown[]>({
     ...options,
+    placeholderData: options.placeholderData ?? ((previousData) => previousData),
     queryKey: queryKey ?? apiQueryKeys.endpoint(tag, method, params),
     queryFn: () => queryFn(params),
   });

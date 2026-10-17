@@ -6,6 +6,7 @@ export default function Page() {
       description="Daftar mata anggaran kegiatan."
       group="masterMak"
       method="masterMakControllerFindAll"
+      methodHasQuery={false}
       create={{
         method: "masterMakControllerCreate",
         fields: [
