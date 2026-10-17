@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/modal/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { DataTable } from "@/components/table/DataTable";
 import { browserApi } from "@/lib/api/browser-client";
-import { setBrowserToken } from "@/lib/api/hooks";
+import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { envelopeRows, unwrapEnvelope, apiErrorMessage, uploadHrisFile } from "@/lib/hris/api";
@@ -34,10 +34,26 @@ type ProjectForm = {
 };
 type RoDraft = RoInputDto & { key: string; plafonText: string };
 type TerminDraft = TerminInputDto & { key: string; persentaseText: string };
+type LookupRow = { id: string; [key: string]: unknown };
+type UnitOption = LookupRow & { kode_unit?: string; nama_unit?: string };
+type AccountOption = LookupRow & { nama_rekening?: string; nama_bank?: string; nomor_rekening?: string; status_aktif?: string };
+type MakOption = LookupRow & { kode_mak?: string; nama_mak?: string; tipe_akun?: string; status_aktif?: string };
 const currentYear = new Date().getFullYear();
 const blankForm = (): ProjectForm => ({ kode_proyek: "", nama_proyek: "", tahun_fiscal: String(currentYear), sumber_pendanaan: "", nama_client: "", pj_1: "", pj_2: "", nilai_kontrak: "", total_direct_cost: "", total_margin: "" });
 const blankRo = (): RoDraft => ({ key: crypto.randomUUID(), nama_ro: "", mak_id: "", id_unit_koordinator: "", rekening_id: "", plafon: 0, plafonText: "" });
 const blankTermin = (persentase = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(persentase) || 0, persentaseText: persentase });
+
+function responseRows<T extends LookupRow>(response: unknown): T[] {
+  let value: unknown = response;
+  for (let depth = 0; depth < 5 && value && typeof value === "object"; depth += 1) {
+    if (Array.isArray(value)) return value as T[];
+    const record = value as Record<string, unknown>;
+    const rows = record.list ?? record.items ?? record.results;
+    if (Array.isArray(rows)) return rows as T[];
+    value = record.data;
+  }
+  return Array.isArray(value) ? (value as T[]) : [];
+}
 
 function Field({ label, value, onChange, type = "text", required = false, placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string }) {
   return (
@@ -52,7 +68,7 @@ function Field({ label, value, onChange, type = "text", required = false, placeh
 }
 
 export default function ProyekClientPage() {
-  const identity = useMemo(browserIdentity, []);
+  const [identity, setIdentity] = useState<ReturnType<typeof browserIdentity>>({ role: null, userId: "", unitKerjaId: "", token: "" });
   const canCreate = identity.role === "superadmin" || identity.role === "koordinator";
   const [search, setSearch] = useState("");
   const [tahun, setTahun] = useState("__all");
@@ -66,6 +82,10 @@ export default function ProyekClientPage() {
   const [rab, setRab] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
 
+  useEffect(() => {
+    setIdentity(browserIdentity());
+  }, []);
+
   const list = use_query({
     tag: "masterProyek",
     method: "list",
@@ -77,6 +97,37 @@ export default function ProyekClientPage() {
   });
   const projects = envelopeRows<ProyekItemDto>(list.data);
   const pagination = unwrapEnvelope<ProyekItemDto[]>(list.data).pagination;
+
+  const units = use_query({
+    tag: "masterUnitKerja",
+    method: "list",
+    params: { tipe: "KOORDINATOR" },
+    queryFn: async () => {
+      setBrowserToken();
+      return apiData(browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 }, { format: "json" }));
+    },
+  });
+  const makLookup = use_query({
+    tag: "masterMak",
+    method: "list",
+    params: undefined,
+    queryFn: async () => {
+      setBrowserToken();
+      return apiData(browserApi.masterMak.masterMakControllerFindAll({ format: "json" }));
+    },
+  });
+  const rekeningLookup = use_query({
+    tag: "masterRekeningBank",
+    method: "list",
+    params: undefined,
+    queryFn: async () => {
+      setBrowserToken();
+      return apiData(browserApi.masterRekeningBank.masterRekeningControllerFindAll({ format: "json" }));
+    },
+  });
+  const unitOptions = responseRows<UnitOption>(units.data);
+  const makOptions = responseRows<MakOption>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
+  const rekeningOptions = responseRows<AccountOption>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
 
   const create = use_mutation({
     tag: "masterProyek",
@@ -188,38 +239,43 @@ export default function ProyekClientPage() {
               {
                 key: "kode",
                 header: "Kode / Proyek",
+                className: "min-w-[15rem]",
                 render: (row: ProyekItemDto) => (
-                  <div>
+                  <div className="space-y-1">
                     <p className="font-medium">{row.kode_proyek}</p>
                     <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
                   </div>
                 ),
               },
-              { key: "tahun", header: "Tahun", render: (row: ProyekItemDto) => row.tahun_fiscal },
+              { key: "tahun", header: "Tahun", className: "w-24 whitespace-nowrap text-center tabular-nums", render: (row: ProyekItemDto) => row.tahun_fiscal },
               {
                 key: "pengaju",
                 header: "Pengaju",
+                className: "min-w-[12rem]",
                 render: (row: ProyekItemDto) => (
                   <div className="text-sm">
                     {String(row.nama_pengaju ?? "—")}
-                    <p className="text-xs text-muted-foreground">{String(row.nama_unit_pengaju ?? "")}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{String(row.nama_unit_pengaju ?? "—")}</p>
                   </div>
                 ),
               },
-              { key: "kontrak", header: "Nilai Kontrak", className: "text-right", render: (row: ProyekItemDto) => <span className="whitespace-nowrap">{formatRupiah(row.nilai_kontrak)}</span> },
+              { key: "kontrak", header: "Nilai Kontrak", className: "min-w-[10rem] whitespace-nowrap text-right tabular-nums", render: (row: ProyekItemDto) => <span>{formatRupiah(row.nilai_kontrak)}</span> },
               {
                 key: "ro",
-                header: "RO",
+                header: "RO / Total Plafon",
+                className: "min-w-[11rem] whitespace-nowrap text-right tabular-nums",
                 render: (row: ProyekItemDto) => (
-                  <span>
-                    {row.jumlah_ro ?? 0} · {formatRupiah(row.total_plafon_ro)}
+                  <span className="text-sm">
+                    {formatRupiah(row.total_plafon_ro)}
+                    <span className="mt-1 block text-xs text-muted-foreground">{row.jumlah_ro ?? 0} RO</span>
                   </span>
                 ),
               },
-              { key: "status", header: "Status", render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{humanizeStatus(row.status_proyek)}</StatusBadge> },
+              { key: "status", header: "Status", className: "min-w-[9rem] whitespace-nowrap", render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{humanizeStatus(row.status_proyek)}</StatusBadge> },
               {
                 key: "aksi",
                 header: "Aksi",
+                className: "w-28 whitespace-nowrap text-right",
                 render: (row: ProyekItemDto) => (
                   <Button variant="ghost" size="sm" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
                     <Eye size={15} /> Detail
@@ -257,18 +313,32 @@ export default function ProyekClientPage() {
           />
         </CardContent>
       </Card>
-      <Dialog
+      <Modal
         open={open}
-        onOpenChange={(value) => {
-          setOpen(value);
-          if (!value) resetForm();
+        onClose={() => {
+          setOpen(false);
+          resetForm();
         }}
+        title="Ajukan Proyek"
+        size="md"
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Batal
+            </Button>
+            <Button disabled={create.isPending} onClick={submit}>
+              {create.isPending && <LoaderCircle className="animate-spin" size={16} />} Simpan Pengajuan
+            </Button>
+          </>
+        }
       >
-        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Ajukan Proyek</DialogTitle>
-            <DialogDescription>RO awal dan termin wajib seimbang sebelum proyek dikirim.</DialogDescription>
-          </DialogHeader>
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">RO awal dan rencana termin wajib seimbang sebelum proyek dikirim.</div>
+        <section className="space-y-4 rounded-lg border p-4">
+          <div>
+            <h2 className="text-sm font-semibold">Informasi proyek</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Identitas dan penanggung jawab proyek.</p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Kode proyek" required value={form.kode_proyek} onChange={(value) => setForm((current) => ({ ...current, kode_proyek: value }))} />
             <Field label="Tahun fiscal" type="number" required value={form.tahun_fiscal} onChange={(value) => setForm((current) => ({ ...current, tahun_fiscal: value }))} />
@@ -279,76 +349,127 @@ export default function ProyekClientPage() {
             <Field label="Nama client" value={form.nama_client} onChange={(value) => setForm((current) => ({ ...current, nama_client: value }))} />
             <Field label="PJ 1" value={form.pj_1} onChange={(value) => setForm((current) => ({ ...current, pj_1: value }))} />
             <Field label="PJ 2" value={form.pj_2} onChange={(value) => setForm((current) => ({ ...current, pj_2: value }))} />
+          </div>
+        </section>
+        <section className="space-y-4 rounded-lg border p-4">
+          <div>
+            <h2 className="text-sm font-semibold">Nilai proyek</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Pastikan nilai kontrak sama dengan direct cost dan margin.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
             <Field label="Nilai kontrak" type="number" required value={form.nilai_kontrak} onChange={(value) => setForm((current) => ({ ...current, nilai_kontrak: value }))} />
             <Field label="Total direct cost" type="number" required value={form.total_direct_cost} onChange={(value) => setForm((current) => ({ ...current, total_direct_cost: value }))} />
             <Field label="Total margin" type="number" required value={form.total_margin} onChange={(value) => setForm((current) => ({ ...current, total_margin: value }))} />
           </div>
-          <p className={contractOk ? "text-sm text-emerald-700" : "text-sm text-destructive"}>
+          <p className={`rounded-md px-3 py-2 text-xs ${contractOk ? "bg-emerald-50 text-emerald-700" : "bg-destructive/10 text-destructive"}`}>
             Kontrak {formatRupiah(numeric("nilai_kontrak"))} = direct cost {formatRupiah(numeric("total_direct_cost"))} + margin {formatRupiah(numeric("total_margin"))}
           </p>
-          <section className="space-y-3 border-t pt-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Alokasi RO awal</h2>
-              <Button type="button" size="sm" variant="outline" onClick={() => setRos((rows) => [...rows, blankRo()])}>
-                <Plus size={14} /> Tambah RO
-              </Button>
+        </section>
+        <section className="space-y-4 rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Alokasi RO awal</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Pilih MAK, unit koordinator, dan rekening dari data master.</p>
             </div>
-            {ros.map((row, index) => (
-              <div key={row.key} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2">
-                <Field label={`Nama RO ${index + 1}`} required value={row.nama_ro} onChange={(value) => updateRo(row.key, "nama_ro", value)} />
-                <Field label="ID MAK" required value={row.mak_id} onChange={(value) => updateRo(row.key, "mak_id", value)} />
-                <Field label="ID Unit Koordinator" required value={row.id_unit_koordinator} onChange={(value) => updateRo(row.key, "id_unit_koordinator", value)} />
-                <Field label="ID Rekening" value={row.rekening_id ?? ""} onChange={(value) => updateRo(row.key, "rekening_id", value)} />
-                <Field label="Plafon" type="number" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
+            <Button type="button" size="sm" variant="outline" onClick={() => setRos((rows) => [...rows, blankRo()])}>
+              <Plus size={14} /> Tambah RO
+            </Button>
+          </div>
+          {ros.map((row, index) => (
+            <div key={row.key} className="space-y-4 rounded-md bg-muted/30 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">RO {String(index + 1).padStart(2, "0")}</p>
                 {ros.length > 1 && (
-                  <Button type="button" variant="destructive" size="sm" className="self-end" onClick={() => setRos((rows) => rows.filter((item) => item.key !== row.key))}>
+                  <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setRos((rows) => rows.filter((item) => item.key !== row.key))}>
                     <Trash2 size={14} /> Hapus
                   </Button>
                 )}
               </div>
-            ))}
-            <p className={roTotal === numeric("total_direct_cost") ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total plafon RO: {formatRupiah(roTotal)}. Harus sama dengan direct cost.</p>
-          </section>
-          <section className="space-y-3 border-t pt-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Rencana termin</h2>
-              <Button type="button" size="sm" variant="outline" onClick={() => setTerms((rows) => [...rows, blankTermin()])}>
-                <Plus size={14} /> Tambah Termin
-              </Button>
-            </div>
-            {terms.map((term, index) => (
-              <div key={term.key} className="flex items-end gap-2">
-                <div className="flex-1">
-                  <Field label={`Termin ${index + 1} (%)`} type="number" required value={term.persentaseText} onChange={(value) => updateTerm(term.key, value)} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Nama RO" required value={row.nama_ro} onChange={(value) => updateRo(row.key, "nama_ro", value)} />
+                <label className="grid gap-1.5 text-sm font-medium">
+                  <span>MAK *</span>
+                  <select value={row.mak_id} onChange={(event) => updateRo(row.key, "mak_id", event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal">
+                    <option value="">Pilih MAK…</option>
+                    {makOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {[option.kode_mak, option.nama_mak, option.tipe_akun ? `(${option.tipe_akun})` : ""].filter(Boolean).join(" — ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  <span>Unit koordinator *</span>
+                  <select value={row.id_unit_koordinator} onChange={(event) => updateRo(row.key, "id_unit_koordinator", event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal">
+                    <option value="">Pilih unit koordinator…</option>
+                    {unitOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {[option.kode_unit, option.nama_unit].filter(Boolean).join(" — ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  <span>Rekening tujuan</span>
+                  <select value={row.rekening_id ?? ""} onChange={(event) => updateRo(row.key, "rekening_id", event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal">
+                    <option value="">Pilih rekening (opsional)…</option>
+                    {rekeningOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {[option.nama_bank, option.nama_rekening, option.nomor_rekening ? `(${option.nomor_rekening})` : ""].filter(Boolean).join(" — ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="sm:col-span-2">
+                  <Field label="Plafon" type="number" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
                 </div>
-                {terms.length > 1 && (
-                  <Button type="button" variant="destructive" size="sm" onClick={() => setTerms((rows) => rows.filter((item) => item.key !== term.key))}>
-                    <Trash2 size={14} />
-                  </Button>
-                )}
               </div>
-            ))}
-            <p className={termsTotal === 100 ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total termin: {termsTotal}% / 100%.</p>
-          </section>
-          <section className="grid gap-3 border-t pt-4 sm:grid-cols-2">
+            </div>
+          ))}
+          <p className={roTotal === numeric("total_direct_cost") ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total plafon RO: {formatRupiah(roTotal)}. Harus sama dengan direct cost.</p>
+        </section>
+        <section className="space-y-4 rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Rencana termin</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Total persentase termin harus tepat 100%.</p>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => setTerms((rows) => [...rows, blankTermin()])}>
+              <Plus size={14} /> Tambah Termin
+            </Button>
+          </div>
+          {terms.map((term, index) => (
+            <div key={term.key} className="grid items-end gap-3 rounded-md bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <p className="pb-2 text-sm font-medium">Termin {String(index + 1).padStart(2, "0")}</p>
+              <div>
+                <Field label="Persentase (%)" type="number" required value={term.persentaseText} onChange={(value) => updateTerm(term.key, value)} />
+                <p className="mt-1 text-xs text-muted-foreground">{formatRupiah((numeric("total_margin") * (Number(term.persentaseText) || 0)) / 100)}</p>
+              </div>
+              {terms.length > 1 && (
+                <Button type="button" variant="destructive" size="sm" onClick={() => setTerms((rows) => rows.filter((item) => item.key !== term.key))}>
+                  <Trash2 size={14} />
+                </Button>
+              )}
+            </div>
+          ))}
+          <p className={termsTotal === 100 ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total termin: {termsTotal}% / 100%.</p>
+        </section>
+        <section className="space-y-4 rounded-lg border p-4">
+          <div>
+            <h2 className="text-sm font-semibold">Dokumen pendukung</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Unggah dokumen opsional untuk melengkapi pengajuan.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <DocumentUploadField label="SK Proyek" accept=".pdf" value={sk} onChange={setSk} />
             <DocumentUploadField label="RAB Proyek" accept=".pdf,.xls,.xlsx" value={rab} onChange={setRab} />
-          </section>
-          {formError && (
-            <Alert variant="destructive">
-              <AlertDescription>{formError}</AlertDescription>
-            </Alert>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Batal
-            </Button>
-            <Button disabled={create.isPending} onClick={submit}>
-              {create.isPending && <LoaderCircle className="animate-spin" size={16} />} Simpan Pengajuan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </section>
+        {formError && (
+          <Alert variant="destructive">
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        )}
+      </Modal>
     </section>
   );
 }
