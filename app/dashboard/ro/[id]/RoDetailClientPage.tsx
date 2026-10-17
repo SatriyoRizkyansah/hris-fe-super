@@ -6,7 +6,7 @@ import { ArrowLeft, Edit, LoaderCircle, Plus, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/Button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Modal } from "@/components/modal/Modal";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
@@ -414,94 +414,98 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           {silpa.error && <p className="mt-2 text-sm text-destructive">{apiErrorMessage(silpa.error)}</p>}
         </section>
       )}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Ubah RO</DialogTitle>
-            <DialogDescription>Aksi tetap tersedia untuk koordinator. Backend menentukan perubahan RO dari proyek boleh atau tidak.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <label className="grid gap-1 text-sm">
-              Nama RO
-              <Input value={edit.nama_ro} onChange={(event) => setEdit((state) => ({ ...state, nama_ro: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Plafon
-              <Input type="number" value={edit.total_plafon} onChange={(event) => setEdit((state) => ({ ...state, total_plafon: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              No Kontrak
-              <Input value={edit.no_kontrak} onChange={(event) => setEdit((state) => ({ ...state, no_kontrak: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              PJ
-              <Input value={edit.pj} onChange={(event) => setEdit((state) => ({ ...state, pj: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              No SK
-              <Input value={edit.no_sk} onChange={(event) => setEdit((state) => ({ ...state, no_sk: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Mulai SK
-              <Input type="date" value={edit.mulai_sk} onChange={(event) => setEdit((state) => ({ ...state, mulai_sk: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Berakhir SK
-              <Input type="date" value={edit.berakhir_sk} onChange={(event) => setEdit((state) => ({ ...state, berakhir_sk: event.target.value }))} />
-            </label>
-          </div>
-          <DialogFooter>
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Ubah RO"
+        description="Aksi tetap tersedia untuk koordinator. Backend menentukan perubahan RO dari proyek boleh atau tidak."
+        bodyClassName="space-y-4"
+        footer={
+          <>
             <Button variant="outline" onClick={() => setEditOpen(false)}>
               Batal
             </Button>
             <Button disabled={update.isPending} onClick={saveEdit}>
               {update.isPending && <LoaderCircle className="animate-spin" size={16} />} Simpan
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={transactionOpen} onOpenChange={setTransactionOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{transactionId ? "Ubah Transaksi" : "Tambah Transaksi"}</DialogTitle>
-            <DialogDescription>Debit dan kredit dalam Rupiah. Isi salah satu nilai bila transaksi hanya satu arah.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm sm:col-span-2">
-              Nama kegiatan
-              <Input value={transaction.nama_kegiatan} onChange={(event) => setTransaction((state) => ({ ...state, nama_kegiatan: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Tanggal
-              <Input type="date" value={transaction.tanggal} onChange={(event) => setTransaction((state) => ({ ...state, tanggal: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              No kuitansi
-              <Input value={transaction.no_kuitansi} onChange={(event) => setTransaction((state) => ({ ...state, no_kuitansi: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Debit
-              <Input type="number" min="0" value={transaction.debit} onChange={(event) => setTransaction((state) => ({ ...state, debit: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Kredit
-              <Input type="number" min="0" value={transaction.kredit} onChange={(event) => setTransaction((state) => ({ ...state, kredit: event.target.value }))} />
-            </label>
-            <label className="grid gap-1 text-sm sm:col-span-2">
-              Keterangan
-              <Input value={transaction.keterangan} onChange={(event) => setTransaction((state) => ({ ...state, keterangan: event.target.value }))} />
-            </label>
-          </div>
-          <DialogFooter>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <label className="grid gap-1 text-sm">
+            Nama RO
+            <Input value={edit.nama_ro} onChange={(event) => setEdit((state) => ({ ...state, nama_ro: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Plafon
+            <Input type="number" value={edit.total_plafon} onChange={(event) => setEdit((state) => ({ ...state, total_plafon: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            No Kontrak
+            <Input value={edit.no_kontrak} onChange={(event) => setEdit((state) => ({ ...state, no_kontrak: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            PJ
+            <Input value={edit.pj} onChange={(event) => setEdit((state) => ({ ...state, pj: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            No SK
+            <Input value={edit.no_sk} onChange={(event) => setEdit((state) => ({ ...state, no_sk: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Mulai SK
+            <Input type="date" value={edit.mulai_sk} onChange={(event) => setEdit((state) => ({ ...state, mulai_sk: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Berakhir SK
+            <Input type="date" value={edit.berakhir_sk} onChange={(event) => setEdit((state) => ({ ...state, berakhir_sk: event.target.value }))} />
+          </label>
+        </div>
+      </Modal>
+      <Modal
+        open={transactionOpen}
+        onClose={() => setTransactionOpen(false)}
+        title={transactionId ? "Ubah Transaksi" : "Tambah Transaksi"}
+        description="Debit dan kredit dalam Rupiah. Isi salah satu nilai bila transaksi hanya satu arah."
+        bodyClassName="space-y-4"
+        footer={
+          <>
             <Button variant="outline" onClick={() => setTransactionOpen(false)}>
               Batal
             </Button>
             <Button disabled={saveTransaction.isPending} onClick={submitTransaction}>
               {saveTransaction.isPending && <LoaderCircle className="animate-spin" size={16} />} Simpan
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Nama kegiatan
+            <Input value={transaction.nama_kegiatan} onChange={(event) => setTransaction((state) => ({ ...state, nama_kegiatan: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Tanggal
+            <Input type="date" value={transaction.tanggal} onChange={(event) => setTransaction((state) => ({ ...state, tanggal: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            No kuitansi
+            <Input value={transaction.no_kuitansi} onChange={(event) => setTransaction((state) => ({ ...state, no_kuitansi: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Debit
+            <Input type="number" min="0" value={transaction.debit} onChange={(event) => setTransaction((state) => ({ ...state, debit: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Kredit
+            <Input type="number" min="0" value={transaction.kredit} onChange={(event) => setTransaction((state) => ({ ...state, kredit: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Keterangan
+            <Input value={transaction.keterangan} onChange={(event) => setTransaction((state) => ({ ...state, keterangan: event.target.value }))} />
+          </label>
+        </div>
+      </Modal>
       <AlertDialog open={Boolean(deleteTransaction)} onOpenChange={(open) => !open && setDeleteTransaction(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

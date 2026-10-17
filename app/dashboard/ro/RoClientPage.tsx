@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { Eye, Plus } from "lucide-react";
+import { useState } from "react";
+import { Eye } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,21 +13,17 @@ import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, envelopeRows, unwrapEnvelope } from "@/lib/hris/api";
 import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
-import { browserIdentity } from "@/lib/hris/identity";
-import { CreateRoDialog } from "./CreateRoDialog";
+
 import type { ProyekItemDto, RoItemDto } from "@/lib/api/generated/api-generated";
 
 const missing = (row: RoItemDto) => [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", !row.no_sk && "No SK", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean);
 
 export default function RoClientPage() {
-  const identity = useMemo(browserIdentity, []);
-  const canCreate = identity.role === "superadmin";
   const [search, setSearch] = useState("");
   const [project, setProject] = useState("__all");
   const [unit, setUnit] = useState("__all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [createOpen, setCreateOpen] = useState(false);
   const list = use_query({
     tag: "masterRo",
     method: "list",
@@ -66,11 +62,6 @@ export default function RoClientPage() {
           <h1 className="text-2xl font-bold">Rencana Operasi</h1>
           <p className="mt-1 text-sm text-muted-foreground">Plafon, saldo, dokumen, dan ledger RO.</p>
         </div>
-        {canCreate && (
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus size={16} /> Tambah RO
-          </Button>
-        )}
       </header>
       <Card>
         <CardContent className="pt-4">
@@ -180,7 +171,6 @@ export default function RoClientPage() {
           />
         </CardContent>
       </Card>
-      <CreateRoDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={list.refetch} />
     </section>
   );
 }

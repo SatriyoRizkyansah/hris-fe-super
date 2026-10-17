@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/modal/Modal";
+import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { DataTable } from "@/components/table/DataTable";
@@ -55,14 +56,14 @@ function responseRows<T extends LookupRow>(response: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function Field({ label, value, onChange, type = "text", required = false, placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string }) {
+function Field({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium">
       <span>
         {label}
         {required ? " *" : ""}
       </span>
-      <Input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <Input type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -128,6 +129,9 @@ export default function ProyekClientPage() {
   const unitOptions = responseRows<UnitOption>(units.data);
   const makOptions = responseRows<MakOption>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const rekeningOptions = responseRows<AccountOption>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
+  const makComboboxOptions = makOptions.map((option) => ({ value: option.id, label: [option.kode_mak, option.nama_mak, option.tipe_akun ? `(${option.tipe_akun})` : ""].filter(Boolean).join(" — ") }));
+  const unitComboboxOptions = unitOptions.map((option) => ({ value: option.id, label: [option.kode_unit, option.nama_unit].filter(Boolean).join(" — ") }));
+  const rekeningComboboxOptions = rekeningOptions.map((option) => ({ value: option.id, label: [option.nama_bank, option.nama_rekening, option.nomor_rekening ? `(${option.nomor_rekening})` : ""].filter(Boolean).join(" — ") }));
 
   const create = use_mutation({
     tag: "masterProyek",
@@ -387,38 +391,17 @@ export default function ProyekClientPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Nama RO" required value={row.nama_ro} onChange={(value) => updateRo(row.key, "nama_ro", value)} />
-                <label className="grid gap-1.5 text-sm font-medium">
+                <label className="grid min-w-0 gap-1.5 text-sm font-medium">
                   <span>MAK *</span>
-                  <select value={row.mak_id} onChange={(event) => updateRo(row.key, "mak_id", event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal">
-                    <option value="">Pilih MAK…</option>
-                    {makOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {[option.kode_mak, option.nama_mak, option.tipe_akun ? `(${option.tipe_akun})` : ""].filter(Boolean).join(" — ")}
-                      </option>
-                    ))}
-                  </select>
+                  <FilterCombobox options={makComboboxOptions} value={row.mak_id} onValueChange={(value) => updateRo(row.key, "mak_id", value)} label="Pilih MAK" />
                 </label>
-                <label className="grid gap-1.5 text-sm font-medium">
+                <label className="grid min-w-0 gap-1.5 text-sm font-medium">
                   <span>Unit koordinator *</span>
-                  <select value={row.id_unit_koordinator} onChange={(event) => updateRo(row.key, "id_unit_koordinator", event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal">
-                    <option value="">Pilih unit koordinator…</option>
-                    {unitOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {[option.kode_unit, option.nama_unit].filter(Boolean).join(" — ")}
-                      </option>
-                    ))}
-                  </select>
+                  <FilterCombobox options={unitComboboxOptions} value={row.id_unit_koordinator} onValueChange={(value) => updateRo(row.key, "id_unit_koordinator", value)} label="Pilih unit koordinator" />
                 </label>
-                <label className="grid gap-1.5 text-sm font-medium">
+                <label className="grid min-w-0 gap-1.5 text-sm font-medium">
                   <span>Rekening tujuan</span>
-                  <select value={row.rekening_id ?? ""} onChange={(event) => updateRo(row.key, "rekening_id", event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-normal">
-                    <option value="">Pilih rekening (opsional)…</option>
-                    {rekeningOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {[option.nama_bank, option.nama_rekening, option.nomor_rekening ? `(${option.nomor_rekening})` : ""].filter(Boolean).join(" — ")}
-                      </option>
-                    ))}
-                  </select>
+                  <FilterCombobox options={rekeningComboboxOptions} value={row.rekening_id ?? ""} onValueChange={(value) => updateRo(row.key, "rekening_id", value)} label="Pilih rekening (opsional)" />
                 </label>
                 <div className="sm:col-span-2">
                   <Field label="Plafon" type="number" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
