@@ -138,7 +138,8 @@ export default function MasterDataPage({ kind, formColumns = 1, modalSize = "md"
     params,
     queryFn: async (request) => {
       setBrowserToken();
-      const group = cfg.tag === "kategori" ? browserApi.kategoriPengadaan : browserApi[cfg.tag as "vendor" | "barang"];
+      const api = browserApi as any;
+      const group = cfg.tag === "kategori" ? api.kategoriPengadaan : api[cfg.tag as "vendor" | "barang"];
       const fn = (group as any)[cfg.method];
       return unwrapList(await apiData(fn(request, { format: "json" }) as Promise<{ data: unknown }>));
     },
@@ -150,10 +151,10 @@ export default function MasterDataPage({ kind, formColumns = 1, modalSize = "md"
     enabled: kind === "barang",
     queryFn: async (request) => {
       setBrowserToken();
-      const firstPage = unwrapList(await apiData(browserApi.kategoriPengadaan.kategoriGetControllerFindAll(request, { format: "json" }) as Promise<{ data: unknown }>));
+      const firstPage = unwrapList(await apiData((browserApi as any).kategoriPengadaan.kategoriGetControllerFindAll(request, { format: "json" }) as Promise<{ data: unknown }>));
       if (firstPage.totalPages <= 1) return firstPage;
       const remainingPages = await Promise.all(
-        Array.from({ length: firstPage.totalPages - 1 }, (_, index) => apiData(browserApi.kategoriPengadaan.kategoriGetControllerFindAll({ ...request, page: index + 2 }, { format: "json" }) as Promise<{ data: unknown }>)),
+        Array.from({ length: firstPage.totalPages - 1 }, (_, index) => apiData((browserApi as any).kategoriPengadaan.kategoriGetControllerFindAll({ ...request, page: index + 2 }, { format: "json" }) as Promise<{ data: unknown }>)),
       );
       return { ...firstPage, items: [...firstPage.items, ...remainingPages.flatMap((pageData) => unwrapList(pageData).items)] };
     },
@@ -165,7 +166,8 @@ export default function MasterDataPage({ kind, formColumns = 1, modalSize = "md"
     invalidateKeys: invalidate,
     mutationFn: async (body) => {
       setBrowserToken();
-      const group = cfg.tag === "kategori" ? browserApi.kategoriPengadaan : browserApi[cfg.tag as "vendor" | "barang"];
+      const api = browserApi as any;
+      const group = cfg.tag === "kategori" ? api.kategoriPengadaan : api[cfg.tag as "vendor" | "barang"];
       return apiData((group as any)[cfg.createMethod](body, { format: "json" }) as Promise<{ data: unknown }>);
     },
     onSuccess: () => setOpen(false),
@@ -176,7 +178,8 @@ export default function MasterDataPage({ kind, formColumns = 1, modalSize = "md"
     invalidateKeys: invalidate,
     mutationFn: async ({ id, body }) => {
       setBrowserToken();
-      const group = cfg.tag === "kategori" ? browserApi.kategoriPengadaan : browserApi[cfg.tag as "vendor" | "barang"];
+      const api = browserApi as any;
+      const group = cfg.tag === "kategori" ? api.kategoriPengadaan : api[cfg.tag as "vendor" | "barang"];
       return apiData((group as any)[cfg.updateMethod](id, body, { format: "json" }) as Promise<{ data: unknown }>);
     },
     onSuccess: () => setOpen(false),
@@ -187,7 +190,8 @@ export default function MasterDataPage({ kind, formColumns = 1, modalSize = "md"
     invalidateKeys: invalidate,
     mutationFn: async (id) => {
       setBrowserToken();
-      const group = cfg.tag === "kategori" ? browserApi.kategoriPengadaan : browserApi[cfg.tag as "vendor" | "barang"];
+      const api = browserApi as any;
+      const group = cfg.tag === "kategori" ? api.kategoriPengadaan : api[cfg.tag as "vendor" | "barang"];
       return apiData((group as any)[cfg.deleteMethod](id, { format: "json" }) as Promise<{ data: unknown }>);
     },
     onSuccess: () => setRemoving(null),

@@ -2,8 +2,6 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { Modal } from "@/components/modal/Modal";
-import { browserApi } from "@/lib/api/browser-client";
-import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
 import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import { Button } from "@/components/ui/Button";
@@ -17,13 +15,7 @@ export default function UserForm({ user, canManage, onClose, onSaved }: { user?:
     tag: "vendor",
     method: "vendorGetControllerFindAll",
     params: {},
-    queryFn: async () => {
-      setBrowserToken();
-      const response = await apiData(browserApi.vendor.vendorGetControllerFindAll({ page: 1, limit: 100 }, { format: "json" }) as Promise<{ data: unknown }>);
-      let payload = response as any;
-      for (let depth = 0; depth < 3 && payload && typeof payload === "object" && "data" in payload; depth += 1) payload = payload.data;
-      return { data: Array.isArray(payload) ? payload : [] };
-    },
+    queryFn: async () => ({ data: [] }),
   });
   const write = useUserWrite();
   const lock = useRef(false);
@@ -45,15 +37,17 @@ export default function UserForm({ user, canManage, onClose, onSaved }: { user?:
       setError(isVendorRole && !form.vendorId ? "Pilih vendor untuk akun role vendor." : "Lengkapi nama, email, role valid, dan password minimal 6 karakter.");
       return;
     }
+    const status: "AKTIF" | "NONAKTIF" = form.status === "aktif" ? "AKTIF" : "NONAKTIF";
     const body = {
       nama: form.nama.trim(),
       email: form.email.trim(),
-      roleId: form.roleId,
-      vendorId: isVendorRole ? form.vendorId : undefined,
-      unitKerja: user ? form.unitKerja.trim() : form.unitKerja.trim() || undefined,
-      status: form.status,
+      role: selectedRole?.kode as "SUPERADMIN" | "KOORDINATOR" | "SUBKOOR" | "KARYAWAN" | "KEUANGAN" | "PIMPINAN" | "SPI",
+      id_unit_kerja: form.unitKerja.trim() || undefined,
+      status,
     };
-    setCommand(user ? { kind: "update", id: user.id, body: { ...body, ...(form.password ? { password: form.password } : {}) } } : { kind: "create", body: { ...body, password: form.password } });
+    setCommand(
+      user ? { kind: "update", id: user.id, body: { nama: body.nama, ...(form.password ? { password: form.password } : {}), id_unit_kerja: body.id_unit_kerja, status } } : { kind: "create", body: { ...body, password: form.password } },
+    );
   }
   async function confirm() {
     if (!command || !canManage || lock.current || !validRole) return;

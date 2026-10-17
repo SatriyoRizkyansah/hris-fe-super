@@ -1,0 +1,23 @@
+
+> lemigas-super-apps@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+unhandledRejection Error [PageNotFoundError]: Cannot find module for page: /_document
+    at getPagePath (D:\development\lemigas\hris-lemigas\keuangan-super-frontend\node_modules\next\dist\server\require.js:94:15)
+    at requirePage (D:\development\lemigas\hris-lemigas\keuangan-super-frontend\node_modules\next\dist\server\require.js:99:22)
+    at D:\development\lemigas\hris-lemigas\keuangan-super-frontend\node_modules\next\dist\server\load-components.js:72:65
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async Promise.all (index 0)
+    at async loadComponentsImpl (D:\development\lemigas\hris-lemigas\keuangan-super-frontend\node_modules\next\dist\server\load-components.js:71:33)
+    at async Object.hasCustomGetInitialProps (D:\development\lemigas\hris-lemigas\keuangan-super-frontend\node_modules\next\dist\build\utils.js:1274:24) {
+  type: 'PageNotFoundError',
+  code: 'ENOENT'
+}

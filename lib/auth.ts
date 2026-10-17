@@ -1,5 +1,20 @@
 export const SESSION_COOKIE = "lemigas_session";
 
+export const HRIS_ROLES = ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"] as const;
+export type HrisRole = (typeof HRIS_ROLES)[number];
+export function normalizeRole(value: string): HrisRole | null {
+  const role = value
+    .trim()
+    .toLocaleLowerCase("id-ID")
+    .replace(/[\s_-]+/g, "");
+  const aliases: Record<string, HrisRole> = { superadmin: "superadmin", koordinator: "koordinator", subkoor: "subkoor", subkoordinator: "subkoor", keuangan: "keuangan", pimpinan: "pimpinan", spi: "spi", karyawan: "karyawan" };
+  return aliases[role] ?? null;
+}
+export function roleHome(role: string): string {
+  if (["subkoor", "spi", "karyawan"].includes(role)) return "/dashboard/profil";
+  return "/dashboard";
+}
+
 export type User = { name: string; role: string; email: string; initials: string };
 export type Session = { token: string; user: User };
 

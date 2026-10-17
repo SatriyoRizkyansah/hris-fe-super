@@ -31,7 +31,7 @@ export default function Shell({ user, children }: { user: User; children: React.
       </a>
       <Topbar user={user} onMenu={toggleMenu} />
       <div className="layout" data-collapsed={collapsed}>
-        <Sidebar collapsed={collapsed} open={drawerOpen} onToggle={toggleMenu} />
+        <Sidebar collapsed={collapsed} open={drawerOpen} onToggle={toggleMenu} role={user.role} />
         {drawerOpen && <div className="scrim" onClick={() => setDrawerOpen(false)} aria-hidden="true" />}
         <div className="main-col">
           <main id="main" className="main">

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/Logo";
 import Skyline from "@/components/Skyline";
-import { setSession } from "@/lib/auth";
+import { normalizeRole, roleHome, setSession } from "@/lib/auth";
+import { useLoginMutation } from "@/lib/api/hooks";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,8 +20,9 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
+  const login = useLoginMutation();
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -29,9 +31,19 @@ export default function LoginPage() {
       return;
     }
 
-    setSession("template-session", { name: identity.trim(), email: identity.trim(), role: "staff" }, remember);
-    router.replace("/dashboard");
-    router.refresh();
+    try {
+      const result = await login.mutateAsync({ data: { email: identity.trim(), password } });
+      const access = result.akses[0];
+      const role = normalizeRole(access.akses);
+      if (!role) throw new Error(`Role akses tidak dikenal: ${access.akses}`);
+      setSession(access.token, { name: result.nama, email: identity.trim(), role }, remember);
+      const next = new URLSearchParams(window.location.search).get("next");
+      const destination = next?.startsWith("/") && !next.startsWith("//") ? next : roleHome(role);
+      router.replace(destination);
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Login gagal. Periksa email dan kata sandi.");
+    }
   }
 
   return (
@@ -114,8 +126,8 @@ export default function LoginPage() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               ) : null}
-              <Button type="submit" className="w-full">
-                Masuk
+              <Button type="submit" className="w-full" disabled={login.isPending}>
+                {login.isPending ? "Memverifikasi…" : "Masuk"}
               </Button>
             </form>
           </CardContent>

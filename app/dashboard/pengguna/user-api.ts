@@ -34,28 +34,30 @@ async function request<T>(send: () => Promise<{ data: unknown }>): Promise<T> {
 export function useUsers(params: UserParams) {
   return use_query<UserList, Error, UserParams>({
     tag: "user",
-    method: "userGetControllerFindAll",
+    method: "usersGetControllerGetData",
     params,
-    queryFn: (query) => request(() => browserApi.user.userGetControllerFindAll(query, { format: "json" })),
+    queryFn: (query) => request(() => browserApi.users.usersGetControllerGetData(query, { format: "json" })),
   });
 }
 
 export function useUserRoles() {
   return use_query<Envelope<UserRole[]>, Error, Record<string, never>>({
     tag: "user",
-    method: "userGetControllerGetRoles",
+    method: "usersGetControllerGetData",
     params: {},
-    queryFn: () => request(() => browserApi.user.userGetControllerGetRoles({ format: "json" })),
+    queryFn: async () => ({ status: 200, message: "Daftar role HRIS", data: ["SUPERADMIN", "KOORDINATOR", "SUBKOOR", "KARYAWAN", "KEUANGAN", "PIMPINAN", "SPI"].map((kode) => ({ id: kode, kode, nama: kode })) }),
   });
 }
 
 export function useUserDetail(id: string | undefined) {
   return use_query<Envelope<UserRecord>, Error, { id?: string }>({
     tag: "user",
-    method: "userGetControllerFindOne",
+    method: "usersGetControllerGetData",
     params: { id },
     enabled: Boolean(id),
-    queryFn: () => request(() => browserApi.user.userGetControllerFindOne(id!, { format: "json" })),
+    queryFn: async () => {
+      throw new Error("Endpoint detail user belum tersedia pada API HRIS.");
+    },
   });
 }
 
@@ -66,9 +68,9 @@ export function useUserWrite() {
     invalidateKeys: [apiQueryKeys.resource("user"), apiQueryKeys.resource("auth"), apiQueryKeys.resource("dashboard")],
     mutationFn: (command) =>
       request(() => {
-        if (command.kind === "create") return browserApi.user.userPostControllerCreate(command.body, { format: "json" });
-        if (command.kind === "update") return browserApi.user.userPutControllerUpdate(command.id, command.body, { format: "json" });
-        return browserApi.user.userDeleteControllerRemove(command.id, { format: "json" });
+        if (command.kind === "create") return browserApi.users.usersPostControllerCreate(command.body, { format: "json" });
+        if (command.kind === "update") return browserApi.users.usersPutControllerUpdate(command.id, command.body, { format: "json" });
+        throw new Error("Endpoint nonaktifkan user belum tersedia pada API HRIS.");
       }),
   });
 }

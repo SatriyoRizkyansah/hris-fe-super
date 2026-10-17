@@ -2,7 +2,7 @@ import { browserApi } from "@/lib/api/browser-client";
 import { readSession, SESSION_COOKIE } from "@/lib/auth";
 import { getApiErrorMessage } from "@/lib/api/errors";
 
-type UploadBody = Parameters<typeof browserApi.dokumen.dokumenPostControllerUpload>[0];
+type UploadBody = Record<string, string | Blob | undefined>;
 
 // Frontend policy, not a claim that Multer enforces MIME types. No active HTML/SVG files.
 const fileTypes: Record<string, string[]> = {
