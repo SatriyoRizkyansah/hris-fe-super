@@ -112,6 +112,10 @@ export default function PengaturanMarginClientPage() {
         <h1 className="text-2xl font-bold">Pengaturan Margin</h1>
         <p className="mt-1 text-sm text-muted-foreground">Atur persentase pembagian margin, unit koordinator pemilik wallet, dan rekening tujuan.</p>
       </header>
+      <Alert className="border-sky-200 bg-sky-50/70 text-sky-950">
+        <AlertTitle>Dasar peraturan</AlertTitle>
+        <AlertDescription>Pengaturan ini mengacu pada Surat Keputusan Pemimpin BLU No. 40.K/KAU.01/DPM/2026 tanggal 2 Juni 2026 tentang Penggunaan Saldo Awal dan Alokasi Margin.</AlertDescription>
+      </Alert>
       {errorMessage && (
         <Alert variant="destructive">
           <AlertTitle>Gagal menyimpan</AlertTitle>
@@ -161,11 +165,11 @@ export default function PengaturanMarginClientPage() {
       {settings.isLoading ? (
         <p className="rounded-xl border bg-background p-6 text-sm text-muted-foreground">Memuat pembagian kamar…</p>
       ) : (
-        <div className="grid items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="margin-settings-grid grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((row, index) => (
-            <Card key={row.id} className="min-w-0 rounded-xl shadow-sm transition-shadow hover:shadow-md">
-              <CardContent className="flex h-full flex-col gap-5 p-5">
-                <div className="flex min-h-12 items-center justify-between gap-3">
+            <Card key={row.id} className="margin-setting-card min-w-0 rounded-xl shadow-sm transition-shadow hover:shadow-md">
+              <CardContent className="flex h-full flex-col gap-4 p-4 sm:p-4">
+                <div className="flex min-h-12 items-center justify-between gap-3 pt-1">
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-sm font-semibold text-foreground">{String(index + 1).padStart(2, "0")}</span>
                     <div className="min-w-0 space-y-0.5">

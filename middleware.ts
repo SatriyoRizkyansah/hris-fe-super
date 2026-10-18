@@ -4,8 +4,9 @@ const SESSION_COOKIE = "lemigas_session";
 const roleAccess: Record<string, string[]> = {
   "/dashboard/pegawai": ["superadmin", "koordinator"],
   "/dashboard/unit-kerja": ["superadmin", "koordinator"],
-  "/dashboard/proyek": ["superadmin", "koordinator", "keuangan", "pimpinan"],
-  "/dashboard/ro": ["superadmin", "koordinator", "keuangan"],
+  "/dashboard/proyek": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan"],
+  "/dashboard/termin": ["superadmin", "keuangan"],
+  "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan"],
   "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan"],
   "/dashboard/rekening": ["superadmin", "keuangan"],
   "/dashboard/mak": ["superadmin", "keuangan"],
@@ -17,7 +18,7 @@ const roleAccess: Record<string, string[]> = {
   "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"],
 };
 const protectedPrefixes = ["/dashboard", ...Object.keys(roleAccess)];
-const roleHome = (role: string) => (role === "pimpinan" ? "/dashboard/proyek" : role === "keuangan" ? "/dashboard/alokasi-gaji/rekap" : ["subkoor", "spi", "karyawan"].includes(role) ? "/dashboard/profil" : "/dashboard");
+const roleHome = (role: string) => (role === "pimpinan" ? "/dashboard/proyek" : role === "keuangan" ? "/dashboard/termin" : ["subkoor", "spi", "karyawan"].includes(role) ? "/dashboard/profil" : "/dashboard");
 
 function readIdentity(cookie?: string): { role?: string } | null {
   if (!cookie) return null;

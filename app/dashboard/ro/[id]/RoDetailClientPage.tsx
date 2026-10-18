@@ -10,6 +10,7 @@ import { Modal } from "@/components/modal/Modal";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
+import { MoneyInput } from "@/components/ui/money-input";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -41,6 +42,8 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [transaction, setTransaction] = useState<TransactionForm>(emptyTransaction);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptUploading, setReceiptUploading] = useState(false);
   const [deleteTransaction, setDeleteTransaction] = useState<AnyRow | null>(null);
   const [confirmSilpa, setConfirmSilpa] = useState(false);
   const detail = use_query({
@@ -187,9 +190,23 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       return;
     }
     try {
-      await saveTransaction.mutateAsync();
+      const result = await saveTransaction.mutateAsync();
+      if (receiptFile) {
+        const response = result as unknown as AnyRow;
+        const body = (response.data ?? response) as AnyRow;
+        const savedId = String(body.id ?? transactionId ?? "");
+        if (!savedId) throw new Error("ID transaksi tidak ditemukan untuk menyimpan bukti.");
+        setReceiptUploading(true);
+        await uploadHrisFile(`/api/ro/${id}/transaksi/${savedId}/dokumen`, receiptFile);
+      }
+      setTransactionOpen(false);
+      setTransactionId(null);
+      setReceiptFile(null);
+      await refresh();
     } catch (error) {
-      setNotice(apiErrorMessage(error, "Gagal menyimpan transaksi."));
+      setNotice(apiErrorMessage(error, "Gagal menyimpan transaksi atau bukti."));
+    } finally {
+      setReceiptUploading(false);
     }
   }
   async function upload(kind: "rab" | "sk") {
@@ -509,16 +526,25 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           </label>
           <label className="grid gap-1 text-sm">
             Debit
-            <Input type="number" min="0" value={transaction.debit} onChange={(event) => setTransaction((state) => ({ ...state, debit: event.target.value }))} />
+            <MoneyInput value={transaction.debit} onValueChange={(value) => setTransaction((state) => ({ ...state, debit: value }))} />
           </label>
           <label className="grid gap-1 text-sm">
             Kredit
-            <Input type="number" min="0" value={transaction.kredit} onChange={(event) => setTransaction((state) => ({ ...state, kredit: event.target.value }))} />
+            <MoneyInput value={transaction.kredit} onValueChange={(value) => setTransaction((state) => ({ ...state, kredit: value }))} />
           </label>
           <label className="grid gap-1 text-sm sm:col-span-2">
             Keterangan
             <Input value={transaction.keterangan} onChange={(event) => setTransaction((state) => ({ ...state, keterangan: event.target.value }))} />
           </label>
+          <DocumentUploadField
+            className="sm:col-span-2"
+            label="Unggah bukti transaksi (PDF/JPG/PNG, maks. 10 MB)"
+            accept=".pdf,.jpg,.jpeg,.png"
+            value={receiptFile}
+            onChange={setReceiptFile}
+            currentFile={String(ledgerRows.find((row) => String(row.id) === transactionId)?.file_bukti ?? "") || null}
+            disabled={saveTransaction.isPending || receiptUploading}
+          />
         </div>
       </Modal>
       <AlertDialog open={Boolean(deleteTransaction)} onOpenChange={(open) => !open && setDeleteTransaction(null)}>

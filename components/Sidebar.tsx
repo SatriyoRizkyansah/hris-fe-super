@@ -49,8 +49,9 @@ const sections = [
   {
     title: "Keuangan",
     items: [
-      { href: "/dashboard/proyek", label: "Proyek", icon: BriefcaseBusiness, roles: ["superadmin", "koordinator", "keuangan", "pimpinan"] },
-      { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "keuangan"] },
+      { href: "/dashboard/proyek", label: "Proyek", icon: BriefcaseBusiness, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan"] },
+      { href: "/dashboard/termin", label: "Termin Proyek", icon: ClipboardCheck, roles: finance },
+      { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan"] },
       { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "koordinator", "keuangan"] },
       { href: "/dashboard/rekening", label: "Rekening Bank", icon: Landmark, roles: finance },
       { href: "/dashboard/mak", label: "MAK", icon: FileText, roles: finance },
@@ -66,8 +67,8 @@ const roleLabels: Record<string, string> = { superadmin: "Superadmin", koordinat
 const allowedPath: Record<string, string[]> = {
   "/dashboard/pegawai": ["superadmin", "koordinator"],
   "/dashboard/unit-kerja": ["superadmin", "koordinator"],
-  "/dashboard/proyek": ["superadmin", "koordinator", "keuangan", "pimpinan"],
-  "/dashboard/ro": ["superadmin", "koordinator", "keuangan"],
+  "/dashboard/proyek": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan"],
+  "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan"],
   "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan"],
   "/dashboard/rekening": ["superadmin", "keuangan"],
   "/dashboard/mak": ["superadmin", "keuangan"],
@@ -78,7 +79,7 @@ const allowedPath: Record<string, string[]> = {
   "/dashboard/pengaturan-margin": ["superadmin"],
   "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"],
 };
-const homeForRole = (value: string) => (value === "pimpinan" ? "/dashboard/proyek" : value === "keuangan" ? "/dashboard/alokasi-gaji/rekap" : ["subkoor", "spi", "karyawan"].includes(value) ? "/dashboard/profil" : "/dashboard");
+const homeForRole = (value: string) => (value === "pimpinan" ? "/dashboard/proyek" : value === "keuangan" ? "/dashboard/termin" : ["subkoor", "spi", "karyawan"].includes(value) ? "/dashboard/profil" : "/dashboard");
 
 export default function Sidebar({ collapsed, open, onToggle, role = "", accesses = [], activeToken = "" }: Props) {
   const pathname = usePathname() ?? "";

@@ -862,6 +862,12 @@ button {
 .hris-page [data-slot="card-content"] {
   padding: 0 22px 20px;
 }
+.hris-page .margin-settings-grid .margin-setting-card > [data-slot="card-content"] {
+  padding: 20px 16px 16px;
+}
+.hris-page .operational-summary-grid > [data-slot="card"] > [data-slot="card-content"] {
+  padding: 12px;
+}
 .hris-page table {
   border-collapse: separate;
   border-spacing: 0;

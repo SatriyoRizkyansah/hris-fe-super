@@ -54,17 +54,21 @@ export default function DanaOperasionalClientPage() {
         <h1 className="text-2xl font-bold">Dana Operasional</h1>
         <p className="mt-1 text-sm text-muted-foreground">Pembagian plafond dan saldo dana operasional per kamar · Tahun fiskal {currentYear}.</p>
       </header>
+      <Alert className="border-sky-200 bg-sky-50/70 text-sky-950">
+        <AlertTitle>Dasar peraturan</AlertTitle>
+        <AlertDescription>Penggunaan saldo awal dan alokasi margin mengacu pada Surat Keputusan Pemimpin BLU No. 40.K/KAU.01/DPM/2026 tanggal 2 Juni 2026 tentang Penggunaan Saldo Awal dan Alokasi Margin.</AlertDescription>
+      </Alert>
       {query.error && (
         <Alert variant="destructive">
           <AlertTitle>Gagal memuat dana operasional</AlertTitle>
           <AlertDescription>{apiErrorMessage(query.error)}</AlertDescription>
         </Alert>
       )}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="operational-summary-grid grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {summary.map((item) => (
           <Card key={item.key} className={item.style}>
-            <CardContent className="px-30 pb-3 sm:px-4 sm:pb-4">
-              <div className="flex min-h-10 items-start justify-between gap-1 pt-4 sm:pt-4">
+            <CardContent className="px-3 pb-3 pt-3 sm:px-4 sm:pb-4">
+              <div className="flex min-h-10 items-start justify-between gap-1">
                 <p className="text-[10px] font-bold uppercase leading-tight tracking-wide text-muted-foreground">{item.label}</p>
                 <span className="shrink-0 rounded-full border bg-background/80 px-1.5 py-0.5 text-[10px] font-bold">{item.share}</span>
               </div>
