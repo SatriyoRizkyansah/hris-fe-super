@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
-import { Wallet } from "lucide-react";
+import { ArrowUpRight, Wallet } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/table/DataTable";
 import { browserApi } from "@/lib/api/browser-client";
@@ -93,6 +95,16 @@ export default function DanaOperasionalClientPage() {
               { key: "plafon", header: "Plafond", className: "text-right", render: (row) => formatRupiah(row.total_plafon) },
               { key: "sisa", header: "Sisa Saldo", className: "text-right", render: (row) => formatRupiah(row.sisa_saldo ?? row.total_plafon) },
               { key: "terpakai", header: "Terpakai", className: "text-right", render: (row) => formatRupiah(row.total_terpakai) },
+              {
+                key: "aksi",
+                header: "Detail",
+                className: "text-right",
+                render: (row) => (
+                  <Button variant="outline" size="sm" render={<Link href={`/dashboard/dana-operasional/${row.id}`} />}>
+                    <ArrowUpRight size={14} /> Detail
+                  </Button>
+                ),
+              },
             ]}
             rows={rows}
             rowKey={(row) => row.id}
