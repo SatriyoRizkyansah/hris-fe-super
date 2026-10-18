@@ -27,6 +27,7 @@ type Props = {
   columns?: { key: string; header: string; render?: (value: unknown, row: Record<string, any>) => ReactNode }[];
   query?: Record<string, unknown>;
   create?: { method: string; fields: { name: string; label: string; required?: boolean }[] };
+  headerAction?: ReactNode;
 };
 
 const humanize = (key: string) => key.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -36,7 +37,7 @@ const display = (value: unknown) => {
   return String(value);
 };
 
-export function HrisResourcePage({ title, description, group, method, methodHasQuery = true, searchPlaceholder, columns: configuredColumns, query: initialQuery = {}, create }: Props) {
+export function HrisResourcePage({ title, description, group, method, methodHasQuery = true, searchPlaceholder, columns: configuredColumns, query: initialQuery = {}, create, headerAction }: Props) {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -68,7 +69,7 @@ export function HrisResourcePage({ title, description, group, method, methodHasQ
     queryFn: async (input) => {
       setBrowserToken();
       const api = (browserApi as any)[group];
-      return apiData(methodHasQuery ? api[method](input, { format: "json" }) : api[method]({ format: "json" }));
+      return apiData(methodHasQuery ? api[method](input, { format: "json" }) : api[method](undefined, { format: "json" }));
     },
   });
   let payload: any = result.data;
@@ -103,18 +104,21 @@ export function HrisResourcePage({ title, description, group, method, methodHasQ
           <h1 className="text-2xl font-bold">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
-        {create && canCreate ? (
-          <Button
-            type="button"
-            onClick={() => {
-              setForm({});
-              setFormError("");
-              setCreateOpen(true);
-            }}
-          >
-            <Plus size={18} /> Tambah
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {headerAction}
+          {create && canCreate ? (
+            <Button
+              type="button"
+              onClick={() => {
+                setForm({});
+                setFormError("");
+                setCreateOpen(true);
+              }}
+            >
+              <Plus size={18} /> Tambah
+            </Button>
+          ) : null}
+        </div>
       </header>
       <Card>
         <CardContent className="pt-4">
@@ -125,7 +129,7 @@ export function HrisResourcePage({ title, description, group, method, methodHasQ
           ) : null}
           {result.isError ? (
             <p role="alert" className="py-8 text-center text-sm text-destructive">
-              Gagal memuat data. Periksa koneksi API dan hak akses.
+              {getApiErrorMessage(result.error) || "Gagal memuat data. Periksa koneksi API dan hak akses."}
             </p>
           ) : null}
           {!result.isLoading && !result.isError ? (

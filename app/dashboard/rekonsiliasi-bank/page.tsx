@@ -1,4 +1,5 @@
-import { HrisResourcePage } from "@/components/hris/HrisResourcePage";
+import RekonsiliasiBankPageClient from "./RekonsiliasiBankPageClient";
+
 export default function Page() {
-  return <HrisResourcePage title="Rekonsiliasi Bank" description="Riwayat rekonsiliasi bank." group="rekonsiliasiBank" method="rekonsiliasiBankControllerFindAll" />;
+  return <RekonsiliasiBankPageClient />;
 }

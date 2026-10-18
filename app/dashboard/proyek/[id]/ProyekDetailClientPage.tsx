@@ -69,7 +69,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetTermin(id);
+      return browserApi.masterProyek.proyekControllerGetTermin(id, { format: "json" });
     },
   });
   const settings = use_query({
@@ -78,7 +78,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     params: undefined,
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterPengaturanMargin.pengaturanMarginControllerGetData();
+      return browserApi.masterPengaturanMargin.pengaturanMarginControllerGetData({ format: "json" });
     },
   });
   const distribution = use_query({
@@ -87,7 +87,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetDistribusi(id);
+      return browserApi.masterProyek.proyekControllerGetDistribusi(id, { format: "json" });
     },
   });
   const units = use_query({
@@ -104,7 +104,8 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const roRows = envelopeRows<Row>(ros.data);
   const termRows = envelopeRows<Row>(terms.data);
   const distributionRows = envelopeRows<Row>(distribution.data);
-  const settingRows = envelopeRows<Row>(settings.data);
+  const settingsData = envelopeData<Row>(settings.data);
+  const settingRows = Array.isArray(settingsData?.list) ? (settingsData.list as Row[]) : [];
   const currentUnit = envelopeRows<Row>(units.data).find((unit) => String(unit.id) === identity.unitKerjaId);
   const isUmum = identity.role === "superadmin" || (identity.role === "koordinator" && String(currentUnit?.kode_unit ?? coordinatorCode) === "ORG-UMUM");
   const isSubmitter = identity.role === "superadmin" || (identity.role === "koordinator" && identity.userId === String(project?.diajukan_oleh_id ?? ""));
@@ -175,9 +176,13 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const roTotal = roRows.reduce((total, row) => total + (Number(row.total_plafon) || 0), 0);
   const roUsed = roRows.reduce((total, row) => total + (Number(row.total_terpakai) || 0), 0);
   const termsPaid = termRows.some((term) => String(term.status) === "CAIR");
+  const termTotal = termRows.reduce((sum, term) => sum + (Number(term.nilai_termin ?? term.nilai ?? term.nominal) || 0), 0);
+  const termPaid = termRows.filter((term) => String(term.status) === "CAIR").reduce((sum, term) => sum + (Number(term.nilai_termin ?? term.nilai ?? term.nominal) || 0), 0);
+  const termRemaining = Math.max(0, termTotal - termPaid);
   const marginDistributed = distributionRows.reduce((total, row) => total + (Number(row.debit) || 0), 0);
   const directCost = Number(project.total_direct_cost) || 0;
   const margin = Number(project.total_margin) || 0;
+  const marginRemaining = Math.max(0, margin - marginDistributed);
   const contract = Number(project.nilai_kontrak) || 0;
   const usedPercent = roTotal ? Math.min(100, (roUsed / roTotal) * 100) : 0;
   const marginPercent = margin ? (marginDistributed / margin) * 100 : 0;
@@ -304,7 +309,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           <Card label="Total Margin" value={formatRupiah(margin)} hint={`Distribusi ${formatRupiah(marginDistributed)}`} />
           <Card label="Dana RO tersedia" value={formatRupiah(roTotal)} hint={termsPaid ? `Termin telah cair · terpakai ${formatRupiah(roUsed)}` : "Belum ada termin cair · dana belum tersedia"} />
         </div>
-        <div className="mt-5 grid gap-5 border-t pt-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-5 border-t pt-4 md:grid-cols-2">
           <div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Pemakaian plafon RO</span>
@@ -329,13 +334,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               {formatRupiah(marginDistributed)} dari {formatRupiah(margin)}
             </p>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Rekonsiliasi nilai</p>
-            <p className="mt-1 font-semibold">
-              {formatRupiah(contract)} = {formatRupiah(directCost)} + {formatRupiah(margin)}
-            </p>
-            <p className="text-xs text-muted-foreground">Nilai kontrak = Direct Cost + Margin</p>
-          </div>
         </div>
       </section>
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
@@ -344,6 +342,15 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             Termin pencairan <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-xs">{termRows.length}</span>
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">Alur Keuangan per termin: menunggu validasi → disetujui Keuangan → dicairkan. Pencairan menambah saldo RO dan mengalokasikan sisa ke dana operasional.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Card label="Total nilai termin" value={formatRupiah(termTotal)} hint={`${termRows.length} termin`} />
+            <Card label="Sudah cair" value={formatRupiah(termPaid)} hint={`${termRows.filter((term) => String(term.status) === "CAIR").length} termin dicairkan`} />
+            <Card label="Belum cair" value={formatRupiah(termRemaining)} hint={`${termRows.filter((term) => String(term.status) !== "CAIR").length} termin tersisa`} />
+            <Card label="Progres pencairan" value={`${termTotal ? ((termPaid / termTotal) * 100).toFixed(1) : "0.0"}%`} hint="Berdasarkan nilai termin" />
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${termTotal ? Math.min(100, (termPaid / termTotal) * 100) : 0}%` }} />
+          </div>
         </div>
         <div className="grid gap-3 p-5">
           {termRows.length ? (
@@ -430,10 +437,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                     </span>
                     <span className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={roStatusTone(String(row.status_ro ?? ""))}>{text(row.status_ro)}</StatusBadge>
-                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Rencana {formatRupiah(planned)}</span>
-                      <span className={`rounded-lg px-2.5 py-1 text-xs ${available > 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-                        {available > 0 ? `Dana cair ${formatRupiah(available)}` : "Belum cair · Rp0 tersedia"}
-                      </span>
+                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Alokasi RO {formatRupiah(planned)}</span>
+                      <span className={`rounded-lg px-2.5 py-1 text-xs ${available > 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>Sisa saldo {formatRupiah(row.sisa_saldo ?? available)}</span>
+                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Terpakai {formatRupiah(row.total_terpakai)}</span>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${usage >= 90 ? "bg-rose-100 text-rose-800" : usage >= 70 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
                         {usage.toFixed(0)}% terpakai
                       </span>
@@ -461,6 +467,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                         <>
                           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             {[
+                              ["Alokasi RO", formatRupiah(planned)],
                               ["Terpakai", formatRupiah(row.total_terpakai)],
                               ["Sisa saldo", formatRupiah(row.sisa_saldo)],
                               ["Penanggung jawab", text(row.pj)],
@@ -573,42 +580,13 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       </section>
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
         <div className="border-b bg-muted/40 px-5 py-4">
-          <h2 className="font-semibold">Distribusi margin per kategori dan unit</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Realisasi pemindahan margin proyek ke dana operasional.</p>
-        </div>
-        <div className="overflow-x-auto p-5">
-          {groupedDistribution.size ? (
-            <table className="w-full min-w-[40rem] text-sm">
-              <thead>
-                <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="p-3">Kategori</th>
-                  <th className="p-3">Unit penerima</th>
-                  <th className="p-3 text-right">Transaksi</th>
-                  <th className="p-3 text-right">Nilai distribusi</th>
-                  <th className="p-3 text-right">Porsi margin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from(groupedDistribution.values()).map((group) => (
-                  <tr key={`${group.category}:${group.unit}`} className="border-b last:border-0 hover:bg-muted/20">
-                    <td className="p-3 font-medium">{group.category.replaceAll("_", " ")}</td>
-                    <td className="p-3">{group.unit}</td>
-                    <td className="p-3 text-right">{group.count}</td>
-                    <td className="p-3 text-right font-semibold">{formatRupiah(group.amount)}</td>
-                    <td className="p-3 text-right">{margin ? `${((group.amount / margin) * 100).toFixed(1)}%` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-sm text-muted-foreground">Belum ada distribusi margin tercatat.</p>
-          )}
-        </div>
-      </section>
-      <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
-        <div className="border-b bg-muted/40 px-5 py-4">
-          <h2 className="font-semibold">Acuan pengaturan margin</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Persentase global dibanding distribusi aktual proyek.</p>
+          <h2 className="font-semibold">Realisasi margin per kategori dan unit</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Acuan, nilai yang sudah disalurkan, dan sisa per kategori dalam satu tabel.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <Card label="Target margin" value={formatRupiah(margin)} />
+            <Card label="Sudah didistribusikan" value={formatRupiah(marginDistributed)} hint={`${marginPercent.toFixed(1)}% dari target`} />
+            <Card label="Sisa belum didistribusikan" value={formatRupiah(marginRemaining)} hint="Target dikurangi realisasi" />
+          </div>
         </div>
         <div className="overflow-x-auto p-5">
           {settingRows.length ? (
@@ -618,22 +596,31 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                   <th className="p-3">Kategori</th>
                   <th className="p-3">Unit penerima</th>
                   <th className="p-3 text-right">Persentase acuan</th>
-                  <th className="p-3 text-right">Nilai acuan proyek</th>
-                  <th className="p-3 text-right">Distribusi aktual</th>
+                  <th className="p-3 text-right">Nilai acuan</th>
+                  <th className="p-3 text-right">Transaksi</th>
+                  <th className="p-3 text-right">Sudah disalurkan</th>
+                  <th className="p-3 text-right">Sisa acuan</th>
                 </tr>
               </thead>
               <tbody>
                 {settingRows.map((setting, index) => {
                   const category = text(setting.kategori_kamar);
-                  const actual = distributionRows.filter((row) => text(row.dana_kategori ?? (row.dana as Row | undefined)?.kategori_kamar) === category).reduce((sum, row) => sum + (Number(row.debit) || 0), 0);
+                  const unit = text(setting.nama_unit ?? (setting.unit as Row | undefined)?.nama_unit);
+                  const matchingRows = distributionRows.filter(
+                    (row) => text(row.dana_kategori ?? (row.dana as Row | undefined)?.kategori_kamar) === category && text((row.unit as Row | undefined)?.nama_unit ?? (row.dana as Row | undefined)?.nama_unit) === unit,
+                  );
+                  const actual = matchingRows.reduce((sum, row) => sum + (Number(row.debit) || 0), 0);
                   const pct = Number(setting.persentase) || 0;
+                  const target = (margin * pct) / 100;
                   return (
                     <tr key={String(setting.id ?? index)} className="border-b last:border-0 hover:bg-muted/20">
                       <td className="p-3 font-medium">{text(setting.nama_kamar ?? category)}</td>
-                      <td className="p-3">{text(setting.nama_unit ?? (setting.unit as Row | undefined)?.nama_unit)}</td>
+                      <td className="p-3">{unit}</td>
                       <td className="p-3 text-right">{pct}%</td>
-                      <td className="p-3 text-right">{formatRupiah((margin * pct) / 100)}</td>
+                      <td className="p-3 text-right">{formatRupiah(target)}</td>
+                      <td className="p-3 text-right">{matchingRows.length}</td>
                       <td className="p-3 text-right font-semibold">{formatRupiah(actual)}</td>
+                      <td className="p-3 text-right">{formatRupiah(Math.max(0, target - actual))}</td>
                     </tr>
                   );
                 })}
