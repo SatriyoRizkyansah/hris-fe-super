@@ -33,12 +33,15 @@ export default function LoginPage() {
 
     try {
       const result = await login.mutateAsync({ data: { email: identity.trim(), password } });
-      const access = result.akses[0];
-      const role = normalizeRole(access.akses);
-      if (!role) throw new Error(`Role akses tidak dikenal: ${access.akses}`);
-      setSession(access.token, { name: result.nama, email: identity.trim(), role }, remember);
+      const accesses = result.akses.flatMap((access) => {
+        const role = normalizeRole(access.akses);
+        return role ? [{ ...access, role }] : [];
+      });
+      const access = accesses[0];
+      if (!access) throw new Error(`Role akses tidak dikenal: ${result.akses[0]?.akses ?? "—"}`);
+      setSession(access.token, { name: result.nama, email: identity.trim(), role: access.role }, remember, accesses);
       const next = new URLSearchParams(window.location.search).get("next");
-      const destination = next?.startsWith("/") && !next.startsWith("//") ? next : roleHome(role);
+      const destination = next?.startsWith("/") && !next.startsWith("//") ? next : roleHome(access.role);
       router.replace(destination);
       router.refresh();
     } catch (cause) {

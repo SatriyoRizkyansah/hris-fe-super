@@ -2,8 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Gauge, PanelLeftClose, PanelLeftOpen, UsersRound, Building2, UserCircle, BriefcaseBusiness, Wallet, Landmark, FileText, Banknote, ChartNoAxesCombined, Settings, UserCog, ClipboardCheck } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import {
+  ArrowLeftRight,
+  Check,
+  ChevronDown,
+  Gauge,
+  PanelLeftClose,
+  PanelLeftOpen,
+  UsersRound,
+  Building2,
+  UserCircle,
+  BriefcaseBusiness,
+  Wallet,
+  Landmark,
+  FileText,
+  Banknote,
+  ChartNoAxesCombined,
+  Settings,
+  UserCog,
+  ClipboardCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/legacy-button";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { LoadingCard } from "@/components/loading";
+import { selectSessionRole, type RoleAccess } from "@/lib/auth";
+import { browserApi } from "@/lib/api/browser-client";
 
 const all = ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"];
 const finance = ["superadmin", "keuangan"];
@@ -36,10 +61,46 @@ const sections = [
   { title: "Akun", items: [{ href: "/dashboard/profil", label: "Profil Saya", icon: UserCircle, roles: all }] },
 ];
 
-type Props = { collapsed: boolean; open: boolean; onToggle: () => void; role?: string };
+type Props = { collapsed: boolean; open: boolean; onToggle: () => void; role?: string; accesses?: RoleAccess[]; activeToken?: string };
+const roleLabels: Record<string, string> = { superadmin: "Superadmin", koordinator: "Koordinator", subkoor: "Subkoordinator", keuangan: "Keuangan", pimpinan: "Pimpinan", spi: "SPI", karyawan: "Karyawan" };
+const allowedPath: Record<string, string[]> = {
+  "/dashboard/pegawai": ["superadmin", "koordinator"],
+  "/dashboard/unit-kerja": ["superadmin", "koordinator"],
+  "/dashboard/proyek": ["superadmin", "koordinator", "keuangan", "pimpinan"],
+  "/dashboard/ro": ["superadmin", "koordinator", "keuangan"],
+  "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan"],
+  "/dashboard/rekening": ["superadmin", "keuangan"],
+  "/dashboard/mak": ["superadmin", "keuangan"],
+  "/dashboard/sk": ["superadmin", "koordinator", "keuangan"],
+  "/dashboard/alokasi-gaji": ["superadmin", "koordinator", "keuangan"],
+  "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan"],
+  "/dashboard/pengguna": ["superadmin"],
+  "/dashboard/pengaturan-margin": ["superadmin"],
+  "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"],
+};
+const homeForRole = (value: string) => (value === "pimpinan" ? "/dashboard/proyek" : value === "keuangan" ? "/dashboard/alokasi-gaji/rekap" : ["subkoor", "spi", "karyawan"].includes(value) ? "/dashboard/profil" : "/dashboard");
 
-export default function Sidebar({ collapsed, open, onToggle, role = "" }: Props) {
+export default function Sidebar({ collapsed, open, onToggle, role = "", accesses = [], activeToken = "" }: Props) {
   const pathname = usePathname() ?? "";
+  const queryClient = useQueryClient();
+  const [switching, setSwitching] = useState(false);
+  const roleOptions = accesses.filter((access, index, list) => list.findIndex((item) => item.token === access.token) === index);
+  const currentAccess = roleOptions.find((access) => access.token === activeToken) ?? roleOptions.find((access) => access.role === role);
+  const canStayHere = (nextRole: string) => {
+    const match = Object.keys(allowedPath)
+      .sort((a, b) => b.length - a.length)
+      .find((path) => pathname === path || pathname.startsWith(`${path}/`));
+    return !match || allowedPath[match].includes(nextRole);
+  };
+  function switchRole(nextToken: string | null) {
+    if (!nextToken || switching) return;
+    const access = roleOptions.find((item) => item.token === nextToken);
+    if (!access || access.token === currentAccess?.token || !selectSessionRole(access)) return;
+    setSwitching(true);
+    queryClient.clear();
+    browserApi.setSecurityData(access.token);
+    window.location.assign(canStayHere(access.role) ? pathname : homeForRole(access.role));
+  }
 
   return (
     <aside className="sidebar-slot" data-open={open} data-collapsed={collapsed}>
@@ -53,7 +114,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "" }: Props)
                 <p className="sidebar-title">{section.title}</p>
                 <ul className="nav">
                   {visibleItems.map(({ href, label, icon: Icon }) => {
-                    const active = href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+                    const active = href === "/dashboard" ? pathname === href : href === "/dashboard/alokasi-gaji" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
                     return (
                       <li key={href}>
                         <Link href={href} className="nav-link" aria-current={active ? "page" : undefined} title={collapsed ? label : undefined}>
@@ -70,6 +131,52 @@ export default function Sidebar({ collapsed, open, onToggle, role = "" }: Props)
         </div>
 
         <div className="sidebar-foot">
+          {roleOptions.length > 0 && (
+            <div className="mb-3 px-1" aria-label="Ganti role">
+              {!collapsed && <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-black/55">Akses aktif</p>}
+              <Select value={currentAccess?.token ?? ""} onValueChange={switchRole}>
+                <SelectTrigger
+                  className="h-auto min-h-12 w-full rounded-2xl border border-black/10 bg-black/[0.06] px-3 py-2 text-left shadow-sm hover:bg-black/[0.1] focus-visible:ring-black/20"
+                  aria-label="Pilih role"
+                  disabled={switching}
+                >
+                  <span className="flex min-w-0 flex-1 items-center gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-black text-[#ffe466] shadow-sm">
+                      <ArrowLeftRight size={16} />
+                    </span>
+                    {!collapsed && (
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold text-black">{roleLabels[currentAccess?.role ?? role] ?? currentAccess?.role ?? role}</span>
+                        <span className="block truncate text-[11px] font-medium text-black/60">{roleOptions.length > 1 ? "Ganti akses" : "Satu akses tersedia"}</span>
+                      </span>
+                    )}
+                    {!collapsed && <ChevronDown size={16} className="shrink-0 text-black/60" />}
+                  </span>
+                </SelectTrigger>
+                <SelectContent align="end" side="top" sideOffset={8} className="w-[var(--anchor-width)] rounded-2xl border border-black/10 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">
+                  <div className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Pilih akses</div>
+                  {roleOptions.map((access, index) => {
+                    const duplicateRole = roleOptions.filter((item) => item.role === access.role).length > 1;
+                    return (
+                      <SelectItem key={access.token} value={access.token} disabled={switching} className="min-h-12 rounded-xl px-3 py-2 focus:bg-amber-100 focus:text-black data-[selected]:bg-amber-50">
+                        <span className="flex min-w-0 flex-1 items-center gap-3">
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-900">
+                            <ArrowLeftRight size={15} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold">{roleLabels[access.role] ?? access.role}</span>
+                            {duplicateRole && <span className="block truncate text-[11px] text-muted-foreground">{access.akses || `Akses ${index + 1}`}</span>}
+                          </span>
+                          {access.token === currentAccess?.token && <Check size={16} className="text-amber-700" />}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {switching && <LoadingCard label="Mengganti role…" />}
           {/* <Skyline className="sidebar-skyline" /> */}
           {/* <p className="sidebar-tagline">
             Energi untuk

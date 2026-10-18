@@ -6,16 +6,19 @@ import { use_query } from "@/lib/api/use_query";
 import { DataTable } from "@/components/table";
 import { Card, CardContent } from "@/components/ui/card";
 export default function Page() {
+  const now = new Date();
   const [page, setPage] = useState(1),
     [pageSize, setPageSize] = useState(10),
-    [search, setSearch] = useState("");
+    [search, setSearch] = useState(""),
+    [bulan, setBulan] = useState(now.getMonth() + 1),
+    [tahun, setTahun] = useState(now.getFullYear());
   const query = use_query({
     tag: "alokasiGajiTa",
     method: "alokasiRekapControllerGetRekap",
-    params: {},
-    queryFn: async () => {
+    params: { periode_bulan: bulan, periode_tahun: tahun },
+    queryFn: async (params) => {
       setBrowserToken();
-      return browserApi.alokasiGajiTa.alokasiRekapControllerGetRekap(undefined, { format: "json" }) as any;
+      return browserApi.alokasiGajiTa.alokasiRekapControllerGetRekap(params, { format: "json" }) as any;
     },
   });
   const response = (query.data as any)?.data ?? query.data;
@@ -35,7 +38,7 @@ export default function Page() {
           {query.isLoading ? (
             <p role="status">Memuat rekap…</p>
           ) : query.isError ? (
-            <p role="alert">Gagal memuat rekap.</p>
+            <p role="alert">{query.error instanceof Error ? query.error.message : "Gagal memuat rekap."}</p>
           ) : (
             <DataTable
               rows={rows}

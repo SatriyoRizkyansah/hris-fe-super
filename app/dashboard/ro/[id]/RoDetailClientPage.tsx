@@ -129,7 +129,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     if (!ro) return;
     setEdit({
       nama_ro: ro.nama_ro ?? "",
-      total_plafon: String(ro.total_plafon ?? ""),
+      total_plafon: String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro.total_plafon ?? ""),
       no_kontrak: String(ro.no_kontrak ?? ""),
       pj: String(ro.pj ?? ""),
       no_sk: String(ro.no_sk ?? ""),
@@ -141,8 +141,9 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     setEditOpen(true);
   }
   async function saveEdit() {
-    if (!edit.nama_ro || Number(edit.total_plafon) <= 0) {
-      setNotice("Nama RO dan plafon lebih dari Rp0 wajib diisi.");
+    const plannedAmount = Number((ro as (RoItemDto & { nilai_rencana?: number }) | undefined)?.nilai_rencana ?? ro?.total_plafon ?? 0);
+    if (!edit.nama_ro.trim() || plannedAmount <= 0) {
+      setNotice("Nama RO wajib diisi dan plafon awal proyek harus lebih dari Rp0.");
       return;
     }
     if (edit.mulai_sk && edit.berakhir_sk && edit.berakhir_sk < edit.mulai_sk) {
@@ -150,9 +151,9 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       return;
     }
     try {
+      const { total_plafon: _lockedPlan, ...metadata } = edit;
       await update.mutateAsync({
-        ...edit,
-        total_plafon: Number(edit.total_plafon),
+        ...metadata,
         no_kontrak: edit.no_kontrak || undefined,
         pj: edit.pj || undefined,
         no_sk: edit.no_sk || undefined,
@@ -224,6 +225,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       </div>
     );
   const incomplete = missing(ro);
+  const plannedPlafon = Number((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana) || Number(ro.total_plafon) || 0;
   const totalPlafon = Number(ro.total_plafon) || 0;
   const totalUsed = Number(ro.total_terpakai) || 0;
   const balance = Number(ro.sisa_saldo ?? totalPlafon - totalUsed);
@@ -250,31 +252,31 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         </div>
       </header>
       {incomplete.length > 0 && (
-        <Alert>
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
           <AlertTitle>Data RO belum lengkap</AlertTitle>
-          <AlertDescription>{incomplete.join(", ")}. Lengkapi sebelum RO dipakai.</AlertDescription>
-        </Alert>
-      )}
-      {notice && (
-        <Alert variant="destructive">
-          <AlertDescription>{notice}</AlertDescription>
+          <AlertDescription className="text-amber-800">
+            {incomplete.join(", ")}. Lengkapi melalui tombol <strong>Lengkapi RO</strong> sebelum RO dipakai.
+          </AlertDescription>
         </Alert>
       )}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-          <p className="text-xs text-muted-foreground">Plafon Awal</p>
-          <p className="mt-1 text-lg font-semibold">{formatRupiah(totalPlafon)}</p>
+          <p className="text-xs text-muted-foreground">Alokasi Rencana</p>
+          <p className="mt-1 text-lg font-semibold">{formatRupiah(plannedPlafon)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Anggaran awal proyek untuk RO ini</p>
         </div>
         <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Pengeluaran</p>
-          <p className="mt-1 text-lg font-semibold text-destructive">{formatRupiah(totalUsed)}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dana Tersedia</p>
+          <p className="mt-1 text-lg font-semibold">{formatRupiah(totalPlafon)}</p>
+          <p className={`mt-1 text-xs ${totalPlafon > 0 ? "text-emerald-700" : "text-amber-700"}`}>{totalPlafon > 0 ? "Termin telah dicairkan" : "Belum ada termin dicairkan"}</p>
           <div className="mt-2 h-2 overflow-hidden rounded bg-muted">
             <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sisa Saldo</p>
-          <p className="mt-1 text-lg font-semibold">{formatRupiah(balance)}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Pengeluaran</p>
+          <p className="mt-1 text-lg font-semibold text-destructive">{formatRupiah(totalUsed)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Sisa tersedia {formatRupiah(balance)}</p>
         </div>
       </div>
       <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-3">
@@ -432,13 +434,20 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         }
       >
         <div className="grid gap-3">
+          {notice && (
+            <Alert variant="destructive" className="border-destructive/40 bg-destructive/5">
+              <AlertTitle>Periksa data RO</AlertTitle>
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>
+          )}
           <label className="grid gap-1 text-sm">
             Nama RO
             <Input value={edit.nama_ro} onChange={(event) => setEdit((state) => ({ ...state, nama_ro: event.target.value }))} />
           </label>
           <label className="grid gap-1 text-sm">
-            Plafon
-            <Input type="number" value={edit.total_plafon} onChange={(event) => setEdit((state) => ({ ...state, total_plafon: event.target.value }))} />
+            Plafon awal proyek (terkunci)
+            <Input type="number" value={String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro?.total_plafon ?? edit.total_plafon)} readOnly aria-readonly="true" />
+            <span className="text-xs text-muted-foreground">Pencairan termin dapat menambah saldo; nilai awal tidak dapat diubah.</span>
           </label>
           <label className="grid gap-1 text-sm">
             No Kontrak
@@ -480,6 +489,12 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         }
       >
         <div className="grid gap-3 sm:grid-cols-2">
+          {notice && (
+            <Alert variant="destructive" className="sm:col-span-2 border-destructive/40 bg-destructive/5">
+              <AlertTitle>Transaksi belum tersimpan</AlertTitle>
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>
+          )}
           <label className="grid gap-1 text-sm sm:col-span-2">
             Nama kegiatan
             <Input value={transaction.nama_kegiatan} onChange={(event) => setTransaction((state) => ({ ...state, nama_kegiatan: event.target.value }))} />

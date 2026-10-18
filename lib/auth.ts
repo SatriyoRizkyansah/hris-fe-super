@@ -16,16 +16,31 @@ export function roleHome(role: string): string {
 }
 
 export type User = { name: string; role: string; email: string; initials: string };
-export type Session = { token: string; user: User };
+export type RoleAccess = { token: string; akses: string; role: HrisRole };
+export type Session = { token: string; user: User; accesses?: RoleAccess[]; remember?: boolean };
 
-export function setSession(token: string, user: Omit<User, "initials">, remember: boolean) {
+export function setSession(token: string, user: Omit<User, "initials">, remember: boolean, accesses: RoleAccess[] = []) {
   const maxAge = remember ? `; max-age=${60 * 60 * 24 * 30}` : "";
-  const session: Session = { token, user: { ...user, initials: makeInitials(user.name) } };
+  const session: Session = { token, user: { ...user, initials: makeInitials(user.name) }, accesses, remember };
   document.cookie = `${SESSION_COOKIE}=${encodeURIComponent(JSON.stringify(session))}; path=/; samesite=lax${maxAge}`;
 }
 
 export function clearSession() {
   document.cookie = `${SESSION_COOKIE}=; path=/; max-age=0; samesite=lax`;
+}
+
+export function selectSessionRole(access: RoleAccess) {
+  const cookie = document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${SESSION_COOKIE}=`))
+    ?.slice(SESSION_COOKIE.length + 1);
+  const current = readSession(cookie);
+  if (!current) return false;
+  const session: Session = { ...current, token: access.token, user: { ...current.user, role: access.role } };
+  const maxAge = current.remember ? `; max-age=${60 * 60 * 24 * 30}` : "";
+  document.cookie = `${SESSION_COOKIE}=${encodeURIComponent(JSON.stringify(session))}; path=/; samesite=lax${maxAge}`;
+  return true;
 }
 
 function makeInitials(name: string) {
@@ -38,7 +53,8 @@ export function readSession(value: string | undefined): Session | null {
   try {
     const parsed = JSON.parse(decodeURIComponent(value)) as Partial<Session>;
     if (typeof parsed.token !== "string" || !parsed.user || typeof parsed.user.name !== "string") return null;
-    return { token: parsed.token, user: { ...parsed.user, initials: makeInitials(parsed.user.name), role: parsed.user.role || "staff", email: parsed.user.email || "" } };
+    const accesses = Array.isArray(parsed.accesses) ? parsed.accesses.filter((access): access is RoleAccess => Boolean(access && typeof access.token === "string" && typeof access.akses === "string" && typeof access.role === "string")) : [];
+    return { token: parsed.token, accesses, remember: Boolean(parsed.remember), user: { ...parsed.user, initials: makeInitials(parsed.user.name), role: parsed.user.role || "staff", email: parsed.user.email || "" } };
   } catch {
     return null;
   }

@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Topbar from "./Topbar";
 import Sidebar from "./Sidebar";
-import type { User } from "@/lib/auth";
+import type { RoleAccess, User } from "@/lib/auth";
 
-export default function Shell({ user, children }: { user: User; children: React.ReactNode }) {
+export default function Shell({ user, accesses, activeToken, children }: { user: User; accesses: RoleAccess[]; activeToken: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false); // desktop
   const [drawerOpen, setDrawerOpen] = useState(false); // mobile
@@ -31,7 +31,7 @@ export default function Shell({ user, children }: { user: User; children: React.
       </a>
       <Topbar user={user} onMenu={toggleMenu} />
       <div className="layout" data-collapsed={collapsed}>
-        <Sidebar collapsed={collapsed} open={drawerOpen} onToggle={toggleMenu} role={user.role} />
+        <Sidebar collapsed={collapsed} open={drawerOpen} onToggle={toggleMenu} role={user.role} accesses={accesses} activeToken={activeToken} />
         {drawerOpen && <div className="scrim" onClick={() => setDrawerOpen(false)} aria-hidden="true" />}
         <div className="main-col">
           <main id="main" className="main">

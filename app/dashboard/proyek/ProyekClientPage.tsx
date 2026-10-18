@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Eye, LoaderCircle, Plus, Trash2 } from "lucide-react";
+import { Check, Eye, LoaderCircle, Plus, Trash2, FilePenLine } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Modal } from "@/components/modal/Modal";
 import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -39,10 +40,24 @@ type LookupRow = { id: string; [key: string]: unknown };
 type UnitOption = LookupRow & { kode_unit?: string; nama_unit?: string };
 type AccountOption = LookupRow & { nama_rekening?: string; nama_bank?: string; nomor_rekening?: string; status_aktif?: string };
 type MakOption = LookupRow & { kode_mak?: string; nama_mak?: string; tipe_akun?: string; status_aktif?: string };
+type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; ros: RoDraft[]; terms: TerminDraft[] };
+const DRAFTS_STORAGE_KEY = "lemigas:proyek:drafts:v1";
 const currentYear = new Date().getFullYear();
 const blankForm = (): ProjectForm => ({ kode_proyek: "", nama_proyek: "", tahun_fiscal: String(currentYear), sumber_pendanaan: "", nama_client: "", pj_1: "", pj_2: "", nilai_kontrak: "", total_direct_cost: "", total_margin: "" });
 const blankRo = (): RoDraft => ({ key: crypto.randomUUID(), nama_ro: "", mak_id: "", id_unit_koordinator: "", rekening_id: "", plafon: 0, plafonText: "" });
 const blankTermin = (persentase = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(persentase) || 0, persentaseText: persentase });
+
+function MoneyField({ label, value, onChange, required = false }: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {
+  return (
+    <label className="grid gap-1.5 text-sm font-medium">
+      <span>
+        {label}
+        {required ? " *" : ""}
+      </span>
+      <MoneyInput aria-label={label} value={value} onValueChange={onChange} />
+    </label>
+  );
+}
 
 function responseRows<T extends LookupRow>(response: unknown): T[] {
   let value: unknown = response;
@@ -82,9 +97,22 @@ export default function ProyekClientPage() {
   const [sk, setSk] = useState<File | null>(null);
   const [rab, setRab] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
+  const [localDrafts, setLocalDrafts] = useState<ProjectLocalDraft[]>([]);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [validationProject, setValidationProject] = useState<ProyekItemDto | null>(null);
+  const [validationApproved, setValidationApproved] = useState(true);
+  const [validationNote, setValidationNote] = useState("");
+  const [validationError, setValidationError] = useState("");
 
   useEffect(() => {
     setIdentity(browserIdentity());
+    try {
+      const saved = localStorage.getItem(DRAFTS_STORAGE_KEY);
+      const parsed: unknown = saved ? JSON.parse(saved) : [];
+      setLocalDrafts(Array.isArray(parsed) ? (parsed as ProjectLocalDraft[]) : []);
+    } catch {
+      setLocalDrafts([]);
+    }
   }, []);
 
   const list = use_query({
@@ -129,9 +157,23 @@ export default function ProyekClientPage() {
   const unitOptions = responseRows<UnitOption>(units.data);
   const makOptions = responseRows<MakOption>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const rekeningOptions = responseRows<AccountOption>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
+  const currentUnit = unitOptions.find((unit) => unit.id === identity.unitKerjaId);
+  const isUmumValidator = identity.role === "superadmin" || (identity.role === "koordinator" && String(currentUnit?.kode_unit ?? "") === "ORG-UMUM");
+  const isPimpinanValidator = identity.role === "superadmin" || identity.role === "pimpinan";
   const makComboboxOptions = makOptions.map((option) => ({ value: option.id, label: [option.kode_mak, option.nama_mak, option.tipe_akun ? `(${option.tipe_akun})` : ""].filter(Boolean).join(" — ") }));
   const unitComboboxOptions = unitOptions.map((option) => ({ value: option.id, label: [option.kode_unit, option.nama_unit].filter(Boolean).join(" — ") }));
   const rekeningComboboxOptions = rekeningOptions.map((option) => ({ value: option.id, label: [option.nama_bank, option.nama_rekening, option.nomor_rekening ? `(${option.nomor_rekening})` : ""].filter(Boolean).join(" — ") }));
+
+  const validation = use_mutation({
+    tag: "masterProyek",
+    method: "workflow",
+    mutationFn: async ({ projectId, stage, approved, note }: { projectId: string; stage: "umum" | "pimpinan"; approved: boolean; note?: string }) => {
+      setBrowserToken();
+      const payload = { disetujui: approved, catatan: note };
+      return stage === "umum" ? browserApi.masterProyek.proyekControllerValidasiUmum(projectId, payload) : browserApi.masterProyek.proyekControllerValidasiPimpinan(projectId, payload);
+    },
+    invalidateKeys: [["api", "masterProyek"]],
+  });
 
   const create = use_mutation({
     tag: "masterProyek",
@@ -170,12 +212,54 @@ export default function ProyekClientPage() {
     setSk(null);
     setRab(null);
     setFormError("");
+    setEditingDraftId(null);
+  }
+  function persistDrafts(drafts: ProjectLocalDraft[]) {
+    setLocalDrafts(drafts);
+    localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(drafts));
+  }
+  function saveDraft() {
+    const draft: ProjectLocalDraft = { id: editingDraftId ?? crypto.randomUUID(), savedAt: new Date().toISOString(), form, ros, terms };
+    persistDrafts([draft, ...localDrafts.filter((item) => item.id !== draft.id)]);
+    setEditingDraftId(draft.id);
+    setFormError("");
+    setOpen(false);
+  }
+  function editDraft(draft: ProjectLocalDraft) {
+    setForm(draft.form);
+    setRos(draft.ros);
+    setTerms(draft.terms);
+    setEditingDraftId(draft.id);
+    setFormError("");
+    setSk(null);
+    setRab(null);
+    setOpen(true);
+  }
+  function deleteDraft(id: string) {
+    persistDrafts(localDrafts.filter((draft) => draft.id !== id));
+    if (editingDraftId === id) resetForm();
   }
   function updateRo(key: string, field: keyof RoDraft, value: string) {
     setRos((rows) => rows.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
   }
   function updateTerm(key: string, value: string) {
     setTerms((rows) => rows.map((row) => (row.key === key ? { ...row, persentaseText: value } : row)));
+  }
+
+  async function submitValidation() {
+    if (!validationProject) return;
+    if (!validationApproved && !validationNote.trim()) {
+      setValidationError("Catatan wajib diisi saat menolak pengajuan.");
+      return;
+    }
+    const stage = validationProject.status_proyek === "MENUNGGU_VALIDASI_UMUM" ? "umum" : "pimpinan";
+    setValidationError("");
+    try {
+      await validation.mutateAsync({ projectId: validationProject.id, stage, approved: validationApproved, note: validationNote.trim() || undefined });
+      setValidationProject(null);
+    } catch (error) {
+      setValidationError(apiErrorMessage(error, "Validasi proyek gagal."));
+    }
   }
 
   async function submit() {
@@ -191,7 +275,7 @@ export default function ProyekClientPage() {
         nilai_kontrak: numeric("nilai_kontrak"),
         total_direct_cost: numeric("total_direct_cost"),
         total_margin: numeric("total_margin"),
-        ro_list: ros.map(({ key, plafonText, ...row }) => ({ ...row, plafon: Number(plafonText) })),
+        ro_list: ros.map(({ key, plafonText, rekening_id, ...row }) => ({ ...row, ...(rekening_id ? { rekening_id } : {}), plafon: Number(plafonText) })),
         termin_list: terms.map(({ key, persentaseText }, index) => ({ nomor_termin: index + 1, persentase: Number(persentaseText) })),
       };
       const response = await create.mutateAsync(payload);
@@ -231,6 +315,51 @@ export default function ProyekClientPage() {
         )}
       </header>
       <Card>
+        <CardHeader>
+          <CardTitle>Tahapan persetujuan proyek</CardTitle>
+          <CardDescription>Proyek diproses secara berurutan. Rencana Operasional (RO) aktif setelah persetujuan pimpinan.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ol className="grid gap-2 sm:grid-cols-4">
+            {["Pengajuan proyek", "Validasi Koordinator Umum", "Unggah notulen", "Persetujuan pimpinan"].map((step, index) => (
+              <li key={step} className="flex items-center gap-3 rounded-lg bg-muted/40 p-3 text-sm">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{index + 1}</span>
+                <span className="font-medium leading-snug">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="border-t pt-3 text-sm text-muted-foreground">Setelah disetujui pimpinan, RO aktif dan proses keuangan per termin dapat dilanjutkan.</p>
+        </CardContent>
+      </Card>
+      {localDrafts.length > 0 && (
+        <Card>
+          <CardContent className="space-y-3 pt-4">
+            <div>
+              <h2 className="font-semibold">Draft Pengajuan Proyek ({localDrafts.length})</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Draft hanya tersimpan di browser ini. Berpindah browser, profil, atau perangkat membuat draft tidak tersedia.</p>
+            </div>
+            {localDrafts.map((draft) => (
+              <div key={draft.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                <div>
+                  <p className="font-medium">{draft.form.nama_proyek || draft.form.kode_proyek || "Draft tanpa nama"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Disimpan {new Date(draft.savedAt).toLocaleString("id-ID")} · {draft.form.kode_proyek || "Kode belum diisi"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => editDraft(draft)}>
+                    Lanjutkan
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteDraft(draft.id)} aria-label="Hapus draft">
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      <Card>
         <CardContent className="pt-4">
           {list.error && (
             <Alert variant="destructive" className="mb-4">
@@ -266,12 +395,14 @@ export default function ProyekClientPage() {
               { key: "kontrak", header: "Nilai Kontrak", className: "min-w-[10rem] whitespace-nowrap text-right tabular-nums", render: (row: ProyekItemDto) => <span>{formatRupiah(row.nilai_kontrak)}</span> },
               {
                 key: "ro",
-                header: "RO / Total Plafon",
-                className: "min-w-[11rem] whitespace-nowrap text-right tabular-nums",
+                header: "Alokasi RO / Saldo",
+                className: "min-w-[12rem] whitespace-nowrap text-right tabular-nums",
                 render: (row: ProyekItemDto) => (
                   <span className="text-sm">
-                    {formatRupiah(row.total_plafon_ro)}
-                    <span className="mt-1 block text-xs text-muted-foreground">{row.jumlah_ro ?? 0} RO</span>
+                    <span className="block">Rencana {formatRupiah(row.total_plafon_ro)}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      Tersedia {formatRupiah((row as ProyekItemDto & { total_saldo_ro?: number }).total_saldo_ro ?? 0)} · {row.jumlah_ro ?? 0} RO
+                    </span>
                   </span>
                 ),
               },
@@ -279,12 +410,32 @@ export default function ProyekClientPage() {
               {
                 key: "aksi",
                 header: "Aksi",
-                className: "w-28 whitespace-nowrap text-right",
-                render: (row: ProyekItemDto) => (
-                  <Button variant="ghost" size="sm" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
-                    <Eye size={15} /> Detail
-                  </Button>
-                ),
+                className: "min-w-[11rem] whitespace-nowrap text-right",
+                render: (row: ProyekItemDto) => {
+                  const canValidateUmum = isUmumValidator && row.status_proyek === "MENUNGGU_VALIDASI_UMUM";
+                  const canValidatePimpinan = isPimpinanValidator && row.status_proyek === "MENUNGGU_VALIDASI_PIMPINAN";
+                  return (
+                    <div className="flex justify-end gap-1">
+                      {(canValidateUmum || canValidatePimpinan) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setValidationProject(row);
+                            setValidationApproved(true);
+                            setValidationNote("");
+                            setValidationError("");
+                          }}
+                        >
+                          <Check size={15} /> Validasi
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
+                        <Eye size={15} /> Detail
+                      </Button>
+                    </div>
+                  );
+                },
               },
             ]}
             rows={projects}
@@ -318,6 +469,76 @@ export default function ProyekClientPage() {
         </CardContent>
       </Card>
       <Modal
+        open={Boolean(validationProject)}
+        onClose={() => {
+          if (!validation.isPending) setValidationProject(null);
+        }}
+        title="Validasi Pengajuan Proyek"
+        size="sm"
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button variant="outline" disabled={validation.isPending} onClick={() => setValidationProject(null)}>
+              Batal
+            </Button>
+            <Button disabled={validation.isPending || (!validationApproved && !validationNote.trim())} variant={validationApproved ? "default" : "destructive"} onClick={submitValidation}>
+              {validation.isPending && <LoaderCircle className="animate-spin" size={16} />}
+              {validationApproved ? "Setujui Pengajuan" : "Tolak Pengajuan"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="rounded-lg bg-muted/40 p-3 text-sm">
+            <p className="font-medium">{validationProject?.nama_proyek}</p>
+            <p className="text-muted-foreground">
+              {validationProject?.kode_proyek} · {humanizeStatus(validationProject?.status_proyek)}
+            </p>
+          </div>
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-sm font-medium">Keputusan validasi</legend>
+            <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${validationApproved ? "border-primary bg-primary/5" : ""}`}>
+              <input
+                type="radio"
+                name="project-validation-decision"
+                checked={validationApproved}
+                onChange={() => {
+                  setValidationApproved(true);
+                  setValidationError("");
+                }}
+                className="mt-1 accent-primary"
+              />
+              <span>
+                <span className="block text-sm font-medium">Setujui</span>
+                <span className="block text-xs text-muted-foreground">Lanjutkan pengajuan ke proses berikutnya.</span>
+              </span>
+            </label>
+            <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${!validationApproved ? "border-destructive bg-destructive/5" : ""}`}>
+              <input type="radio" name="project-validation-decision" checked={!validationApproved} onChange={() => setValidationApproved(false)} className="mt-1 accent-destructive" />
+              <span>
+                <span className="block text-sm font-medium">Tolak</span>
+                <span className="block text-xs text-muted-foreground">Pengajuan dikembalikan dengan catatan.</span>
+              </span>
+            </label>
+          </fieldset>
+          <label className="grid gap-1.5 text-sm font-medium">
+            Catatan {!validationApproved && <span className="text-destructive">(wajib saat menolak)</span>}
+            <textarea
+              value={validationNote}
+              onChange={(event) => setValidationNote(event.target.value)}
+              rows={3}
+              placeholder={validationApproved ? "Catatan tambahan (opsional)" : "Tuliskan alasan penolakan"}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            />
+          </label>
+          {validationError && (
+            <Alert variant="destructive">
+              <AlertDescription>{validationError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      </Modal>
+      <Modal
         open={open}
         onClose={() => {
           setOpen(false);
@@ -331,12 +552,27 @@ export default function ProyekClientPage() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Batal
             </Button>
+            <Button variant="outline" onClick={saveDraft}>
+              Simpan Draft
+            </Button>
             <Button disabled={create.isPending} onClick={submit}>
               {create.isPending && <LoaderCircle className="animate-spin" size={16} />} Simpan Pengajuan
             </Button>
           </>
         }
       >
+        <div className="space-y-3">
+          <Alert>
+            <AlertTitle>Tahapan persetujuan</AlertTitle>
+            <AlertDescription>Pengajuan proyek → validasi Koordinator Umum → unggah notulen → persetujuan pimpinan. RO aktif setelah pimpinan menyetujui proyek.</AlertDescription>
+          </Alert>
+          {editingDraftId && (
+            <Alert>
+              <AlertTitle>Draft tersimpan di browser ini</AlertTitle>
+              <AlertDescription>Draft tidak tersedia di browser, profil, atau perangkat lain. Berkas SK dan RAB harus dipilih kembali sebelum pengajuan.</AlertDescription>
+            </Alert>
+          )}
+        </div>
         <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">RO awal dan rencana termin wajib seimbang sebelum proyek dikirim.</div>
         <section className="space-y-4 rounded-lg border p-4">
           <div>
@@ -361,9 +597,9 @@ export default function ProyekClientPage() {
             <p className="mt-1 text-xs text-muted-foreground">Pastikan nilai kontrak sama dengan direct cost dan margin.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Nilai kontrak" type="number" required value={form.nilai_kontrak} onChange={(value) => setForm((current) => ({ ...current, nilai_kontrak: value }))} />
-            <Field label="Total direct cost" type="number" required value={form.total_direct_cost} onChange={(value) => setForm((current) => ({ ...current, total_direct_cost: value }))} />
-            <Field label="Total margin" type="number" required value={form.total_margin} onChange={(value) => setForm((current) => ({ ...current, total_margin: value }))} />
+            <MoneyField label="Nilai kontrak" required value={form.nilai_kontrak} onChange={(value) => setForm((current) => ({ ...current, nilai_kontrak: value }))} />
+            <MoneyField label="Total direct cost" required value={form.total_direct_cost} onChange={(value) => setForm((current) => ({ ...current, total_direct_cost: value }))} />
+            <MoneyField label="Total margin" required value={form.total_margin} onChange={(value) => setForm((current) => ({ ...current, total_margin: value }))} />
           </div>
           <p className={`rounded-md px-3 py-2 text-xs ${contractOk ? "bg-emerald-50 text-emerald-700" : "bg-destructive/10 text-destructive"}`}>
             Kontrak {formatRupiah(numeric("nilai_kontrak"))} = direct cost {formatRupiah(numeric("total_direct_cost"))} + margin {formatRupiah(numeric("total_margin"))}
@@ -404,7 +640,7 @@ export default function ProyekClientPage() {
                   <FilterCombobox options={rekeningComboboxOptions} value={row.rekening_id ?? ""} onValueChange={(value) => updateRo(row.key, "rekening_id", value)} label="Pilih rekening (opsional)" />
                 </label>
                 <div className="sm:col-span-2">
-                  <Field label="Plafon" type="number" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
+                  <MoneyField label="Plafon" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
                 </div>
               </div>
             </div>

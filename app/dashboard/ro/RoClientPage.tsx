@@ -108,14 +108,20 @@ export default function RoClientPage() {
               },
               {
                 key: "budget",
-                header: "Plafon / Sisa",
+                header: "Rencana / Dana Tersedia",
                 className: "text-right",
-                render: (row: RoItemDto) => (
-                  <span className="whitespace-nowrap text-sm">
-                    {formatRupiah(row.total_plafon)}
-                    <span className="block text-xs text-muted-foreground">Sisa {formatRupiah(row.sisa_saldo)}</span>
-                  </span>
-                ),
+                render: (row: RoItemDto) => {
+                  const planned = Number((row as RoItemDto & { nilai_rencana?: number }).nilai_rencana) || Number(row.total_plafon) || 0;
+                  const available = Number(row.total_plafon) || 0;
+                  return (
+                    <span className="whitespace-nowrap text-sm">
+                      <span className="block">Rencana {formatRupiah(planned)}</span>
+                      <span className={`mt-1 block text-xs ${available > 0 ? "text-emerald-700" : "text-amber-700"}`}>
+                        {available > 0 ? `Tersedia ${formatRupiah(available)} · sisa ${formatRupiah(row.sisa_saldo)}` : "Belum cair · Rp0 tersedia"}
+                      </span>
+                    </span>
+                  );
+                },
               },
               {
                 key: "status",

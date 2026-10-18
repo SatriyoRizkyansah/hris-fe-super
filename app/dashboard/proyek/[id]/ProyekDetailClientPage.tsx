@@ -171,8 +171,10 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       </div>
     );
   const status = project.status_proyek;
+  const roPlan = roRows.reduce((total, row) => total + (Number(row.nilai_rencana) || Number(row.total_plafon) || 0), 0);
   const roTotal = roRows.reduce((total, row) => total + (Number(row.total_plafon) || 0), 0);
   const roUsed = roRows.reduce((total, row) => total + (Number(row.total_terpakai) || 0), 0);
+  const termsPaid = termRows.some((term) => String(term.status) === "CAIR");
   const marginDistributed = distributionRows.reduce((total, row) => total + (Number(row.debit) || 0), 0);
   const directCost = Number(project.total_direct_cost) || 0;
   const margin = Number(project.total_margin) || 0;
@@ -248,7 +250,43 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             )}
           </div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Urutan: validasi umum, unggah notulen, validasi pimpinan, validasi keuangan per termin, pencairan termin.</p>
+        <div className="mt-5 border-t pt-4">
+          <div className="mb-5">
+            <p className="text-sm font-semibold">Alur persetujuan proyek</p>
+            <p className="text-xs text-muted-foreground">Proses berjalan berurutan. Rencana Operasional (RO) aktif setelah persetujuan pimpinan.</p>
+          </div>
+          {(() => {
+            const steps = ["Pengajuan proyek", "Validasi Koordinator Umum", "Unggah notulen", "Persetujuan pimpinan"];
+            const currentIndex = status === "MENUNGGU_VALIDASI_UMUM" ? 1 : status === "MENUNGGU_NOTULEN" ? 2 : status === "MENUNGGU_VALIDASI_PIMPINAN" ? 3 : status === "DISETUJUI_PIMPINAN" ? 4 : 0;
+            const rejected = String(status).startsWith("DITOLAK");
+            return (
+              <ol className="grid grid-cols-1 gap-0 sm:grid-cols-4">
+                {steps.map((step, index) => {
+                  const complete = !rejected && index < currentIndex;
+                  const active = !rejected && index === currentIndex && currentIndex < steps.length;
+                  const color = complete ? "bg-emerald-600" : active ? "bg-primary" : "bg-border";
+                  return (
+                    <li key={step} className="relative flex gap-3 pb-5 last:pb-0 sm:flex-col sm:items-center sm:pb-0 sm:text-center">
+                      {index < steps.length - 1 && (
+                        <span aria-hidden="true" className={`absolute left-[15px] top-8 h-[calc(100%-1rem)] w-0.5 ${complete ? "bg-emerald-600" : "bg-border"} sm:left-[calc(50%+16px)] sm:top-[15px] sm:h-0.5 sm:w-[calc(100%-32px)]`} />
+                      )}
+                      <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${color}`} aria-label={complete ? "Selesai" : active ? "Sedang diproses" : "Menunggu"}>
+                        {complete ? <Check size={16} /> : index + 1}
+                      </span>
+                      <span className="pt-1 sm:pt-2">
+                        <span className={`block text-sm font-medium leading-snug ${complete ? "text-emerald-800" : active ? "text-foreground" : "text-muted-foreground"}`}>{step}</span>
+                        <span className={`mt-1 block text-xs ${complete ? "text-emerald-700" : active ? "text-primary" : "text-muted-foreground"}`}>{complete ? "Selesai" : active ? "Sedang diproses" : "Menunggu"}</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            );
+          })()}
+          {String(status).startsWith("DITOLAK") && <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">Pengajuan ditolak. Silakan periksa catatan validasi.</p>}
+          {status === "DISETUJUI_PIMPINAN" && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Proyek disetujui pimpinan. RO telah memasuki tahap aktif.</p>}
+          <p className="mt-4 text-xs text-muted-foreground">Setelah persetujuan pimpinan: validasi Keuangan dan pencairan setiap termin.</p>
+        </div>
       </div>
       <section className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -262,9 +300,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Card label="Nilai Kontrak" value={formatRupiah(contract)} />
-          <Card label="Direct Cost" value={formatRupiah(directCost)} hint={`${roRows.length} RO · plafon ${formatRupiah(roTotal)}`} />
+          <Card label="Direct Cost" value={formatRupiah(directCost)} hint={`${roRows.length} RO · alokasi rencana ${formatRupiah(roPlan)}`} />
           <Card label="Total Margin" value={formatRupiah(margin)} hint={`Distribusi ${formatRupiah(marginDistributed)}`} />
-          <Card label="Realisasi RO" value={formatRupiah(roUsed)} hint={`Sisa plafon ${formatRupiah(roTotal - roUsed)}`} />
+          <Card label="Dana RO tersedia" value={formatRupiah(roTotal)} hint={termsPaid ? `Termin telah cair · terpakai ${formatRupiah(roUsed)}` : "Belum ada termin cair · dana belum tersedia"} />
         </div>
         <div className="mt-5 grid gap-5 border-t pt-4 md:grid-cols-3">
           <div>
@@ -305,7 +343,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           <h2 className="font-semibold">
             Termin pencairan <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-xs">{termRows.length}</span>
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Rencana pencairan kontrak dan status validasi Keuangan.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Alur Keuangan per termin: menunggu validasi → disetujui Keuangan → dicairkan. Pencairan menambah saldo RO dan mengalokasikan sisa ke dana operasional.</p>
         </div>
         <div className="grid gap-3 p-5">
           {termRows.length ? (
@@ -321,7 +359,14 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                     </p>
                     <p className="text-sm font-semibold">{formatRupiah(term.nilai_termin ?? term.nilai ?? term.nominal)}</p>
                     <p className="text-xs text-muted-foreground">
-                      {humanizeStatus(termStatus)}
+                      Tahap:{" "}
+                      {termStatus === "MENUNGGU_VALIDASI_KEUANGAN"
+                        ? "Menunggu validasi Keuangan"
+                        : termStatus === "DISETUJUI_KEUANGAN"
+                          ? "Disetujui Keuangan · Menunggu pencairan"
+                          : termStatus === "CAIR"
+                            ? "Sudah dicairkan"
+                            : humanizeStatus(termStatus)}
                       {term.dicairkan_pada ? ` · Dicairkan ${formatDate(String(term.dicairkan_pada))}` : ""}
                       {term.catatan_keuangan ? ` · ${String(term.catatan_keuangan)}` : ""}
                     </p>
@@ -330,12 +375,12 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                     <div className="flex gap-2">
                       {termStatus === "MENUNGGU_VALIDASI_KEUANGAN" && (
                         <Button size="sm" variant="outline" disabled={terminMutation.isPending} onClick={() => terminMutation.mutate({ termId, action: "validasi" })}>
-                          Validasi
+                          Validasi termin
                         </Button>
                       )}
                       {termStatus === "DISETUJUI_KEUANGAN" && status === "DISETUJUI_PIMPINAN" && (
                         <Button size="sm" disabled={terminMutation.isPending} onClick={() => terminMutation.mutate({ termId, action: "cairkan" })}>
-                          Cairkan
+                          Cairkan termin
                         </Button>
                       )}
                     </div>
@@ -361,7 +406,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             roRows.map((row) => {
               const roId = String(row.id);
               const detailRow = roDetails[roId];
-              const usage = Number(row.total_plafon) > 0 ? Math.min(100, (Number(row.total_terpakai ?? 0) / Number(row.total_plafon)) * 100) : 0;
+              const planned = Number(row.nilai_rencana) || Number(row.total_plafon) || 0;
+              const available = Number(row.total_plafon) || 0;
+              const usage = available > 0 ? Math.min(100, (Number(row.total_terpakai ?? 0) / available) * 100) : 0;
               const missing = [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", !row.no_sk && "No SK", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean) as string[];
               const allocations = Array.isArray(detailRow?.alokasi_list) ? (detailRow.alokasi_list as Row[]) : [];
               const ledger = Array.isArray(detailRow?.transaksi_list) ? (detailRow.transaksi_list as Row[]) : [];
@@ -383,8 +430,10 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                     </span>
                     <span className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={roStatusTone(String(row.status_ro ?? ""))}>{text(row.status_ro)}</StatusBadge>
-                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Plafon {formatRupiah(row.total_plafon)}</span>
-                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Sisa {formatRupiah(row.sisa_saldo)}</span>
+                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Rencana {formatRupiah(planned)}</span>
+                      <span className={`rounded-lg px-2.5 py-1 text-xs ${available > 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                        {available > 0 ? `Dana cair ${formatRupiah(available)}` : "Belum cair · Rp0 tersedia"}
+                      </span>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${usage >= 90 ? "bg-rose-100 text-rose-800" : usage >= 70 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
                         {usage.toFixed(0)}% terpakai
                       </span>

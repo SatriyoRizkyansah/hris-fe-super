@@ -3,6 +3,7 @@ import "@fontsource-variable/plus-jakarta-sans";
 import "./globals.css";
 import { QueryProvider } from "@/components/QueryProvider";
 import { ApiSuccessAlerts } from "@/components/ApiSuccessAlerts";
+import { ApiMutationFeedback } from "@/components/ApiMutationFeedback";
 
 export const metadata: Metadata = {
   title: { default: "LEMIGAS Super Apps", template: "%s · LEMIGAS Super Apps" },
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <QueryProvider>
           {children}
           <ApiSuccessAlerts />
+          <ApiMutationFeedback />
         </QueryProvider>
       </body>
     </html>
