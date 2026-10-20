@@ -4,26 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  ArrowLeftRight,
-  Check,
-  ChevronDown,
-  Gauge,
-  PanelLeftClose,
-  PanelLeftOpen,
-  UsersRound,
-  Building2,
-  UserCircle,
-  BriefcaseBusiness,
-  Wallet,
-  Landmark,
-  FileText,
-  Banknote,
-  ChartNoAxesCombined,
-  Settings,
-  UserCog,
-  ClipboardCheck,
-} from "lucide-react";
+import { ArrowLeftRight, Check, Gauge, PanelLeftClose, PanelLeftOpen, UsersRound, Building2, UserCircle, BriefcaseBusiness, Wallet, Landmark, FileText, Banknote, ChartNoAxesCombined, Settings, UserCog, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/legacy-button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { LoadingCard } from "@/components/loading";
@@ -137,21 +118,20 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
               {!collapsed && <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-black/55">Akses aktif</p>}
               <Select value={currentAccess?.token ?? ""} onValueChange={switchRole}>
                 <SelectTrigger
-                  className="h-auto min-h-12 w-full rounded-2xl border border-black/10 bg-black/[0.06] px-3 py-2 text-left shadow-sm hover:bg-black/[0.1] focus-visible:ring-black/20"
+                  className="h-auto min-h-12 w-full rounded-2xl border border-black/10 bg-black/[0.06] px-2.5 py-2 text-left shadow-sm hover:bg-black/[0.1] focus-visible:ring-black/20 [&>svg:last-child]:hidden"
                   aria-label="Pilih role"
                   disabled={switching}
                 >
-                  <span className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex min-w-0 flex-1 items-center gap-2.5">
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-black text-[#ffe466] shadow-sm">
                       <ArrowLeftRight size={16} />
                     </span>
                     {!collapsed && (
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold text-black">{roleLabels[currentAccess?.role ?? role] ?? currentAccess?.role ?? role}</span>
-                        <span className="block truncate text-[11px] font-medium text-black/60">{roleOptions.length > 1 ? "Ganti akses" : "Satu akses tersedia"}</span>
+                      <span className="min-w-0 flex-1 py-0.5">
+                        <span className="block truncate text-left text-sm font-bold leading-5 text-black">{roleLabels[currentAccess?.role ?? role] ?? currentAccess?.role ?? role}</span>
+                        <span className="block truncate text-left text-[11px] font-medium leading-4 text-black/60">{roleOptions.length > 1 ? "Ganti akses" : "Satu akses tersedia"}</span>
                       </span>
                     )}
-                    {!collapsed && <ChevronDown size={16} className="shrink-0 text-black/60" />}
                   </span>
                 </SelectTrigger>
                 <SelectContent align="end" side="top" sideOffset={8} className="w-[var(--anchor-width)] rounded-2xl border border-black/10 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">

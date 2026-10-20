@@ -428,9 +428,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                     className="flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span className="min-w-0">
-                      <span className="block font-semibold">
-                        {text(row.kode_ro ?? row.kode_mak)} · {text(row.nama_ro, "RO")}
-                      </span>
+                      <span className="block font-semibold">{text(row.nama_ro, "RO")}</span>
                       <span className="mt-1 block text-xs text-muted-foreground">
                         {text(row.nama_unit_koordinator)} · Tahun fiskal {text(row.tahun_fiscal)}
                       </span>
@@ -640,20 +638,41 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           {workflow === "notulen" ? (
             <DocumentUploadField label="Dokumen Notulen" accept=".pdf,.doc,.docx" value={file} onChange={setFile} currentFile={typeof project.file_notulen === "string" ? project.file_notulen : null} />
           ) : (
-            <>
-              <div className="flex gap-2">
-                <Button type="button" variant={approved ? "default" : "outline"} onClick={() => setApproved(true)}>
-                  Setujui
-                </Button>
-                <Button type="button" variant={!approved ? "destructive" : "outline"} onClick={() => setApproved(false)}>
-                  Tolak
-                </Button>
+            <div className="space-y-3">
+              <div className="rounded-lg bg-muted/40 p-3 text-sm">
+                <p className="font-medium">{text(project.nama_proyek)}</p>
+                <p className="text-muted-foreground">
+                  {text(project.kode_proyek)} · {humanizeStatus(project.status_proyek)}
+                </p>
               </div>
+              <fieldset className="grid gap-2">
+                <legend className="mb-1 text-sm font-medium">Keputusan validasi</legend>
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${approved ? "border-primary bg-primary/5" : ""}`}>
+                  <input type="radio" name="project-detail-validation-decision" checked={approved} onChange={() => setApproved(true)} className="mt-1 accent-primary" />
+                  <span>
+                    <span className="block text-sm font-medium">Setujui</span>
+                    <span className="block text-xs text-muted-foreground">Lanjutkan pengajuan ke proses berikutnya.</span>
+                  </span>
+                </label>
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${!approved ? "border-destructive bg-destructive/5" : ""}`}>
+                  <input type="radio" name="project-detail-validation-decision" checked={!approved} onChange={() => setApproved(false)} className="mt-1 accent-destructive" />
+                  <span>
+                    <span className="block text-sm font-medium">Tolak</span>
+                    <span className="block text-xs text-muted-foreground">Pengajuan dikembalikan dengan catatan.</span>
+                  </span>
+                </label>
+              </fieldset>
               <label className="grid gap-1.5 text-sm font-medium">
-                Catatan{!approved ? " *" : ""}
-                <textarea className="min-h-24 rounded-md border bg-background p-2 text-sm" value={note} onChange={(event) => setNote(event.target.value)} />
+                Catatan{!approved ? <span className="text-destructive">(wajib saat menolak)</span> : null}
+                <textarea
+                  rows={3}
+                  placeholder={approved ? "Catatan tambahan (opsional)" : "Tuliskan alasan penolakan"}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                />
               </label>
-            </>
+            </div>
           )}
           {actionError && (
             <Alert variant="destructive">

@@ -18,7 +18,7 @@ import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { envelopeRows, unwrapEnvelope, apiErrorMessage, uploadHrisFile } from "@/lib/hris/api";
-import { formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
+import { formatDate, formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { CreateProyekDto, ProyekItemDto, RoInputDto, TerminInputDto } from "@/lib/api/generated/api-generated";
 
@@ -26,6 +26,8 @@ type ProjectForm = {
   kode_proyek: string;
   nama_proyek: string;
   tahun_fiscal: string;
+  mulai_proyek: string;
+  estimasi_selesai_proyek: string;
   sumber_pendanaan: string;
   nama_client: string;
   pj_1: string;
@@ -34,7 +36,7 @@ type ProjectForm = {
   total_direct_cost: string;
   total_margin: string;
 };
-type RoDraft = RoInputDto & { key: string; plafonText: string };
+type RoDraft = RoInputDto & { key: string; plafonText: string; detailMode: "detail" | "later"; no_kontrak: string; pj: string; no_sk: string; mulai_sk: string; berakhir_sk: string };
 type TerminDraft = TerminInputDto & { key: string; persentaseText: string };
 type LookupRow = { id: string; [key: string]: unknown };
 type UnitOption = LookupRow & { kode_unit?: string; nama_unit?: string };
@@ -43,8 +45,35 @@ type MakOption = LookupRow & { kode_mak?: string; nama_mak?: string; tipe_akun?:
 type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; ros: RoDraft[]; terms: TerminDraft[] };
 const DRAFTS_STORAGE_KEY = "lemigas:proyek:drafts:v1";
 const currentYear = new Date().getFullYear();
-const blankForm = (): ProjectForm => ({ kode_proyek: "", nama_proyek: "", tahun_fiscal: String(currentYear), sumber_pendanaan: "", nama_client: "", pj_1: "", pj_2: "", nilai_kontrak: "", total_direct_cost: "", total_margin: "" });
-const blankRo = (): RoDraft => ({ key: crypto.randomUUID(), nama_ro: "", mak_id: "", id_unit_koordinator: "", rekening_id: "", plafon: 0, plafonText: "" });
+const blankForm = (): ProjectForm => ({
+  kode_proyek: "",
+  nama_proyek: "",
+  tahun_fiscal: String(currentYear),
+  mulai_proyek: "",
+  estimasi_selesai_proyek: "",
+  sumber_pendanaan: "",
+  nama_client: "",
+  pj_1: "",
+  pj_2: "",
+  nilai_kontrak: "",
+  total_direct_cost: "",
+  total_margin: "",
+});
+const blankRo = (): RoDraft => ({
+  key: crypto.randomUUID(),
+  nama_ro: "",
+  mak_id: "",
+  id_unit_koordinator: "",
+  rekening_id: "",
+  plafon: 0,
+  plafonText: "",
+  detailMode: "later",
+  no_kontrak: "",
+  pj: "",
+  no_sk: "",
+  mulai_sk: "",
+  berakhir_sk: "",
+});
 const blankTermin = (persentase = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(persentase) || 0, persentaseText: persentase });
 
 function MoneyField({ label, value, onChange, required = false }: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {
@@ -198,7 +227,7 @@ export default function ProyekClientPage() {
     form.total_margin !== "" &&
     contractOk &&
     ros.length &&
-    ros.every((row) => row.nama_ro && row.mak_id && row.id_unit_koordinator && Number(row.plafonText) > 0) &&
+    ros.every((row) => row.nama_ro && row.mak_id && row.id_unit_koordinator && Number(row.plafonText) > 0 && (row.detailMode === "later" || (row.no_kontrak.trim() && row.pj.trim() && row.no_sk.trim() && row.mulai_sk && row.berakhir_sk))) &&
     roTotal === numeric("total_direct_cost") &&
     terms.length &&
     terms.every((term) => Number(term.persentaseText) > 0) &&
@@ -227,7 +256,7 @@ export default function ProyekClientPage() {
   }
   function editDraft(draft: ProjectLocalDraft) {
     setForm(draft.form);
-    setRos(draft.ros);
+    setRos(draft.ros.map((row) => ({ ...blankRo(), ...row, detailMode: row.detailMode ?? "later" })));
     setTerms(draft.terms);
     setEditingDraftId(draft.id);
     setFormError("");
@@ -263,6 +292,10 @@ export default function ProyekClientPage() {
   }
 
   async function submit() {
+    if (form.mulai_proyek && form.estimasi_selesai_proyek && form.estimasi_selesai_proyek < form.mulai_proyek) {
+      setFormError("Estimasi selesai proyek tidak boleh sebelum tanggal mulai.");
+      return;
+    }
     if (!valid || create.isPending) {
       setFormError("Lengkapi data. Kontrak = direct cost + margin, plafon RO = direct cost, termin = 100%.");
       return;
@@ -272,24 +305,38 @@ export default function ProyekClientPage() {
       const payload: CreateProyekDto = {
         ...form,
         tahun_fiscal: Number(form.tahun_fiscal),
+        mulai_proyek: form.mulai_proyek || undefined,
+        estimasi_selesai_proyek: form.estimasi_selesai_proyek || undefined,
         nilai_kontrak: numeric("nilai_kontrak"),
         total_direct_cost: numeric("total_direct_cost"),
         total_margin: numeric("total_margin"),
-        ro_list: ros.map(({ key, plafonText, rekening_id, ...row }) => ({ ...row, ...(rekening_id ? { rekening_id } : {}), plafon: Number(plafonText) })),
+        ro_list: ros.map((row) => ({
+          nama_ro: row.nama_ro,
+          mak_id: row.mak_id,
+          id_unit_koordinator: row.id_unit_koordinator,
+          ...(row.rekening_id ? { rekening_id: row.rekening_id } : {}),
+          plafon: Number(row.plafonText),
+          ...(row.detailMode === "detail" ? { no_kontrak: row.no_kontrak, pj: row.pj, no_sk: row.no_sk, mulai_sk: row.mulai_sk, berakhir_sk: row.berakhir_sk } : {}),
+        })),
         termin_list: terms.map(({ key, persentaseText }, index) => ({ nomor_termin: index + 1, persentase: Number(persentaseText) })),
       };
       const response = await create.mutateAsync(payload);
       const project = unwrapEnvelope<ProyekItemDto>(response).data;
       if (!project?.id) throw new Error("Proyek tersimpan, tetapi ID proyek tidak diterima.");
+
+      const draftId = editingDraftId;
+      if (draftId) {
+        persistDrafts(localDrafts.filter((draft) => draft.id !== draftId));
+      }
+      setOpen(false);
+      resetForm();
+
       try {
         if (sk) await uploadHrisFile(`/api/proyek/${project.id}/sk`, sk);
         if (rab) await uploadHrisFile(`/api/proyek/${project.id}/rab`, rab);
       } catch (error) {
         setFormError(`Proyek tersimpan. ${apiErrorMessage(error, "Unggah dokumen gagal.")} Unggah ulang dari detail proyek.`);
-        return;
       }
-      setOpen(false);
-      resetForm();
     } catch (error) {
       setFormError(apiErrorMessage(error, "Gagal mengajukan proyek."));
     }
@@ -333,29 +380,31 @@ export default function ProyekClientPage() {
       </Card>
       {localDrafts.length > 0 && (
         <Card>
-          <CardContent className="space-y-3 pt-4">
-            <div>
-              <h2 className="font-semibold">Draft Pengajuan Proyek ({localDrafts.length})</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Draft hanya tersimpan di browser ini. Berpindah browser, profil, atau perangkat membuat draft tidak tersedia.</p>
-            </div>
-            {localDrafts.map((draft) => (
-              <div key={draft.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-                <div>
-                  <p className="font-medium">{draft.form.nama_proyek || draft.form.kode_proyek || "Draft tanpa nama"}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Disimpan {new Date(draft.savedAt).toLocaleString("id-ID")} · {draft.form.kode_proyek || "Kode belum diisi"}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => editDraft(draft)}>
-                    Lanjutkan
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteDraft(draft.id)} aria-label="Hapus draft">
-                    <Trash2 size={15} />
-                  </Button>
-                </div>
+          <CardContent className="space-y-3">
+            <div className="space-y-3 pt-4">
+              <div>
+                <h2 className="font-semibold">Draft Pengajuan Proyek ({localDrafts.length})</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Draft hanya tersimpan di browser ini. Berpindah browser, profil, atau perangkat membuat draft tidak tersedia.</p>
               </div>
-            ))}
+              {localDrafts.map((draft) => (
+                <div key={draft.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                  <div>
+                    <p className="font-medium">{draft.form.nama_proyek || draft.form.kode_proyek || "Draft tanpa nama"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Disimpan {new Date(draft.savedAt).toLocaleString("id-ID")} · {draft.form.kode_proyek || "Kode belum diisi"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => editDraft(draft)}>
+                      Lanjutkan
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteDraft(draft.id)} aria-label="Hapus draft">
+                      <Trash2 size={15} />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -381,6 +430,24 @@ export default function ProyekClientPage() {
                 ),
               },
               { key: "tahun", header: "Tahun", className: "w-24 whitespace-nowrap text-center tabular-nums", render: (row: ProyekItemDto) => row.tahun_fiscal },
+              {
+                key: "durasi",
+                header: "Durasi proyek",
+                className: "min-w-[13rem] whitespace-nowrap",
+                render: (row: ProyekItemDto) => {
+                  const start = row.mulai_proyek;
+                  const end = row.estimasi_selesai_proyek;
+                  const days = start && end ? Math.floor((Date.parse(end.slice(0, 10)) - Date.parse(start.slice(0, 10))) / 86_400_000) + 1 : null;
+                  return (
+                    <div className="text-sm">
+                      <span>
+                        {formatDate(start)} – {formatDate(end)}
+                      </span>
+                      <p className="mt-1 text-xs text-muted-foreground">{days !== null && days > 0 ? `±${days} hari` : "Tanggal RO belum lengkap"}</p>
+                    </div>
+                  );
+                },
+              },
               {
                 key: "pengaju",
                 header: "Pengaju",
@@ -582,6 +649,10 @@ export default function ProyekClientPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Kode proyek" required value={form.kode_proyek} onChange={(value) => setForm((current) => ({ ...current, kode_proyek: value }))} />
             <Field label="Tahun fiscal" type="number" required value={form.tahun_fiscal} onChange={(value) => setForm((current) => ({ ...current, tahun_fiscal: value }))} />
+            <div className="sm:col-span-2 grid gap-4 sm:grid-cols-2">
+              <Field label="Mulai proyek" type="date" value={form.mulai_proyek} onChange={(value) => setForm((current) => ({ ...current, mulai_proyek: value }))} />
+              <Field label="Estimasi selesai proyek" type="date" value={form.estimasi_selesai_proyek} onChange={(value) => setForm((current) => ({ ...current, estimasi_selesai_proyek: value }))} />
+            </div>
             <div className="sm:col-span-2">
               <Field label="Nama proyek" required value={form.nama_proyek} onChange={(value) => setForm((current) => ({ ...current, nama_proyek: value }))} />
             </div>
@@ -616,34 +687,70 @@ export default function ProyekClientPage() {
             </Button>
           </div>
           {ros.map((row, index) => (
-            <div key={row.key} className="space-y-4 rounded-md bg-muted/30 p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">RO {String(index + 1).padStart(2, "0")}</p>
+            <article key={row.key} className="overflow-hidden rounded-xl border bg-background shadow-sm">
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
+                <div>
+                  <h3 className="font-semibold">
+                    RO {String(index + 1).padStart(2, "0")}
+                    {row.nama_ro.trim() ? ` · ${row.nama_ro}` : ""}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">{row.detailMode === "detail" ? "Detail administrasi diisi sekarang" : "Detail administrasi dilengkapi nanti"}</p>
+                </div>
                 {ros.length > 1 && (
                   <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setRos((rows) => rows.filter((item) => item.key !== row.key))}>
                     <Trash2 size={14} /> Hapus
                   </Button>
                 )}
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Nama RO" required value={row.nama_ro} onChange={(value) => updateRo(row.key, "nama_ro", value)} />
-                <label className="grid min-w-0 gap-1.5 text-sm font-medium">
-                  <span>MAK *</span>
-                  <FilterCombobox options={makComboboxOptions} value={row.mak_id} onValueChange={(value) => updateRo(row.key, "mak_id", value)} label="Pilih MAK" />
-                </label>
-                <label className="grid min-w-0 gap-1.5 text-sm font-medium">
-                  <span>Unit koordinator *</span>
-                  <FilterCombobox options={unitComboboxOptions} value={row.id_unit_koordinator} onValueChange={(value) => updateRo(row.key, "id_unit_koordinator", value)} label="Pilih unit koordinator" />
-                </label>
-                <label className="grid min-w-0 gap-1.5 text-sm font-medium">
-                  <span>Rekening tujuan</span>
-                  <FilterCombobox options={rekeningComboboxOptions} value={row.rekening_id ?? ""} onValueChange={(value) => updateRo(row.key, "rekening_id", value)} label="Pilih rekening (opsional)" />
-                </label>
-                <div className="sm:col-span-2">
+              </header>
+              <div className="space-y-4 p-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Nama RO" required value={row.nama_ro} onChange={(value) => updateRo(row.key, "nama_ro", value)} />
                   <MoneyField label="Plafon" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
+                  <fieldset className="grid gap-2 sm:col-span-2">
+                    <legend className="text-sm font-medium">Detail administrasi RO</legend>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "detail" ? "border-primary bg-primary/5" : ""}`}>
+                        <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "detail"} onChange={() => updateRo(row.key, "detailMode", "detail")} className="mt-1 accent-primary" />
+                        <span>
+                          <strong className="block">Isi sekarang</strong>
+                          <span className="text-xs text-muted-foreground">Lengkapi nomor kontrak, PJ, dan SK RO.</span>
+                        </span>
+                      </label>
+                      <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "later" ? "border-primary bg-primary/5" : ""}`}>
+                        <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "later"} onChange={() => updateRo(row.key, "detailMode", "later")} className="mt-1 accent-primary" />
+                        <span>
+                          <strong className="block">Lengkapi nanti</strong>
+                          <span className="text-xs text-muted-foreground">RO dibuat tanpa detail administrasi.</span>
+                        </span>
+                      </label>
+                    </div>
+                  </fieldset>
+                  {row.detailMode === "detail" && (
+                    <>
+                      <Field label="Nomor kontrak RO" required value={row.no_kontrak} onChange={(value) => updateRo(row.key, "no_kontrak", value)} />
+                      <Field label="Penanggung jawab RO" required value={row.pj} onChange={(value) => updateRo(row.key, "pj", value)} />
+                      <Field label="Nomor SK RO" required value={row.no_sk} onChange={(value) => updateRo(row.key, "no_sk", value)} />
+                      <Field label="Mulai SK" type="date" required value={row.mulai_sk} onChange={(value) => updateRo(row.key, "mulai_sk", value)} />
+                      <Field label="Berakhir SK" type="date" required value={row.berakhir_sk} onChange={(value) => updateRo(row.key, "berakhir_sk", value)} />
+                    </>
+                  )}
+                  <div className="sm:col-span-2">
+                    <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                      <span>MAK *</span>
+                      <FilterCombobox options={makComboboxOptions} value={row.mak_id} onValueChange={(value) => updateRo(row.key, "mak_id", value)} label="Pilih MAK" />
+                    </label>
+                  </div>
+                  <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                    <span>Unit koordinator *</span>
+                    <FilterCombobox options={unitComboboxOptions} value={row.id_unit_koordinator} onValueChange={(value) => updateRo(row.key, "id_unit_koordinator", value)} label="Pilih unit koordinator" />
+                  </label>
+                  <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                    <span>Rekening tujuan</span>
+                    <FilterCombobox options={rekeningComboboxOptions} value={row.rekening_id ?? ""} onValueChange={(value) => updateRo(row.key, "rekening_id", value)} label="Pilih rekening (opsional)" />
+                  </label>
                 </div>
               </div>
-            </div>
+            </article>
           ))}
           <p className={roTotal === numeric("total_direct_cost") ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total plafon RO: {formatRupiah(roTotal)}. Harus sama dengan direct cost.</p>
         </section>

@@ -22,9 +22,11 @@ type Props = {
   description: string;
   group: string;
   method: string;
-  methodHasQuery?: boolean;
+  /** Generated client signature: params-only, query plus params, or no request payload. */
+  requestStyle?: "params" | "query" | "none";
   searchPlaceholder?: string;
   columns?: { key: string; header: string; render?: (value: unknown, row: Record<string, any>) => ReactNode }[];
+  filters?: { field: string; label: string; options: { label: string; value: string }[] }[];
   query?: Record<string, unknown>;
   create?: { method: string; fields: { name: string; label: string; required?: boolean }[] };
   headerAction?: ReactNode;
@@ -37,8 +39,25 @@ const display = (value: unknown) => {
   return String(value);
 };
 
-export function HrisResourcePage({ title, description, group, method, methodHasQuery = true, searchPlaceholder, columns: configuredColumns, query: initialQuery = {}, create, headerAction }: Props) {
+function extractRows(value: unknown, depth = 0): { rows: Record<string, any>[]; meta: Record<string, any> } {
+  if (Array.isArray(value)) return { rows: value, meta: {} };
+  if (!value || typeof value !== "object" || depth >= 8) return { rows: [], meta: {} };
+
+  const record = value as Record<string, any>;
+  const meta = record.pagination ?? record.meta ?? {};
+  for (const key of ["data", "items", "list", "results", "records", "rows", "content"]) {
+    if (record[key] === undefined || record[key] === null) continue;
+    const extracted = extractRows(record[key], depth + 1);
+    if (extracted.rows.length || Array.isArray(record[key])) {
+      return { rows: extracted.rows, meta: Object.keys(meta).length ? meta : extracted.meta };
+    }
+  }
+  return { rows: [], meta };
+}
+
+export function HrisResourcePage({ title, description, group, method, requestStyle = "query", searchPlaceholder, columns: configuredColumns, filters = [], query: initialQuery = {}, create, headerAction }: Props) {
   const [search, setSearch] = useState("");
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
@@ -61,7 +80,10 @@ export function HrisResourcePage({ title, description, group, method, methodHasQ
   });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const params = useMemo(() => ({ ...initialQuery, query: search || undefined, page, limit: pageSize }), [initialQuery, search, page, pageSize]);
+  const params = useMemo(
+    () => ({ ...initialQuery, ...Object.fromEntries(Object.entries(filterValues).map(([key, value]) => [key, value && value !== "__all" ? value : undefined])), query: search || undefined, page, limit: pageSize }),
+    [initialQuery, filterValues, search, page, pageSize],
+  );
   const result = use_query({
     tag: group,
     method,
@@ -69,26 +91,11 @@ export function HrisResourcePage({ title, description, group, method, methodHasQ
     queryFn: async (input) => {
       setBrowserToken();
       const api = (browserApi as any)[group];
-      return apiData(methodHasQuery ? api[method](input, { format: "json" }) : api[method](undefined, { format: "json" }));
+      const request = requestStyle === "params" ? api[method]({ format: "json" }) : requestStyle === "none" ? api[method](undefined, { format: "json" }) : api[method](input, { format: "json" });
+      return apiData(request);
     },
   });
-  let payload: any = result.data;
-  let meta: Record<string, any> = {};
-  let rows: Record<string, any>[] = [];
-  for (let depth = 0; depth < 6 && payload; depth += 1) {
-    if (Array.isArray(payload)) {
-      rows = payload;
-      break;
-    }
-    if (typeof payload !== "object") break;
-    meta = payload.pagination ?? meta;
-    const nested = payload.data ?? payload.list ?? payload.items ?? payload.results;
-    if (Array.isArray(nested)) {
-      rows = nested;
-      break;
-    }
-    payload = nested;
-  }
+  const { rows, meta } = extractRows(result.data);
   const keys: NonNullable<Props["columns"]> =
     configuredColumns ??
     Object.keys(rows[0] ?? {})
@@ -140,6 +147,12 @@ export function HrisResourcePage({ title, description, group, method, methodHasQ
               remoteSearch
               searchValue={search}
               searchPlaceholder={searchPlaceholder ?? `Cari ${title.toLocaleLowerCase("id-ID")}…`}
+              filters={filters}
+              filterValues={filterValues}
+              onFilterChange={(field, value) => {
+                setFilterValues((current) => ({ ...current, [field]: value }));
+                setPage(1);
+              }}
               onSearchChange={(value) => {
                 setSearch(value);
                 setPage(1);

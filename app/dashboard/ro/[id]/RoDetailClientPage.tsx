@@ -23,6 +23,7 @@ import type { RoItemDto, UpdateRoDto } from "@/lib/api/generated/api-generated";
 type AnyRow = Record<string, unknown>;
 type EditForm = { nama_ro: string; total_plafon: string; no_kontrak: string; pj: string; no_sk: string; mulai_sk: string; berakhir_sk: string; status_ro: "AKTIF" | "NONAKTIF" | "SELESAI" };
 type TransactionForm = { nama_kegiatan: string; no_kuitansi: string; tanggal: string; debit: string; kredit: string; keterangan: string };
+type TransactionDirection = "debit" | "kredit";
 const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: "", pj: "", no_sk: "", mulai_sk: "", berakhir_sk: "", status_ro: "AKTIF" });
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
 function missing(row: RoItemDto) {
@@ -41,6 +42,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   const [notice, setNotice] = useState("");
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [transaction, setTransaction] = useState<TransactionForm>(emptyTransaction);
+  const [transactionDirection, setTransactionDirection] = useState<TransactionDirection>("kredit");
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptUploading, setReceiptUploading] = useState(false);
@@ -99,12 +101,13 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     method: "save",
     mutationFn: async () => {
       setBrowserToken();
+      const amount = transactionDirection === "debit" ? transaction.debit : transaction.kredit;
       const payload = {
         nama_kegiatan: transaction.nama_kegiatan,
         no_kuitansi: transaction.no_kuitansi || undefined,
         tanggal: transaction.tanggal,
-        debit: transaction.debit ? Number(transaction.debit) : undefined,
-        kredit: transaction.kredit ? Number(transaction.kredit) : undefined,
+        debit: transactionDirection === "debit" && amount ? Number(amount) : 0,
+        kredit: transactionDirection === "kredit" && amount ? Number(amount) : 0,
         keterangan: transaction.keterangan || undefined,
       };
       return transactionId ? browserApi.masterRoTransaksi.roTransaksiControllerUpdate(id, transactionId, payload) : browserApi.masterRoTransaksi.roTransaksiControllerCreate(id, payload);
@@ -169,6 +172,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   }
   function openTransaction(row?: AnyRow) {
     setTransactionId(row?.id ? String(row.id) : null);
+    setTransactionDirection(Number(row?.debit) > 0 ? "debit" : "kredit");
     setTransaction({
       nama_kegiatan: String(row?.nama_kegiatan ?? ""),
       no_kuitansi: String(row?.no_kuitansi ?? ""),
@@ -182,11 +186,16 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   }
   async function submitTransaction() {
     if (!transaction.nama_kegiatan || !transaction.tanggal) {
-      setNotice("Kegiatan dan tanggal transaksi wajib diisi.");
+      setNotice("Nama kegiatan dan tanggal transaksi wajib diisi.");
       return;
     }
-    if (Number(transaction.debit || 0) < 0 || Number(transaction.kredit || 0) < 0) {
-      setNotice("Debit dan kredit tidak boleh negatif.");
+    const amount = transactionDirection === "debit" ? transaction.debit : transaction.kredit;
+    if (!amount || Number(amount) <= 0) {
+      setNotice("Nominal transaksi harus lebih dari Rp0.");
+      return;
+    }
+    if (Number(amount) < 0) {
+      setNotice("Nominal transaksi tidak boleh negatif.");
       return;
     }
     try {
@@ -284,8 +293,8 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         </div>
         <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dana Tersedia</p>
-          <p className="mt-1 text-lg font-semibold">{formatRupiah(totalPlafon)}</p>
-          <p className={`mt-1 text-xs ${totalPlafon > 0 ? "text-emerald-700" : "text-amber-700"}`}>{totalPlafon > 0 ? "Termin telah dicairkan" : "Belum ada termin dicairkan"}</p>
+          <p className="mt-1 text-lg font-semibold">{formatRupiah(balance)}</p>
+          <p className={`mt-1 text-xs ${totalPlafon > 0 ? "text-emerald-700" : "text-amber-700"}`}>{totalPlafon > 0 ? "Saldo setelah memperhitungkan pengeluaran" : "Belum ada termin dicairkan"}</p>
           <div className="mt-2 h-2 overflow-hidden rounded bg-muted">
             <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
           </div>
@@ -492,7 +501,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         open={transactionOpen}
         onClose={() => setTransactionOpen(false)}
         title={transactionId ? "Ubah Transaksi" : "Tambah Transaksi"}
-        description="Debit dan kredit dalam Rupiah. Isi salah satu nilai bila transaksi hanya satu arah."
+        description={transactionId ? "Ubah detail mutasi saldo RO." : "Pilih jenis transaksi. Pengeluaran mengurangi saldo; dana masuk menambah saldo."}
         bodyClassName="space-y-4"
         footer={
           <>
@@ -524,13 +533,41 @@ export default function RoDetailClientPage({ id }: { id: string }) {
             No kuitansi
             <Input value={transaction.no_kuitansi} onChange={(event) => setTransaction((state) => ({ ...state, no_kuitansi: event.target.value }))} />
           </label>
-          <label className="grid gap-1 text-sm">
-            Debit
-            <MoneyInput value={transaction.debit} onValueChange={(value) => setTransaction((state) => ({ ...state, debit: value }))} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Kredit
-            <MoneyInput value={transaction.kredit} onValueChange={(value) => setTransaction((state) => ({ ...state, kredit: value }))} />
+          <fieldset className="grid gap-2 sm:col-span-2">
+            <legend className="mb-1 text-sm font-medium">Jenis transaksi</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                aria-pressed={transactionDirection === "kredit"}
+                onClick={() => {
+                  setTransactionDirection("kredit");
+                  setTransaction((state) => ({ ...state, debit: "" }));
+                }}
+                className={`rounded-lg border p-3 text-left transition-colors ${transactionDirection === "kredit" ? "border-destructive bg-destructive/5 ring-2 ring-destructive/20" : "hover:bg-muted/50"}`}
+              >
+                <span className="block font-semibold">Pengeluaran · Kurangi saldo</span>
+                <span className="mt-1 block text-xs text-muted-foreground">Pembelian, pembayaran, atau biaya kegiatan</span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={transactionDirection === "debit"}
+                onClick={() => {
+                  setTransactionDirection("debit");
+                  setTransaction((state) => ({ ...state, kredit: "" }));
+                }}
+                className={`rounded-lg border p-3 text-left transition-colors ${transactionDirection === "debit" ? "border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600/20" : "hover:bg-muted/50"}`}
+              >
+                <span className="block font-semibold">Dana masuk · Tambah saldo</span>
+                <span className="mt-1 block text-xs text-muted-foreground">Pencairan atau pengembalian dana</span>
+              </button>
+            </div>
+          </fieldset>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            {transactionDirection === "kredit" ? "Nominal pengeluaran (mengurangi saldo)" : "Nominal dana masuk (menambah saldo)"}
+            <MoneyInput
+              value={transactionDirection === "kredit" ? transaction.kredit : transaction.debit}
+              onValueChange={(value) => setTransaction((state) => (transactionDirection === "kredit" ? { ...state, kredit: value, debit: "" } : { ...state, debit: value, kredit: "" }))}
+            />
           </label>
           <label className="grid gap-1 text-sm sm:col-span-2">
             Keterangan

@@ -6,7 +6,7 @@ export default function Page() {
       description="Daftar rekening bank terdaftar."
       group="masterRekeningBank"
       method="masterRekeningControllerFindAll"
-      methodHasQuery={false}
+      requestStyle="params"
       create={{
         method: "masterRekeningControllerCreate",
         fields: [

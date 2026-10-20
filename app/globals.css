@@ -868,6 +868,12 @@ button {
 .hris-page .operational-summary-grid > [data-slot="card"] > [data-slot="card-content"] {
   padding: 12px;
 }
+.hris-page .termin-summary > [data-slot="card"] .termin-summary-content {
+  padding: 16px;
+}
+.hris-page .termin-summary p {
+  user-select: none;
+}
 .hris-page table {
   border-collapse: separate;
   border-spacing: 0;

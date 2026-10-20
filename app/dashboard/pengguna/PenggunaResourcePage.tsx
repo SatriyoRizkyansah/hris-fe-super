@@ -9,6 +9,29 @@ export function PenggunaResourcePage() {
       description="Daftar akun pengguna sistem."
       group="users"
       method="usersGetControllerGetData"
+      filters={[
+        {
+          field: "role",
+          label: "Role",
+          options: [
+            { label: "Superadmin", value: "SUPERADMIN" },
+            { label: "Koordinator", value: "KOORDINATOR" },
+            { label: "Subkoordinator", value: "SUBKOOR" },
+            { label: "Karyawan", value: "KARYAWAN" },
+            { label: "Keuangan", value: "KEUANGAN" },
+            { label: "Pimpinan", value: "PIMPINAN" },
+            { label: "SPI", value: "SPI" },
+          ],
+        },
+        {
+          field: "status",
+          label: "Status",
+          options: [
+            { label: "Aktif", value: "AKTIF" },
+            { label: "Nonaktif", value: "NONAKTIF" },
+          ],
+        },
+      ]}
       columns={[
         { key: "nama", header: "Nama" },
         { key: "email", header: "Email" },

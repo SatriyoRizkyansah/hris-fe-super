@@ -238,13 +238,7 @@ export interface ProyekItemDto {
   total_direct_cost?: number;
   /** @example 250000000 */
   total_margin?: number;
-  status_proyek:
-    | "MENUNGGU_VALIDASI_UMUM"
-    | "MENUNGGU_NOTULEN"
-    | "MENUNGGU_VALIDASI_PIMPINAN"
-    | "DISETUJUI_PIMPINAN"
-    | "DITOLAK_UMUM"
-    | "DITOLAK_PIMPINAN";
+  status_proyek: "MENUNGGU_VALIDASI_UMUM" | "MENUNGGU_NOTULEN" | "MENUNGGU_VALIDASI_PIMPINAN" | "DISETUJUI_PIMPINAN" | "DITOLAK_UMUM" | "DITOLAK_PIMPINAN";
   catatan_validasi?: object | null;
   diajukan_oleh_id?: object | null;
   nama_pengaju?: object | null;
@@ -253,6 +247,8 @@ export interface ProyekItemDto {
   divalidasi_pimpinan_pada?: object | null;
   jumlah_ro?: number;
   total_plafon_ro?: number;
+  mulai_proyek?: object | null;
+  estimasi_selesai_proyek?: object | null;
   /** @format date-time */
   created_at?: string;
   /** @format date-time */
@@ -288,6 +284,10 @@ export interface CreateProyekDto {
   nama_proyek: string;
   /** @example 2026 */
   tahun_fiscal: number;
+  /** @format date */
+  mulai_proyek?: string;
+  /** @format date */
+  estimasi_selesai_proyek?: string;
   /** @example "APBN 2026" */
   sumber_pendanaan?: string;
   /** @example "Nama Penanggung Jawab 1" */
@@ -465,13 +465,7 @@ export interface DanaOperasionalItemDto {
   nama_unit_koordinator?: object | null;
   id_rekening?: object | null;
   rekening_id?: object | null;
-  kategori_kamar?:
-    | "P1_PNS_NON_PNS"
-    | "P2_KP3"
-    | "OPS_KANTOR"
-    | "OPS_KP3"
-    | "MULOS_SPI"
-    | "LAINNYA";
+  kategori_kamar?: "P1_PNS_NON_PNS" | "P2_KP3" | "OPS_KANTOR" | "OPS_KP3" | "MULOS_SPI" | "LAINNYA";
   /** @format date-time */
   created_at?: string;
   /** @format date-time */
@@ -494,13 +488,7 @@ export interface CreateDanaOperasionalDto {
    * Kategori kamar wallet
    * @example "LAINNYA"
    */
-  kategori_kamar?:
-    | "P1_PNS_NON_PNS"
-    | "P2_KP3"
-    | "OPS_KANTOR"
-    | "OPS_KP3"
-    | "MULOS_SPI"
-    | "LAINNYA";
+  kategori_kamar?: "P1_PNS_NON_PNS" | "P2_KP3" | "OPS_KANTOR" | "OPS_KP3" | "MULOS_SPI" | "LAINNYA";
 }
 
 export interface UpdateDanaOperasionalDto {
@@ -725,24 +713,9 @@ export interface CreateUserDto {
    */
   password: string;
   /** @example "KOORDINATOR" */
-  role:
-    | "SUPERADMIN"
-    | "KOORDINATOR"
-    | "SUBKOOR"
-    | "KARYAWAN"
-    | "KEUANGAN"
-    | "PIMPINAN"
-    | "SPI";
+  role: "SUPERADMIN" | "KOORDINATOR" | "SUBKOOR" | "KARYAWAN" | "KEUANGAN" | "PIMPINAN" | "SPI";
   /** Role tambahan selain role default */
-  roles?: (
-    | "SUPERADMIN"
-    | "KOORDINATOR"
-    | "SUBKOOR"
-    | "KARYAWAN"
-    | "KEUANGAN"
-    | "PIMPINAN"
-    | "SPI"
-  )[];
+  roles?: ("SUPERADMIN" | "KOORDINATOR" | "SUBKOOR" | "KARYAWAN" | "KEUANGAN" | "PIMPINAN" | "SPI")[];
   /** Unit kerja (koordinator unit aktif) */
   id_unit_kerja?: string;
   /** @default "AKTIF" */
@@ -754,24 +727,9 @@ export interface UpdateUserDto {
   /** @minLength 6 */
   password?: string;
   /** Role default */
-  role?:
-    | "SUPERADMIN"
-    | "KOORDINATOR"
-    | "SUBKOOR"
-    | "KARYAWAN"
-    | "KEUANGAN"
-    | "PIMPINAN"
-    | "SPI";
+  role?: "SUPERADMIN" | "KOORDINATOR" | "SUBKOOR" | "KARYAWAN" | "KEUANGAN" | "PIMPINAN" | "SPI";
   /** Daftar role (termasuk default). Jika diisi, akan sync UserRole */
-  roles?: (
-    | "SUPERADMIN"
-    | "KOORDINATOR"
-    | "SUBKOOR"
-    | "KARYAWAN"
-    | "KEUANGAN"
-    | "PIMPINAN"
-    | "SPI"
-  )[];
+  roles?: ("SUPERADMIN" | "KOORDINATOR" | "SUBKOOR" | "KARYAWAN" | "KEUANGAN" | "PIMPINAN" | "SPI")[];
   id_unit_kerja?: string;
   status?: "AKTIF" | "NONAKTIF";
 }
@@ -880,22 +838,16 @@ export interface FullRequestParams extends Omit<RequestInit, "body"> {
   cancelToken?: CancelToken;
 }
 
-export type RequestParams = Omit<
-  FullRequestParams,
-  "body" | "method" | "query" | "path"
->;
+export type RequestParams = Omit<FullRequestParams, "body" | "method" | "query" | "path">;
 
 export interface ApiConfig<SecurityDataType = unknown> {
   baseUrl?: string;
   baseApiParams?: Omit<RequestParams, "baseUrl" | "cancelToken" | "signal">;
-  securityWorker?: (
-    securityData: SecurityDataType | null,
-  ) => Promise<RequestParams | void> | RequestParams | void;
+  securityWorker?: (securityData: SecurityDataType | null) => Promise<RequestParams | void> | RequestParams | void;
   customFetch?: typeof fetch;
 }
 
-export interface HttpResponse<D extends unknown, E extends unknown = unknown>
-  extends Response {
+export interface HttpResponse<D extends unknown, E extends unknown = unknown> extends Response {
   data: D;
   error: E;
 }
@@ -915,8 +867,7 @@ export class HttpClient<SecurityDataType = unknown> {
   private securityData: SecurityDataType | null = null;
   private securityWorker?: ApiConfig<SecurityDataType>["securityWorker"];
   private abortControllers = new Map<CancelToken, AbortController>();
-  private customFetch = (...fetchParams: Parameters<typeof fetch>) =>
-    fetch(...fetchParams);
+  private customFetch = (...fetchParams: Parameters<typeof fetch>) => fetch(...fetchParams);
 
   private baseApiParams: RequestParams = {
     credentials: "same-origin",
@@ -949,16 +900,8 @@ export class HttpClient<SecurityDataType = unknown> {
 
   protected toQueryString(rawQuery?: QueryParamsType): string {
     const query = rawQuery || {};
-    const keys = Object.keys(query).filter(
-      (key) => "undefined" !== typeof query[key],
-    );
-    return keys
-      .map((key) =>
-        Array.isArray(query[key])
-          ? this.addArrayQueryParam(query, key)
-          : this.addQueryParam(query, key),
-      )
-      .join("&");
+    const keys = Object.keys(query).filter((key) => "undefined" !== typeof query[key]);
+    return keys.map((key) => (Array.isArray(query[key]) ? this.addArrayQueryParam(query, key) : this.addQueryParam(query, key))).join("&");
   }
 
   protected addQueryParams(rawQuery?: QueryParamsType): string {
@@ -967,18 +910,9 @@ export class HttpClient<SecurityDataType = unknown> {
   }
 
   private contentFormatters: Record<ContentType, (input: any) => any> = {
-    [ContentType.Json]: (input: any) =>
-      input !== null && (typeof input === "object" || typeof input === "string")
-        ? JSON.stringify(input)
-        : input,
-    [ContentType.JsonApi]: (input: any) =>
-      input !== null && (typeof input === "object" || typeof input === "string")
-        ? JSON.stringify(input)
-        : input,
-    [ContentType.Text]: (input: any) =>
-      input !== null && typeof input !== "string"
-        ? JSON.stringify(input)
-        : input,
+    [ContentType.Json]: (input: any) => (input !== null && (typeof input === "object" || typeof input === "string") ? JSON.stringify(input) : input),
+    [ContentType.JsonApi]: (input: any) => (input !== null && (typeof input === "object" || typeof input === "string") ? JSON.stringify(input) : input),
+    [ContentType.Text]: (input: any) => (input !== null && typeof input !== "string" ? JSON.stringify(input) : input),
     [ContentType.FormData]: (input: any) => {
       if (input instanceof FormData) {
         return input;
@@ -986,24 +920,14 @@ export class HttpClient<SecurityDataType = unknown> {
 
       return Object.keys(input || {}).reduce((formData, key) => {
         const property = input[key];
-        formData.append(
-          key,
-          property instanceof Blob
-            ? property
-            : typeof property === "object" && property !== null
-              ? JSON.stringify(property)
-              : `${property}`,
-        );
+        formData.append(key, property instanceof Blob ? property : typeof property === "object" && property !== null ? JSON.stringify(property) : `${property}`);
         return formData;
       }, new FormData());
     },
     [ContentType.UrlEncoded]: (input: any) => this.toQueryString(input),
   };
 
-  protected mergeRequestParams(
-    params1: RequestParams,
-    params2?: RequestParams,
-  ): RequestParams {
+  protected mergeRequestParams(params1: RequestParams, params2?: RequestParams): RequestParams {
     return {
       ...this.baseApiParams,
       ...params1,
@@ -1016,9 +940,7 @@ export class HttpClient<SecurityDataType = unknown> {
     };
   }
 
-  protected createAbortSignal = (
-    cancelToken: CancelToken,
-  ): AbortSignal | undefined => {
+  protected createAbortSignal = (cancelToken: CancelToken): AbortSignal | undefined => {
     if (this.abortControllers.has(cancelToken)) {
       const abortController = this.abortControllers.get(cancelToken);
       if (abortController) {
@@ -1041,47 +963,22 @@ export class HttpClient<SecurityDataType = unknown> {
     }
   };
 
-  public request = async <T = any, E = any>({
-    body,
-    secure,
-    path,
-    type,
-    query,
-    format,
-    baseUrl,
-    cancelToken,
-    ...params
-  }: FullRequestParams): Promise<HttpResponse<T, E>> => {
-    const secureParams =
-      ((typeof secure === "boolean" ? secure : this.baseApiParams.secure) &&
-        this.securityWorker &&
-        (await this.securityWorker(this.securityData))) ||
-      {};
+  public request = async <T = any, E = any>({ body, secure, path, type, query, format, baseUrl, cancelToken, ...params }: FullRequestParams): Promise<HttpResponse<T, E>> => {
+    const secureParams = ((typeof secure === "boolean" ? secure : this.baseApiParams.secure) && this.securityWorker && (await this.securityWorker(this.securityData))) || {};
     const requestParams = this.mergeRequestParams(params, secureParams);
     const queryString = query && this.toQueryString(query);
     const payloadFormatter = this.contentFormatters[type || ContentType.Json];
     const responseFormat = format || requestParams.format;
 
-    return this.customFetch(
-      `${baseUrl || this.baseUrl || ""}${path}${queryString ? `?${queryString}` : ""}`,
-      {
-        ...requestParams,
-        headers: {
-          ...(requestParams.headers || {}),
-          ...(type && type !== ContentType.FormData
-            ? { "Content-Type": type }
-            : {}),
-        },
-        signal:
-          (cancelToken
-            ? this.createAbortSignal(cancelToken)
-            : requestParams.signal) || null,
-        body:
-          typeof body === "undefined" || body === null
-            ? null
-            : payloadFormatter(body),
+    return this.customFetch(`${baseUrl || this.baseUrl || ""}${path}${queryString ? `?${queryString}` : ""}`, {
+      ...requestParams,
+      headers: {
+        ...(requestParams.headers || {}),
+        ...(type && type !== ContentType.FormData ? { "Content-Type": type } : {}),
       },
-    ).then(async (response) => {
+      signal: (cancelToken ? this.createAbortSignal(cancelToken) : requestParams.signal) || null,
+      body: typeof body === "undefined" || body === null ? null : payloadFormatter(body),
+    }).then(async (response) => {
       const r = response as HttpResponse<T, E>;
       r.data = null as unknown as T;
       r.error = null as unknown as E;
@@ -1120,9 +1017,7 @@ export class HttpClient<SecurityDataType = unknown> {
  *
  * Dokumentasi API HRIS LEMIGAS - Pengelolaan pegawai, unit kerja dinamis (koordinator/sub-koordinator), SK, RO, dana operasional, dan alokasi gaji TA
  */
-export class Api<
-  SecurityDataType extends unknown,
-> extends HttpClient<SecurityDataType> {
+export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDataType> {
   app = {
     /**
      * No description
@@ -1248,10 +1143,7 @@ export class Api<
      * @request POST:/api/pegawai
      * @secure
      */
-    pegawaiPostControllerCreate: (
-      data: CreatePegawaiDto,
-      params: RequestParams = {},
-    ) =>
+    pegawaiPostControllerCreate: (data: CreatePegawaiDto, params: RequestParams = {}) =>
       this.request<
         StandartResponseCreate & {
           data?: PegawaiItemDto;
@@ -1299,11 +1191,7 @@ export class Api<
      * @request PUT:/api/pegawai/{id}
      * @secure
      */
-    pegawaiPutControllerUpdate: (
-      id: string,
-      data: UpdatePegawaiDto,
-      params: RequestParams = {},
-    ) =>
+    pegawaiPutControllerUpdate: (id: string, data: UpdatePegawaiDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: PegawaiItemDto;
@@ -1393,10 +1281,7 @@ export class Api<
      * @request POST:/api/unit-kerja
      * @secure
      */
-    unitKerjaPostControllerCreate: (
-      data: CreateUnitKerjaDto,
-      params: RequestParams = {},
-    ) =>
+    unitKerjaPostControllerCreate: (data: CreateUnitKerjaDto, params: RequestParams = {}) =>
       this.request<
         StandartResponseCreate & {
           data?: UnitKerjaItemDto;
@@ -1444,11 +1329,7 @@ export class Api<
      * @request PUT:/api/unit-kerja/{id}
      * @secure
      */
-    unitKerjaPutControllerUpdate: (
-      id: string,
-      data: UpdateUnitKerjaDto,
-      params: RequestParams = {},
-    ) =>
+    unitKerjaPutControllerUpdate: (id: string, data: UpdateUnitKerjaDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: UnitKerjaItemDto;
@@ -1537,10 +1418,7 @@ export class Api<
      * @request POST:/api/proyek
      * @secure
      */
-    proyekControllerCreate: (
-      data: CreateProyekDto,
-      params: RequestParams = {},
-    ) =>
+    proyekControllerCreate: (data: CreateProyekDto, params: RequestParams = {}) =>
       this.request<
         StandartResponseCreate & {
           data?: ProyekItemDto;
@@ -1605,11 +1483,7 @@ export class Api<
      * @request PUT:/api/proyek/{id}
      * @secure
      */
-    proyekControllerUpdate: (
-      id: string,
-      data: UpdateProyekDto,
-      params: RequestParams = {},
-    ) =>
+    proyekControllerUpdate: (id: string, data: UpdateProyekDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: ProyekItemDto;
@@ -1702,11 +1576,7 @@ export class Api<
      * @request POST:/api/proyek/{id}/validasi-umum
      * @secure
      */
-    proyekControllerValidasiUmum: (
-      id: string,
-      data: ProyekValidationDto,
-      params: RequestParams = {},
-    ) =>
+    proyekControllerValidasiUmum: (id: string, data: ProyekValidationDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: ProyekItemDto;
@@ -1731,11 +1601,7 @@ export class Api<
      * @request POST:/api/proyek/{id}/validasi-pimpinan
      * @secure
      */
-    proyekControllerValidasiPimpinan: (
-      id: string,
-      data: ProyekValidationDto,
-      params: RequestParams = {},
-    ) =>
+    proyekControllerValidasiPimpinan: (id: string, data: ProyekValidationDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: ProyekItemDto;
@@ -1761,10 +1627,19 @@ export class Api<
      * @secure
      */
     proyekControllerGetTermin: (id: string, params: RequestParams = {}) =>
-      this.request<void, any>({
+      this.request<
+        {
+          /** @example 200 */
+          status?: number;
+          message?: string;
+          data?: Record<string, any>[];
+        },
+        any
+      >({
         path: `/api/proyek/${id}/termin`,
         method: "GET",
         secure: true,
+        format: "json",
         ...params,
       }),
 
@@ -1777,12 +1652,7 @@ export class Api<
      * @request POST:/api/proyek/{id}/termin/{terminId}/validasi-keuangan
      * @secure
      */
-    proyekControllerValidasiTerminKeuangan: (
-      id: string,
-      terminId: string,
-      data: TerminKeuanganValidationDto,
-      params: RequestParams = {},
-    ) =>
+    proyekControllerValidasiTerminKeuangan: (id: string, terminId: string, data: TerminKeuanganValidationDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/proyek/${id}/termin/${terminId}/validasi-keuangan`,
         method: "POST",
@@ -1801,11 +1671,7 @@ export class Api<
      * @request POST:/api/proyek/{id}/termin/{terminId}/cairkan
      * @secure
      */
-    proyekControllerCairkanTermin: (
-      id: string,
-      terminId: string,
-      params: RequestParams = {},
-    ) =>
+    proyekControllerCairkanTermin: (id: string, terminId: string, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/proyek/${id}/termin/${terminId}/cairkan`,
         method: "POST",
@@ -1938,11 +1804,7 @@ export class Api<
      * @request PUT:/api/ro/{id}
      * @secure
      */
-    roControllerUpdate: (
-      id: string,
-      data: UpdateRoDto,
-      params: RequestParams = {},
-    ) =>
+    roControllerUpdate: (id: string, data: UpdateRoDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: RoItemDto;
@@ -2076,11 +1938,7 @@ export class Api<
      * @request POST:/api/ro/{id}/transaksi
      * @secure
      */
-    roTransaksiControllerCreate: (
-      id: string,
-      data: CreateRoTransaksiDto,
-      params: RequestParams = {},
-    ) =>
+    roTransaksiControllerCreate: (id: string, data: CreateRoTransaksiDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/ro/${id}/transaksi`,
         method: "POST",
@@ -2099,12 +1957,7 @@ export class Api<
      * @request PUT:/api/ro/{id}/transaksi/{tid}
      * @secure
      */
-    roTransaksiControllerUpdate: (
-      id: string,
-      tid: string,
-      data: UpdateRoTransaksiDto,
-      params: RequestParams = {},
-    ) =>
+    roTransaksiControllerUpdate: (id: string, tid: string, data: UpdateRoTransaksiDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/ro/${id}/transaksi/${tid}`,
         method: "PUT",
@@ -2123,11 +1976,7 @@ export class Api<
      * @request DELETE:/api/ro/{id}/transaksi/{tid}
      * @secure
      */
-    roTransaksiControllerRemove: (
-      tid: string,
-      id: string,
-      params: RequestParams = {},
-    ) =>
+    roTransaksiControllerRemove: (tid: string, id: string, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/ro/${id}/transaksi/${tid}`,
         method: "DELETE",
@@ -2144,11 +1993,7 @@ export class Api<
      * @request POST:/api/ro/{id}/transaksi/{tid}/dokumen
      * @secure
      */
-    roTransaksiControllerUploadDocument: (
-      id: string,
-      tid: string,
-      params: RequestParams = {},
-    ) =>
+    roTransaksiControllerUploadDocument: (id: string, tid: string, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/ro/${id}/transaksi/${tid}/dokumen`,
         method: "POST",
@@ -2179,13 +2024,7 @@ export class Api<
         /** @example 2026 */
         tahun_fiscal?: number;
         /** Filter kategori kamar */
-        kategori_kamar?:
-          | "P1_PNS_NON_PNS"
-          | "P2_KP3"
-          | "OPS_KANTOR"
-          | "OPS_KP3"
-          | "MULOS_SPI"
-          | "LAINNYA";
+        kategori_kamar?: "P1_PNS_NON_PNS" | "P2_KP3" | "OPS_KANTOR" | "OPS_KP3" | "MULOS_SPI" | "LAINNYA";
       },
       params: RequestParams = {},
     ) =>
@@ -2222,10 +2061,7 @@ export class Api<
      * @request POST:/api/dana-operasional
      * @secure
      */
-    danaOperasionalControllerCreate: (
-      data: CreateDanaOperasionalDto,
-      params: RequestParams = {},
-    ) =>
+    danaOperasionalControllerCreate: (data: CreateDanaOperasionalDto, params: RequestParams = {}) =>
       this.request<
         StandartResponseCreate & {
           data?: DanaOperasionalItemDto;
@@ -2250,10 +2086,7 @@ export class Api<
      * @request GET:/api/dana-operasional/{id}
      * @secure
      */
-    danaOperasionalControllerGetDetail: (
-      id: string,
-      params: RequestParams = {},
-    ) =>
+    danaOperasionalControllerGetDetail: (id: string, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: DanaOperasionalItemDto;
@@ -2276,11 +2109,7 @@ export class Api<
      * @request PUT:/api/dana-operasional/{id}
      * @secure
      */
-    danaOperasionalControllerUpdate: (
-      id: string,
-      data: UpdateDanaOperasionalDto,
-      params: RequestParams = {},
-    ) =>
+    danaOperasionalControllerUpdate: (id: string, data: UpdateDanaOperasionalDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: DanaOperasionalItemDto;
@@ -2322,10 +2151,7 @@ export class Api<
      * @request GET:/api/dana-operasional/{id}/ledger
      * @secure
      */
-    danaOperasionalControllerGetLedger: (
-      id: string,
-      params: RequestParams = {},
-    ) =>
+    danaOperasionalControllerGetLedger: (id: string, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: object;
@@ -2366,11 +2192,7 @@ export class Api<
      * @request POST:/api/dana-operasional/{id}/transaksi
      * @secure
      */
-    danaTransaksiControllerCreate: (
-      id: string,
-      data: CreateDanaTransaksiDto,
-      params: RequestParams = {},
-    ) =>
+    danaTransaksiControllerCreate: (id: string, data: CreateDanaTransaksiDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/dana-operasional/${id}/transaksi`,
         method: "POST",
@@ -2389,12 +2211,7 @@ export class Api<
      * @request PUT:/api/dana-operasional/{id}/transaksi/{tid}
      * @secure
      */
-    danaTransaksiControllerUpdate: (
-      tid: string,
-      id: string,
-      data: UpdateDanaTransaksiDto,
-      params: RequestParams = {},
-    ) =>
+    danaTransaksiControllerUpdate: (tid: string, id: string, data: UpdateDanaTransaksiDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/dana-operasional/${id}/transaksi/${tid}`,
         method: "PUT",
@@ -2413,11 +2230,7 @@ export class Api<
      * @request DELETE:/api/dana-operasional/{id}/transaksi/{tid}
      * @secure
      */
-    danaTransaksiControllerRemove: (
-      tid: string,
-      id: string,
-      params: RequestParams = {},
-    ) =>
+    danaTransaksiControllerRemove: (tid: string, id: string, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/dana-operasional/${id}/transaksi/${tid}`,
         method: "DELETE",
@@ -2434,11 +2247,7 @@ export class Api<
      * @request POST:/api/dana-operasional/{id}/transaksi/{tid}/dokumen
      * @secure
      */
-    danaTransaksiControllerUploadDocument: (
-      id: string,
-      tid: string,
-      params: RequestParams = {},
-    ) =>
+    danaTransaksiControllerUploadDocument: (id: string, tid: string, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/dana-operasional/${id}/transaksi/${tid}/dokumen`,
         method: "POST",
@@ -2632,11 +2441,7 @@ export class Api<
      * @request PUT:/api/sk/{id}
      * @secure
      */
-    skPutControllerUpdate: (
-      id: string,
-      data: UpdateSkDto,
-      params: RequestParams = {},
-    ) =>
+    skPutControllerUpdate: (id: string, data: UpdateSkDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: SkItemDto;
@@ -2678,11 +2483,7 @@ export class Api<
      * @request PUT:/api/sk/{id}/activate
      * @secure
      */
-    skPutControllerActivate: (
-      id: string,
-      data: ActivateSkDto,
-      params: RequestParams = {},
-    ) =>
+    skPutControllerActivate: (id: string, data: ActivateSkDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: SkItemDto;
@@ -2765,10 +2566,7 @@ export class Api<
      * @request POST:/api/alokasi-gaji
      * @secure
      */
-    alokasiPostControllerCreate: (
-      data: CreateAlokasiDto,
-      params: RequestParams = {},
-    ) =>
+    alokasiPostControllerCreate: (data: CreateAlokasiDto, params: RequestParams = {}) =>
       this.request<
         StandartResponseCreate & {
           data?: AlokasiItemDto;
@@ -2793,11 +2591,7 @@ export class Api<
      * @request PUT:/api/alokasi-gaji/{id}
      * @secure
      */
-    alokasiPutControllerUpdate: (
-      id: string,
-      data: UpdateAlokasiDto,
-      params: RequestParams = {},
-    ) =>
+    alokasiPutControllerUpdate: (id: string, data: UpdateAlokasiDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: AlokasiItemDto;
@@ -2992,14 +2786,7 @@ export class Api<
         limit?: number;
         /** @default 1 */
         page?: number;
-        role?:
-          | "SUPERADMIN"
-          | "KOORDINATOR"
-          | "SUBKOOR"
-          | "KARYAWAN"
-          | "KEUANGAN"
-          | "PIMPINAN"
-          | "SPI";
+        role?: "SUPERADMIN" | "KOORDINATOR" | "SUBKOOR" | "KARYAWAN" | "KEUANGAN" | "PIMPINAN" | "SPI";
         status?: "AKTIF" | "NONAKTIF";
       },
       params: RequestParams = {},
@@ -3037,10 +2824,7 @@ export class Api<
      * @request POST:/api/users
      * @secure
      */
-    usersPostControllerCreate: (
-      data: CreateUserDto,
-      params: RequestParams = {},
-    ) =>
+    usersPostControllerCreate: (data: CreateUserDto, params: RequestParams = {}) =>
       this.request<
         StandartResponseCreate & {
           data?: UserItemDto;
@@ -3065,11 +2849,7 @@ export class Api<
      * @request PUT:/api/users/{id}
      * @secure
      */
-    usersPutControllerUpdate: (
-      id: string,
-      data: UpdateUserDto,
-      params: RequestParams = {},
-    ) =>
+    usersPutControllerUpdate: (id: string, data: UpdateUserDto, params: RequestParams = {}) =>
       this.request<
         StandartResponse & {
           data?: UserItemDto;
@@ -3173,10 +2953,7 @@ export class Api<
      * @request POST:/api/finance/distribute-margin
      * @secure
      */
-    financeControllerDistribute: (
-      data: DistributeMarginDto,
-      params: RequestParams = {},
-    ) =>
+    financeControllerDistribute: (data: DistributeMarginDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/finance/distribute-margin`,
         method: "POST",
@@ -3195,10 +2972,7 @@ export class Api<
      * @request POST:/api/finance/distribusi-margin
      * @secure
      */
-    financeControllerDistribusiMargin: (
-      data: DistribusiMarginSimpleDto,
-      params: RequestParams = {},
-    ) =>
+    financeControllerDistribusiMargin: (data: DistribusiMarginSimpleDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/finance/distribusi-margin`,
         method: "POST",
@@ -3262,11 +3036,7 @@ export class Api<
      * @request PUT:/api/pengaturan-margin/{id}
      * @secure
      */
-    pengaturanMarginControllerUpdate: (
-      id: string,
-      data: UpdatePengaturanMarginDto,
-      params: RequestParams = {},
-    ) =>
+    pengaturanMarginControllerUpdate: (id: string, data: UpdatePengaturanMarginDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/pengaturan-margin/${id}`,
         method: "PUT",
@@ -3303,10 +3073,7 @@ export class Api<
      * @request POST:/api/master-rekening
      * @secure
      */
-    masterRekeningControllerCreate: (
-      data: CreateMasterRekeningDto,
-      params: RequestParams = {},
-    ) =>
+    masterRekeningControllerCreate: (data: CreateMasterRekeningDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/master-rekening`,
         method: "POST",
@@ -3342,11 +3109,7 @@ export class Api<
      * @request PUT:/api/master-rekening/{id}
      * @secure
      */
-    masterRekeningControllerUpdate: (
-      id: string,
-      data: UpdateMasterRekeningDto,
-      params: RequestParams = {},
-    ) =>
+    masterRekeningControllerUpdate: (id: string, data: UpdateMasterRekeningDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/master-rekening/${id}`,
         method: "PUT",
@@ -3435,10 +3198,7 @@ export class Api<
      * @request POST:/api/rekonsiliasi
      * @secure
      */
-    rekonsiliasiBankControllerCreate: (
-      data: CreateRekonsiliasiBankDto,
-      params: RequestParams = {},
-    ) =>
+    rekonsiliasiBankControllerCreate: (data: CreateRekonsiliasiBankDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/rekonsiliasi`,
         method: "POST",
@@ -3475,10 +3235,7 @@ export class Api<
      * @request POST:/api/master-mak
      * @secure
      */
-    masterMakControllerCreate: (
-      data: CreateMasterMakDto,
-      params: RequestParams = {},
-    ) =>
+    masterMakControllerCreate: (data: CreateMasterMakDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/master-mak`,
         method: "POST",
@@ -3514,11 +3271,7 @@ export class Api<
      * @request PUT:/api/master-mak/{id}
      * @secure
      */
-    masterMakControllerUpdate: (
-      id: string,
-      data: UpdateMasterMakDto,
-      params: RequestParams = {},
-    ) =>
+    masterMakControllerUpdate: (id: string, data: UpdateMasterMakDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/master-mak/${id}`,
         method: "PUT",

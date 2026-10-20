@@ -96,7 +96,7 @@ export default function RekonsiliasiBankPageClient() {
         description="Riwayat rekonsiliasi bank."
         group="rekonsiliasiBank"
         method="rekonsiliasiBankControllerFindAll"
-        methodHasQuery={false}
+        requestStyle="none"
         columns={[
           { key: "tanggal_rekonsiliasi", header: "Tanggal" },
           {
