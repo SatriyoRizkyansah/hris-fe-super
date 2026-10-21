@@ -117,6 +117,7 @@ export default function ProyekClientPage() {
   const canCreate = identity.role === "superadmin" || identity.role === "koordinator";
   const [search, setSearch] = useState("");
   const [tahun, setTahun] = useState("__all");
+  const [koordinator, setKoordinator] = useState("__all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [open, setOpen] = useState(false);
@@ -147,10 +148,16 @@ export default function ProyekClientPage() {
   const list = use_query({
     tag: "masterProyek",
     method: "list",
-    params: { search, tahun, page, pageSize },
+    params: { search, tahun, koordinator, page, pageSize },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetData({ query: search || undefined, tahun_fiscal: tahun === "__all" ? undefined : Number(tahun), page, limit: pageSize });
+      return browserApi.masterProyek.proyekControllerGetData({
+        query: search || undefined,
+        tahun_fiscal: tahun === "__all" ? undefined : Number(tahun),
+        id_unit_koordinator: koordinator === "__all" ? undefined : koordinator,
+        page,
+        limit: pageSize,
+      });
     },
   });
   const projects = envelopeRows<ProyekItemDto>(list.data);
@@ -514,10 +521,14 @@ export default function ProyekClientPage() {
             }}
             remoteSearch
             rowsPerPageOptions={[10, 25, 50]}
-            filters={[{ field: "tahun", label: "Tahun Fiscal", options: [{ label: "Semua Tahun", value: "__all" }, ...years.map((value) => ({ label: value, value }))] }]}
-            filterValues={{ tahun }}
-            onFilterChange={(_, value) => {
-              setTahun(value);
+            filters={[
+              { field: "tahun", label: "Tahun Fiscal", options: years.map((value) => ({ label: value, value })) },
+              { field: "koordinator", label: "Koordinator", options: unitComboboxOptions },
+            ]}
+            filterValues={{ tahun, koordinator }}
+            onFilterChange={(field, value) => {
+              if (field === "tahun") setTahun(value);
+              if (field === "koordinator") setKoordinator(value);
               setPage(1);
             }}
             pagination={{
