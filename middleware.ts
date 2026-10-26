@@ -10,7 +10,7 @@ const roleAccess: Record<string, string[]> = {
   "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"],
   "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"],
   "/dashboard/karwas": ["superadmin", "keu_karwas"],
-  "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan", "keu_bendahara"],
+  "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan", "keu_bendahara", "keu_karwas"],
   "/dashboard/rekening": ["superadmin", "keuangan", "keu_bendahara"],
   "/dashboard/mak": ["superadmin", "keuangan"],
   "/dashboard/sk": ["superadmin", "koordinator"],

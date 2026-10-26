@@ -1664,7 +1664,7 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekControllerGetTerminQueue
-     * @summary Get antrean termin proyek untuk Keuangan (Superadmin, Keuangan)
+     * @summary Get antrean termin proyek untuk Billing dan Keuangan (Superadmin, Keuangan, Keuangan - Billing)
      * @request GET:/api/proyek/termin-queue
      * @secure
      */
@@ -3397,7 +3397,7 @@ export class Api<
      *
      * @tags Master - Rekening Bank
      * @name MasterRekeningControllerFindAll
-     * @summary Get daftar rekening bank (Superadmin, Keuangan)
+     * @summary Get daftar rekening bank (Superadmin, Keuangan, Keuangan - Bendahara)
      * @request GET:/api/master-rekening
      * @secure
      */
@@ -3436,7 +3436,7 @@ export class Api<
      *
      * @tags Master - Rekening Bank
      * @name MasterRekeningControllerFindOne
-     * @summary Get detail rekening bank (Superadmin, Keuangan)
+     * @summary Get detail rekening bank (Superadmin, Keuangan, Keuangan - Bendahara)
      * @request GET:/api/master-rekening/{id}
      * @secure
      */
@@ -3680,6 +3680,10 @@ export class Api<
         page?: number;
         ro_id?: string;
         status?: string;
+        id_proyek?: string;
+        id_unit_koordinator?: string;
+        /** @example 2026 */
+        tahun_fiscal?: number;
       },
       params: RequestParams = {},
     ) =>
@@ -3710,6 +3714,43 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaControllerFilterOptions
+     * @summary Opsi filter pengajuan belanja (Superadmin, Koordinator, Subkoordinator, Keuangan, Keuangan - KARWAS, Keuangan - Bendahara, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @request GET:/api/pengajuan-belanja/filter-options
+     * @secure
+     */
+    pengajuanBelanjaControllerFilterOptions: (params: RequestParams = {}) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/filter-options`,
+        method: "GET",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaControllerReviewContext
+     * @summary Konteks finansial untuk review KARWAS (Superadmin, Keuangan - KARWAS)
+     * @request GET:/api/pengajuan-belanja/{id}/review-context
+     * @secure
+     */
+    pengajuanBelanjaControllerReviewContext: (
+      id: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/review-context`,
+        method: "GET",
+        secure: true,
         ...params,
       }),
 

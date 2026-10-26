@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { MoneyInput } from "@/components/ui/money-input";
+import { DataTable } from "@/components/table";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -354,76 +355,42 @@ export default function RoDetailClientPage({ id }: { id: string }) {
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto p-5">
+        <div className="p-5">
           {tab === "ledger" ? (
-            <table className="w-full min-w-[48rem] text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Tanggal</th>
-                  <th className="p-2">Kegiatan</th>
-                  <th className="p-2">Kuitansi</th>
-                  <th className="p-2 text-right">Debit</th>
-                  <th className="p-2 text-right">Kredit</th>
-                  <th className="p-2 text-right">Saldo</th>
-                  {canManage && <th className="p-2" />}
-                </tr>
-              </thead>
-              <tbody>
-                {ledgerRows.map((row, index) => (
-                  <tr key={String(row.id ?? index)} className="border-b">
-                    <td className="p-2">{formatDate(row.tanggal)}</td>
-                    <td className="p-2">{String(row.nama_kegiatan ?? "—")}</td>
-                    <td className="p-2">{String(row.no_kuitansi ?? "—")}</td>
-                    <td className="p-2 text-right">{Number(row.debit) ? formatRupiah(row.debit) : "—"}</td>
-                    <td className="p-2 text-right">{Number(row.kredit) ? formatRupiah(row.kredit) : "—"}</td>
-                    <td className="p-2 text-right">{formatRupiah(row.saldo)}</td>
-                    {canManage && (
-                      <td className="p-2 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => openTransaction(row)}>
-                          Ubah
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTransaction(row)}>
-                          Hapus
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-                {!ledgerRows.length && (
-                  <tr>
-                    <td className="p-3 text-muted-foreground" colSpan={canManage ? 7 : 6}>
-                      Belum ada transaksi ledger.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <DataTable
+              title="Riwayat Arus Kas RO"
+              rows={ledgerRows}
+              rowKey={(row, index) => String(row.id ?? index)}
+              emptyMessage="Belum ada transaksi ledger."
+              searchPlaceholder="Cari tanggal, kegiatan, atau kuitansi..."
+              columns={[
+                { key: "tanggal", header: "Tanggal", render: (row) => formatDate(row.tanggal) },
+                { key: "nama_kegiatan", header: "Kegiatan", render: (row) => String(row.nama_kegiatan ?? "—") },
+                { key: "no_kuitansi", header: "Kuitansi", render: (row) => String(row.no_kuitansi ?? "—") },
+                { key: "debit", header: "Debit", className: "text-right tabular-nums", render: (row) => Number(row.debit) ? formatRupiah(row.debit) : "—" },
+                { key: "kredit", header: "Kredit", className: "text-right tabular-nums", render: (row) => Number(row.kredit) ? formatRupiah(row.kredit) : "—" },
+                { key: "saldo", header: "Saldo", className: "text-right tabular-nums", render: (row) => formatRupiah(row.saldo) },
+                ...(canManage ? [{ key: "aksi", header: "Aksi", render: (row: AnyRow) => (
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => openTransaction(row)}>Ubah</Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTransaction(row)}>Hapus</Button>
+                  </div>
+                ) }] : []),
+              ]}
+            />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Pegawai</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2 text-right">Nilai</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allocations.map((row, index) => (
-                  <tr key={String(row.id ?? index)} className="border-b">
-                    <td className="p-2">{String(row.nama_pegawai ?? (row.pegawai as AnyRow | undefined)?.nama ?? "—")}</td>
-                    <td className="p-2">{String(row.status ?? "—")}</td>
-                    <td className="p-2 text-right">{formatRupiah(row.nominal ?? row.nilai)}</td>
-                  </tr>
-                ))}
-                {!allocations.length && (
-                  <tr>
-                    <td className="p-3 text-muted-foreground" colSpan={3}>
-                      Belum ada alokasi gaji.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <DataTable
+              title="Daftar Alokasi Gaji"
+              rows={allocations}
+              rowKey={(row, index) => String(row.id ?? index)}
+              emptyMessage="Belum ada alokasi gaji."
+              searchPlaceholder="Cari pegawai atau status..."
+              columns={[
+                { key: "pegawai", header: "Pegawai", render: (row) => String(row.nama_pegawai ?? (row.pegawai as AnyRow | undefined)?.nama ?? "—") },
+                { key: "status", header: "Status", render: (row) => String(row.status ?? "—") },
+                { key: "nominal", header: "Nilai", className: "text-right tabular-nums", render: (row) => formatRupiah(row.nominal ?? row.nilai) },
+              ]}
+            />
           )}
         </div>
       </section>

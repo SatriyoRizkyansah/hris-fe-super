@@ -20,6 +20,7 @@ export type CurrentUser = {
   nama: string;
   role: string;
   unitKerja?: string;
+  unitKerjaKode?: string | null;
 };
 
 export function setBrowserToken() {

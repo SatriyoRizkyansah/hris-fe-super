@@ -29,11 +29,17 @@ export function DataTableFilters({ filters, values, onChange, onReset }: { filte
         </Button>
       </div>
       <div className={`grid min-w-0 gap-3 [&>*]:min-w-0 ${filters.length > 1 ? "sm:grid-cols-2" : ""}`}>
-        {filters.map((filter) => {
+        {filters.map((filter, index) => {
           const options = optionsWithAll(filter.options);
           const selectedValue = values[filter.field] ?? ALL_FILTER_VALUE;
+          const isOnlyFilterOnLastRow = filters.length > 1 && filters.length % 2 === 1 && index === filters.length - 1;
 
-          return <FilterCombobox key={filter.field} options={options} value={selectedValue} onValueChange={(value) => onChange(filter.field, value)} label={filter.label} />;
+          return (
+            <div key={filter.field} className={`min-w-0 space-y-1.5 ${isOnlyFilterOnLastRow ? "sm:col-span-2" : ""}`}>
+              <p className="px-1 text-xs font-semibold text-foreground">{filter.label}</p>
+              <FilterCombobox options={options} value={selectedValue} onValueChange={(value) => onChange(filter.field, value)} label={filter.label} />
+            </div>
+          );
         })}
       </div>
     </div>

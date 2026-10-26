@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Banknote, BriefcaseBusiness, Building2, CircleDollarSign, Landmark, RefreshCw, UsersRound, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { browserApi } from "@/lib/api/browser-client";
-import { setBrowserToken } from "@/lib/api/hooks";
+import { setBrowserToken, useCurrentUser } from "@/lib/api/hooks";
 import { readSession, SESSION_COOKIE } from "@/lib/auth";
 import { use_query } from "@/lib/api/use_query";
 
@@ -20,6 +20,13 @@ const shortcuts = [
 ];
 
 export default function DashboardPage() {
+  const rawSession = typeof document === "undefined"
+    ? undefined
+    : document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
+  const sessionRole = readSession(rawSession)?.user?.role ?? "";
+  const currentUser = useCurrentUser({}, sessionRole === "koordinator");
+  const canSeeOperationalFunds = ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"].includes(sessionRole)
+    || (sessionRole === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM");
   const stats = use_query({
     tag: "dashboard",
     method: "dashboardControllerGetSuperadminDashboard",
@@ -243,7 +250,7 @@ export default function DashboardPage() {
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-        {shortcuts.map(({ href, title, description, icon: Icon }) => (
+        {shortcuts.filter((item) => item.href !== "/dashboard/dana-operasional" || canSeeOperationalFunds).map(({ href, title, description, icon: Icon }) => (
           <Link key={href} href={href} className="dashboard-shortcut">
             <span className="dashboard-shortcut-icon">
               <Icon size={21} />
