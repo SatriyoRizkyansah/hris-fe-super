@@ -11,7 +11,7 @@ export type LoginResponse = {
   id_pegawai: string;
   nama: string;
   foto?: string;
-  akses: Array<{ token: string; akses: string }>;
+  akses: Array<{ token: string; akses: string; role?: string }>;
 };
 
 export type CurrentUser = {
@@ -55,7 +55,12 @@ function parseLoginResponse(value: unknown): LoginResponse {
   if (!payload || typeof payload !== "object" || !Array.isArray(payload.akses)) {
     throw new Error("Server tidak mengirim profil login yang valid. Periksa response POST /api/auth/login.");
   }
-  const akses = payload.akses.filter((item): item is { token: string; akses: string } => Boolean(item && typeof item.token === "string" && item.token && typeof item.akses === "string"));
+  const akses = payload.akses.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const access = item as { token?: unknown; akses?: unknown; role?: unknown };
+    if (typeof access.token !== "string" || !access.token || typeof access.akses !== "string") return [];
+    return [{ token: access.token, akses: access.akses, ...(typeof access.role === "string" ? { role: access.role } : {}) }];
+  });
   if (!akses.length) throw new Error("Server login tidak mengirim token akses. Periksa response POST /api/auth/login.");
   return { id_pegawai: payload.id_pegawai ?? "", nama: payload.nama ?? "Pengguna", foto: payload.foto, akses };
 }

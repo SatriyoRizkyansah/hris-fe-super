@@ -17,6 +17,7 @@ export type UserRecord = {
   status: "aktif" | "nonaktif";
   vendorId?: string | null;
   vendor?: { id: string; nama: string } | null;
+  roles?: string[];
   createdAt: string;
   role: UserRole;
 };
@@ -45,7 +46,11 @@ export function useUserRoles() {
     tag: "user",
     method: "usersGetControllerGetData",
     params: {},
-    queryFn: async () => ({ status: 200, message: "Daftar role HRIS", data: ["SUPERADMIN", "KOORDINATOR", "SUBKOOR", "KARYAWAN", "KEUANGAN", "PIMPINAN", "SPI"].map((kode) => ({ id: kode, kode, nama: kode })) }),
+    queryFn: async () => ({
+      status: 200,
+      message: "Daftar role HRIS",
+      data: ["SUPERADMIN", "KOORDINATOR", "SUBKOOR", "KARYAWAN", "KEUANGAN", "KEU_BILLING", "KEU_BENDAHARA", "KEU_KARWAS", "PIMPINAN", "SPI"].map((kode) => ({ id: kode, kode, nama: kode })),
+    }),
   });
 }
 

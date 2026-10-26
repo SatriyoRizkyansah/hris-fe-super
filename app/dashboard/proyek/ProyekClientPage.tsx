@@ -442,9 +442,9 @@ export default function ProyekClientPage() {
                 header: "Durasi proyek",
                 className: "min-w-[13rem] whitespace-nowrap",
                 render: (row: ProyekItemDto) => {
-                  const start = row.mulai_proyek;
-                  const end = row.estimasi_selesai_proyek;
-                  const days = start && end ? Math.floor((Date.parse(end.slice(0, 10)) - Date.parse(start.slice(0, 10))) / 86_400_000) + 1 : null;
+                  const start = typeof row.mulai_proyek === "string" ? row.mulai_proyek : null;
+                  const end = typeof row.estimasi_selesai_proyek === "string" ? row.estimasi_selesai_proyek : null;
+                  const days = start && end ? Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000) + 1 : null;
                   return (
                     <div className="text-sm">
                       <span>

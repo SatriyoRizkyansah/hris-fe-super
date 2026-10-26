@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUserRoles, useUserWrite, userError, type UserRecord, type UserCommand } from "./user-api";
+import type { CreateUserDto } from "@/lib/api/generated/api-generated";
 
 export default function UserForm({ user, canManage, onClose, onSaved }: { user?: UserRecord; canManage: boolean; onClose: () => void; onSaved: () => void }) {
   const roles = useUserRoles();
@@ -19,12 +20,22 @@ export default function UserForm({ user, canManage, onClose, onSaved }: { user?:
   });
   const write = useUserWrite();
   const lock = useRef(false);
-  const [form, setForm] = useState({ nama: user?.nama ?? "", email: user?.email ?? "", password: "", roleId: user?.role.id ?? "", vendorId: user?.vendorId ?? "", unitKerja: user?.unitKerja ?? "", status: user?.status ?? "aktif" });
+  const [form, setForm] = useState({
+    nama: user?.nama ?? "",
+    email: user?.email ?? "",
+    password: "",
+    roleId: user?.role.id ?? "",
+    roleIds: user?.roles?.length ? [...user.roles] : user?.role.id ? [user.role.id] : [],
+    vendorId: user?.vendorId ?? "",
+    unitKerja: user?.unitKerja ?? "",
+    status: user?.status ?? "aktif",
+  });
   const [command, setCommand] = useState<UserCommand | null>(null);
   const [error, setError] = useState("");
-  const validRole = roles.isSuccess && roles.data.data.some((role) => role.id === form.roleId);
-  const selectedRole = roles.data?.data.find((role) => role.id === form.roleId);
-  const isVendorRole = selectedRole?.kode.toUpperCase() === "VENDOR";
+  const validRole = roles.isSuccess && Boolean(form.roleId) && form.roleIds.length > 0 && form.roleIds.includes(form.roleId) && form.roleIds.every((id) => roles.data.data.some((role) => role.id === id));
+  const selectedRoles = roles.data?.data.filter((role) => form.roleIds.includes(role.id)) ?? [];
+  const primaryRole = roles.data?.data.find((role) => role.id === form.roleId);
+  const isVendorRole = selectedRoles.some((role) => role.kode.toUpperCase() === "VENDOR");
   const busy = write.isPending;
   function close() {
     if (!lock.current) onClose();
@@ -41,12 +52,15 @@ export default function UserForm({ user, canManage, onClose, onSaved }: { user?:
     const body = {
       nama: form.nama.trim(),
       email: form.email.trim(),
-      role: selectedRole?.kode as "SUPERADMIN" | "KOORDINATOR" | "SUBKOOR" | "KARYAWAN" | "KEUANGAN" | "PIMPINAN" | "SPI",
+      role: primaryRole?.kode as CreateUserDto["role"],
+      roles: selectedRoles.map((role) => role.kode as CreateUserDto["role"]),
       id_unit_kerja: form.unitKerja.trim() || undefined,
       status,
     };
     setCommand(
-      user ? { kind: "update", id: user.id, body: { nama: body.nama, ...(form.password ? { password: form.password } : {}), id_unit_kerja: body.id_unit_kerja, status } } : { kind: "create", body: { ...body, password: form.password } },
+      user
+        ? { kind: "update", id: user.id, body: { nama: body.nama, role: body.role, roles: body.roles, ...(form.password ? { password: form.password } : {}), id_unit_kerja: body.id_unit_kerja, status } }
+        : { kind: "create", body: { ...body, password: form.password } },
     );
   }
   async function confirm() {
@@ -98,21 +112,25 @@ export default function UserForm({ user, canManage, onClose, onSaved }: { user?:
             </div>
             <div className="grid gap-2">
               <Label htmlFor="user-role">Peran</Label>
-              <select
-                id="user-role"
-                required
-                disabled={!roles.isSuccess}
-                className="h-9 w-full rounded-md border bg-background px-3 text-foreground"
-                value={form.roleId}
-                onChange={(e) => setForm({ ...form, roleId: e.target.value, vendorId: "" })}
-              >
-                <option value="">{roles.isPending ? "Memuat role…" : "Pilih role"}</option>
+              <fieldset id="user-role" disabled={!roles.isSuccess} className="grid gap-2 rounded-md border p-3">
+                <legend className="px-1 text-xs text-muted-foreground">Pilih satu atau lebih peran</legend>
                 {roles.data?.data.map((role) => (
-                  <option key={role.id} value={role.id}>
+                  <label key={role.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.roleIds.includes(role.id)}
+                      onChange={(event) =>
+                        setForm((current) => {
+                          const roleIds = event.target.checked ? [...current.roleIds, role.id] : current.roleIds.filter((id) => id !== role.id);
+                          return { ...current, roleIds, roleId: event.target.checked ? current.roleId || role.id : current.roleId === role.id ? (roleIds[0] ?? "") : current.roleId, vendorId: "" };
+                        })
+                      }
+                    />
                     {role.nama} ({role.kode})
-                  </option>
+                  </label>
                 ))}
-              </select>
+                {roles.isPending && <span className="text-sm text-muted-foreground">Memuat role…</span>}
+              </fieldset>
               {roles.isError ? (
                 <div role="alert">
                   {userError(roles.error)}{" "}

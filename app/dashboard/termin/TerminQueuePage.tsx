@@ -1,17 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Check, CircleDollarSign, Eye, LoaderCircle, LockKeyhole } from "lucide-react";
+import { Eye, FilePlus2, LockKeyhole } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/modal/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { DataTable } from "@/components/table/DataTable";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
-import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, envelopeRows, unwrapEnvelope } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
@@ -41,7 +40,6 @@ type TerminRow = {
     ro_list?: { id: string; kode_ro: string; nama_ro: string; nilai_rencana: number; total_plafon: number; unit_koordinator?: { nama_unit?: string }; mak?: { kode_mak?: string; nama_mak?: string }; transaksi_list?: { debit: number }[] }[];
   };
 };
-type MarginConfig = { kategori_kamar: string; nama_kamar: string; persentase: number; nama_unit?: string; rekening?: { nama_bank?: string; nama_rekening?: string; nomor_rekening?: string } | null };
 type TerminQueueQuery = { query?: string; status?: string; tahun_fiscal?: number; page: number; limit: number };
 type QueueResponse = { data?: TerminRow[]; pagination?: { page?: number; limit?: number; total_datas?: number; total_pages?: number } };
 const ALL = "__all";
@@ -52,10 +50,7 @@ export default function TerminQueuePage() {
   const [status, setStatus] = useState(ALL);
   const [year, setYear] = useState(ALL);
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<TerminRow | null>(null);
   const [detail, setDetail] = useState<TerminRow | null>(null);
-  const [note, setNote] = useState("");
-  const [actionError, setActionError] = useState("");
   const request = use_query({
     tag: "masterProyek",
     method: "terminQueue",
@@ -75,25 +70,6 @@ export default function TerminQueuePage() {
       });
     },
   });
-  const marginQuery = use_query({
-    tag: "masterPengaturanMargin",
-    method: "list",
-    params: undefined,
-    queryFn: async () => {
-      setBrowserToken();
-      return browserApi.masterPengaturanMargin.pengaturanMarginControllerGetData({ format: "json" });
-    },
-  });
-  const marginConfigs = envelopeRows<MarginConfig>(marginQuery.data);
-  const mutation = use_mutation({
-    tag: "masterProyek",
-    method: "terminQueueAction",
-    mutationFn: async ({ row, action, catatan }: { row: TerminRow; action: "validate" | "pay"; catatan?: string }) => {
-      setBrowserToken();
-      return action === "validate" ? browserApi.masterProyek.proyekControllerValidasiTerminKeuangan(row.proyek!.id, row.id, { disetujui: true, catatan }) : browserApi.masterProyek.proyekControllerCairkanTermin(row.proyek!.id, row.id);
-    },
-    invalidateKeys: [["api", "masterProyek"]],
-  });
   const rows = envelopeRows<TerminRow>(request.data);
   const pagination = unwrapEnvelope<unknown>(request.data).pagination;
   const total = Number(pagination?.total_datas ?? rows.length);
@@ -109,33 +85,6 @@ export default function TerminQueuePage() {
     return Array.from(groups.entries()).map(([key, projectRows]) => ({ key, rows: projectRows.sort((a, b) => a.nomor_termin - b.nomor_termin), project: projectRows[0]?.proyek }));
   }, [rows]);
   const priorUnpaid = (row: TerminRow) => row.proyek?.termin_list?.find((term) => term.nomor_termin < row.nomor_termin && term.status !== "CAIR");
-  const allocationPreview = (row: TerminRow) => {
-    const project = row.proyek;
-    let available = Number(row.nilai_termin ?? 0);
-    const remainingDirect = Math.max(0, Number(project?.total_direct_cost ?? 0) - (project?.ro_list ?? []).reduce((sum, ro) => sum + (ro.transaksi_list ?? []).reduce((total, tx) => total + Number(tx.debit || 0), 0), 0));
-    const forRos = Math.min(available, remainingDirect);
-    available -= forRos;
-    const allocations: { label: string; meta: string; amount: number }[] = [];
-    let roBudget = forRos;
-    for (const ro of project?.ro_list ?? []) {
-      if (roBudget <= 0) break;
-      const alreadyIn = (ro.transaksi_list ?? []).reduce((sum, tx) => sum + Number(tx.debit || 0), 0);
-      const outstanding = Math.max(0, Number(ro.nilai_rencana || 0) - alreadyIn);
-      const amount = Math.min(roBudget, outstanding);
-      if (amount > 0) allocations.push({ label: ro.nama_ro, meta: [ro.kode_ro, ro.unit_koordinator?.nama_unit, ro.mak?.kode_mak].filter(Boolean).join(" · "), amount });
-      roBudget -= amount;
-    }
-    const margin = Math.max(0, Number(project?.total_margin || 0));
-    for (const config of marginConfigs) {
-      const amount = Math.round((available * Number(config.persentase || 0)) / 100);
-      allocations.push({
-        label: config.nama_kamar,
-        meta: `${config.persentase}% · ${config.nama_unit ?? "Unit belum diatur"} · ${config.rekening?.nama_bank ?? "Rekening belum diatur"} ${config.rekening?.nama_rekening ?? ""}`.trim(),
-        amount,
-      });
-    }
-    return { allocations, roAmount: forRos, marginAmount: available, remainingMargin: margin };
-  };
   const columns = [
     {
       key: "proyek",
@@ -193,60 +142,26 @@ export default function TerminQueuePage() {
           <Button size="sm" variant="outline" onClick={() => setDetail(row)}>
             <Eye size={14} /> Rincian
           </Button>
-          {row.status === "MENUNGGU_VALIDASI_KEUANGAN" && (
-            <Button
-              size="sm"
-              disabled={Boolean(priorUnpaid(row))}
-              title={priorUnpaid(row) ? `Termin ${priorUnpaid(row)?.nomor_termin} harus cair lebih dahulu` : undefined}
-              onClick={() => {
-                setSelected(row);
-                setNote("");
-                setActionError("");
-              }}
-            >
-              <Check size={14} /> Validasi
-            </Button>
-          )}
-          {row.status === "DISETUJUI_KEUANGAN" && (
-            <Button
-              size="sm"
-              disabled={Boolean(priorUnpaid(row)) || row.proyek?.status_proyek !== "DISETUJUI_PIMPINAN"}
-              title={priorUnpaid(row) ? `Termin ${priorUnpaid(row)?.nomor_termin} harus cair lebih dahulu` : undefined}
-              onClick={() => void runAction(row, "pay")}
-            >
-              <CircleDollarSign size={14} /> Cairkan
+          {row.proyek?.status_proyek === "DISETUJUI_PIMPINAN" && (
+            <Button size="sm" render={<Link href="/dashboard/invoice" />}>
+              <FilePlus2 size={14} /> Proses Invoice
             </Button>
           )}
         </div>
       ),
     },
   ];
-  async function runAction(row: TerminRow, action: "validate" | "pay") {
-    setActionError("");
-    try {
-      await mutation.mutateAsync({ row, action, catatan: note || undefined });
-      setSelected(null);
-    } catch (error) {
-      setActionError(apiErrorMessage(error));
-    }
-  }
 
   return (
     <section className="hris-page space-y-5">
       <header>
         <h1 className="text-2xl font-bold">Antrean Termin</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Validasi dan pencairan termin proyek.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Kesiapan termin sebagai sumber invoice proyek. Pencairan kas diproses lewat penerimaan invoice, bukan penambahan plafon RO.</p>
       </header>
       {request.error && (
         <Alert variant="destructive">
           <AlertTitle>Gagal memuat antrean termin</AlertTitle>
           <AlertDescription>{apiErrorMessage(request.error)}</AlertDescription>
-        </Alert>
-      )}
-      {mutation.error && !actionError && (
-        <Alert variant="destructive">
-          <AlertTitle>Aksi gagal</AlertTitle>
-          <AlertDescription>{apiErrorMessage(mutation.error)}</AlertDescription>
         </Alert>
       )}
       <div className="termin-summary grid gap-3 sm:grid-cols-3">
@@ -362,7 +277,7 @@ export default function TerminQueuePage() {
                             <tr key={row.id} className="border-t hover:bg-muted/20">
                               {columns.map((column) => (
                                 <td key={column.key} className={`px-3 py-3 align-middle ${column.className ?? ""}`}>
-                                  {column.render(row, index)}
+                                  {column.render(row)}
                                 </td>
                               ))}
                             </tr>
@@ -400,7 +315,6 @@ export default function TerminQueuePage() {
           (() => {
             const project = detail.proyek;
             const blocked = priorUnpaid(detail);
-            const allocation = allocationPreview(detail);
             return (
               <div className="space-y-5">
                 <section className="rounded-lg border bg-muted/20 p-4">
@@ -453,30 +367,12 @@ export default function TerminQueuePage() {
                     </Alert>
                   ) : null}
                 </section>
-                <section>
-                  <h3 className="mb-2 font-semibold">Perkiraan sebaran dana saat termin cair</h3>
-                  <p className="mb-3 text-sm text-muted-foreground">Pencairan mengisi sisa direct cost ke RO secara berurutan. Sisa nilai termin dibagi ke wallet dana operasional sesuai persentase pengaturan margin.</p>
-                  <div className="space-y-2">
-                    {allocation.allocations.map((item, index) => (
-                      <div key={`${item.label}-${index}`} className="flex flex-wrap justify-between gap-3 rounded-lg border p-3">
-                        <div>
-                          <p className="font-medium">{item.label}</p>
-                          <p className="text-xs text-muted-foreground">{item.meta}</p>
-                        </div>
-                        <p className="font-semibold">{formatRupiah(item.amount)}</p>
-                      </div>
-                    ))}
-                    {!allocation.allocations.length && <p className="text-sm text-muted-foreground">Tidak ada rincian tujuan tersedia.</p>}
-                  </div>
-                  <div className="mt-3 rounded-lg bg-muted/40 p-3 text-sm">
-                    <p>
-                      Dialokasikan ke RO: <strong>{formatRupiah(allocation.roAmount)}</strong>
-                    </p>
-                    <p>
-                      Dialokasikan sebagai margin: <strong>{formatRupiah(allocation.marginAmount)}</strong>
-                    </p>
-                  </div>
-                </section>
+                <Alert className="border-sky-200 bg-sky-50/70 text-sky-950">
+                  <AlertTitle>Alur invoice proyek</AlertTitle>
+                  <AlertDescription>
+                    Billing membuat invoice dari termin ini. Keuangan memvalidasi dan menerbitkan invoice. Bendahara mencatat penerimaan bank; penerimaan proyek melunasi talangan dana operasional lebih dulu.
+                  </AlertDescription>
+                </Alert>
                 {project?.ro_list?.length ? (
                   <section>
                     <h3 className="mb-2 font-semibold">Rencana RO proyek</h3>
@@ -505,38 +401,6 @@ export default function TerminQueuePage() {
               </div>
             );
           })()}
-      </Modal>
-      <Modal
-        open={Boolean(selected)}
-        onClose={() => {
-          if (!mutation.isPending) setSelected(null);
-        }}
-        title="Validasi Termin"
-      >
-        {selected && (
-          <div className="space-y-4">
-            <p>
-              Setujui Termin {selected.nomor_termin} untuk <strong>{selected.proyek?.nama_proyek}</strong>?
-            </p>
-            <label className="grid gap-1.5 text-sm font-medium">
-              Catatan (opsional)
-              <Input value={note} onChange={(event) => setNote(event.target.value)} />
-            </label>
-            {actionError && (
-              <Alert variant="destructive">
-                <AlertDescription>{actionError}</AlertDescription>
-              </Alert>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setSelected(null)} disabled={mutation.isPending}>
-                Batal
-              </Button>
-              <Button onClick={() => void runAction(selected, "validate")} disabled={mutation.isPending}>
-                {mutation.isPending ? <LoaderCircle className="animate-spin" size={14} /> : <Check size={14} />} Setujui
-              </Button>
-            </div>
-          </div>
-        )}
       </Modal>
     </section>
   );

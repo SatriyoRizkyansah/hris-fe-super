@@ -34,7 +34,8 @@ export default function LoginPage() {
     try {
       const result = await login.mutateAsync({ data: { email: identity.trim(), password } });
       const accesses = result.akses.flatMap((access) => {
-        const role = normalizeRole(access.akses);
+        // Use explicit role code; keep label-based fallback for older backends.
+        const role = normalizeRole(access.role || access.akses);
         return role ? [{ ...access, role }] : [];
       });
       const access = accesses[0];

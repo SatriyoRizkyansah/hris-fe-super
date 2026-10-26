@@ -219,7 +219,7 @@ export default function RoClientPage() {
                               <tr key={row.id} className="border-t hover:bg-muted/20">
                                 {columns.map((column) => (
                                   <td key={column.key} className={`px-3 py-3 align-middle ${column.className ?? ""}`}>
-                                    {column.render(row, index)}
+                                    {column.render(row)}
                                   </td>
                                 ))}
                               </tr>

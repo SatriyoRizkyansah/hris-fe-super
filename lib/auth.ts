@@ -1,16 +1,18 @@
 export const SESSION_COOKIE = "lemigas_session";
 
-export const HRIS_ROLES = ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"] as const;
+export const HRIS_ROLES = ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas", "pimpinan", "spi", "karyawan"] as const;
 export type HrisRole = (typeof HRIS_ROLES)[number];
 export function normalizeRole(value: string): HrisRole | null {
   const role = value
     .trim()
     .toLocaleLowerCase("id-ID")
     .replace(/[\s_-]+/g, "");
-  const aliases: Record<string, HrisRole> = { superadmin: "superadmin", koordinator: "koordinator", subkoor: "subkoor", subkoordinator: "subkoor", keuangan: "keuangan", pimpinan: "pimpinan", spi: "spi", karyawan: "karyawan" };
+  const aliases: Record<string, HrisRole> = { superadmin: "superadmin", koordinator: "koordinator", subkoor: "subkoor", subkoordinator: "subkoor", keuangan: "keuangan", keubilling: "keu_billing", keubendahara: "keu_bendahara", keukarwas: "keu_karwas", pimpinan: "pimpinan", spi: "spi", karyawan: "karyawan" };
   return aliases[role] ?? null;
 }
 export function roleHome(role: string): string {
+  if (role === "pimpinan" || role === "keu_billing" || role === "keu_karwas") return "/dashboard/proyek";
+  if (role === "keuangan" || role === "keu_bendahara") return "/dashboard/termin";
   if (["subkoor", "spi", "karyawan"].includes(role)) return "/dashboard/profil";
   return "/dashboard";
 }

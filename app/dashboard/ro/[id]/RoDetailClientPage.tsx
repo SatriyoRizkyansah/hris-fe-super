@@ -353,11 +353,6 @@ export default function RoDetailClientPage({ id }: { id: string }) {
               Alokasi Gaji ({allocations.length})
             </button>
           </div>
-          {canManage && tab === "ledger" && (
-            <Button size="sm" className="mr-3" onClick={() => openTransaction()}>
-              <Plus size={16} /> Transaksi
-            </Button>
-          )}
         </div>
         <div className="overflow-x-auto p-5">
           {tab === "ledger" ? (

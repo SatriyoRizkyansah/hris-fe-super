@@ -4,21 +4,35 @@ const SESSION_COOKIE = "lemigas_session";
 const roleAccess: Record<string, string[]> = {
   "/dashboard/pegawai": ["superadmin", "koordinator"],
   "/dashboard/unit-kerja": ["superadmin", "koordinator"],
-  "/dashboard/proyek": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan"],
-  "/dashboard/termin": ["superadmin", "keuangan"],
-  "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan"],
-  "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan"],
-  "/dashboard/rekening": ["superadmin", "keuangan"],
+  "/dashboard/proyek": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_karwas", "pimpinan"],
+  "/dashboard/termin": ["superadmin", "keuangan", "keu_billing"],
+  "/dashboard/invoice": ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "pimpinan", "spi"],
+  "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"],
+  "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"],
+  "/dashboard/karwas": ["superadmin", "keu_karwas"],
+  "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan", "keu_bendahara"],
+  "/dashboard/rekening": ["superadmin", "keuangan", "keu_bendahara"],
   "/dashboard/mak": ["superadmin", "keuangan"],
   "/dashboard/sk": ["superadmin", "koordinator"],
   "/dashboard/alokasi-gaji": ["superadmin", "koordinator", "keuangan"],
-  "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan"],
+  "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan", "keu_bendahara"],
   "/dashboard/pengguna": ["superadmin"],
   "/dashboard/pengaturan-margin": ["superadmin"],
-  "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"],
+  "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas", "pimpinan", "spi", "karyawan"],
 };
 const protectedPrefixes = ["/dashboard", ...Object.keys(roleAccess)];
-const roleHome = (role: string) => (role === "pimpinan" ? "/dashboard/proyek" : role === "keuangan" ? "/dashboard/termin" : ["subkoor", "spi", "karyawan"].includes(role) ? "/dashboard/profil" : "/dashboard");
+const roleHome = (role: string) =>
+  role === "pimpinan" || role === "keu_karwas"
+    ? "/dashboard/proyek"
+    : role === "keu_billing"
+      ? "/dashboard/termin"
+      : role === "keuangan"
+        ? "/dashboard/invoice"
+        : role === "keu_bendahara"
+          ? "/dashboard/pengajuan-belanja"
+          : ["subkoor", "spi", "karyawan"].includes(role)
+            ? "/dashboard/profil"
+            : "/dashboard";
 
 function readIdentity(cookie?: string): { role?: string } | null {
   if (!cookie) return null;

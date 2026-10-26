@@ -20,8 +20,10 @@ export interface LoginDto {
 export interface AksesItemDto {
   /** @example "eyJhbGciOiJI..." */
   token: string;
-  /** @example "Operator" */
+  /** @example "Keuangan Billing" */
   akses: string;
+  /** @example "KEU_BILLING" */
+  role: string;
 }
 
 export interface LoginUserDto {
@@ -753,6 +755,9 @@ export interface CreateUserDto {
     | "SUBKOOR"
     | "KARYAWAN"
     | "KEUANGAN"
+    | "KEU_BILLING"
+    | "KEU_BENDAHARA"
+    | "KEU_KARWAS"
     | "PIMPINAN"
     | "SPI";
   /** Role tambahan selain role default */
@@ -762,6 +767,9 @@ export interface CreateUserDto {
     | "SUBKOOR"
     | "KARYAWAN"
     | "KEUANGAN"
+    | "KEU_BILLING"
+    | "KEU_BENDAHARA"
+    | "KEU_KARWAS"
     | "PIMPINAN"
     | "SPI"
   )[];
@@ -782,6 +790,9 @@ export interface UpdateUserDto {
     | "SUBKOOR"
     | "KARYAWAN"
     | "KEUANGAN"
+    | "KEU_BILLING"
+    | "KEU_BENDAHARA"
+    | "KEU_KARWAS"
     | "PIMPINAN"
     | "SPI";
   /** Daftar role (termasuk default). Jika diisi, akan sync UserRole */
@@ -791,6 +802,9 @@ export interface UpdateUserDto {
     | "SUBKOOR"
     | "KARYAWAN"
     | "KEUANGAN"
+    | "KEU_BILLING"
+    | "KEU_BENDAHARA"
+    | "KEU_KARWAS"
     | "PIMPINAN"
     | "SPI"
   )[];
@@ -878,6 +892,71 @@ export interface UpdateMasterMakDto {
   tipe_akun?: "BELANJA" | "PENDAPATAN";
   /** @example true */
   status_aktif?: boolean;
+}
+
+export interface CreatePengajuanBelanjaDto {
+  ro_id: string;
+  /** @example "Pembelian bahan pengujian" */
+  nama_kegiatan: string;
+  /** @example "KWT-001" */
+  no_kuitansi?: string;
+  /** @example "2026-10-26" */
+  tanggal: string;
+  /** @example 1500000 */
+  jumlah: number;
+  keterangan?: string;
+}
+
+export interface ReviewPengajuanBelanjaDto {
+  disetujui: boolean;
+  catatan?: string;
+}
+
+export interface AlokasiPembayaranBelanjaDto {
+  dana_operasional_id: string;
+  /** @example 1000000 */
+  nominal: number;
+}
+
+export interface BayarPengajuanBelanjaDto {
+  /** @example "BAYAR-PB-2026-001" */
+  nomor_pembayaran: string;
+  /** @example "2026-10-27" */
+  tanggal_bayar: string;
+  catatan?: string;
+  alokasi: AlokasiPembayaranBelanjaDto[];
+}
+
+export interface CreateInvoiceDto {
+  jenis: "PROYEK" | "RETAIL";
+  termin_id?: string;
+  retail_job_id?: string;
+  /** @example "INV/2026/001" */
+  nomor_invoice: string;
+  /** @example "2026-10-26" */
+  tanggal_terbit: string;
+  /** @example "2026-11-25" */
+  tanggal_jatuh_tempo?: string;
+}
+
+export interface ValidasiInvoiceKeuanganDto {
+  disetujui: boolean;
+  catatan?: string;
+}
+
+export interface CreateMutasiBankDto {
+  rekening_id: string;
+  tanggal_transaksi: string;
+  nominal: number;
+  referensi_bank: string;
+  nama_pengirim?: string;
+  keterangan?: string;
+}
+
+export interface BayarInvoiceDto {
+  mutasi_bank_id: string;
+  nominal: number;
+  catatan?: string;
 }
 
 export type QueryParamsType = Record<string | number, any>;
@@ -2105,7 +2184,7 @@ export class Api<
      *
      * @tags Master - RO Transaksi
      * @name RoTransaksiControllerCreate
-     * @summary Tambah transaksi RO (Superadmin, Koordinator)
+     * @summary Tambah transaksi RO (Superadmin, Keuangan - Bendahara)
      * @request POST:/api/ro/{id}/transaksi
      * @secure
      */
@@ -2128,7 +2207,7 @@ export class Api<
      *
      * @tags Master - RO Transaksi
      * @name RoTransaksiControllerUpdate
-     * @summary Update transaksi RO (Superadmin, Koordinator)
+     * @summary Update transaksi RO (Superadmin, Keuangan - Bendahara)
      * @request PUT:/api/ro/{id}/transaksi/{tid}
      * @secure
      */
@@ -2152,13 +2231,13 @@ export class Api<
      *
      * @tags Master - RO Transaksi
      * @name RoTransaksiControllerRemove
-     * @summary Hapus transaksi RO (Superadmin, Koordinator)
+     * @summary Hapus transaksi RO (Superadmin, Keuangan - Bendahara)
      * @request DELETE:/api/ro/{id}/transaksi/{tid}
      * @secure
      */
     roTransaksiControllerRemove: (
-      tid: string,
       id: string,
+      tid: string,
       params: RequestParams = {},
     ) =>
       this.request<void, any>({
@@ -2195,7 +2274,7 @@ export class Api<
      *
      * @tags Master - Dana Operasional
      * @name DanaOperasionalControllerGetData
-     * @summary Get daftar dana operasional (Superadmin, Koordinator, Keuangan)
+     * @summary Get daftar dana operasional (Superadmin, Koordinator, Keuangan, Keuangan - Bendahara)
      * @request GET:/api/dana-operasional
      * @secure
      */
@@ -2279,7 +2358,7 @@ export class Api<
      *
      * @tags Master - Dana Operasional
      * @name DanaOperasionalControllerGetDetail
-     * @summary Get detail dana operasional (Superadmin, Koordinator, Keuangan, Pimpinan)
+     * @summary Get detail dana operasional (Superadmin, Koordinator, Keuangan, Keuangan - Bendahara, Pimpinan)
      * @request GET:/api/dana-operasional/{id}
      * @secure
      */
@@ -2351,7 +2430,7 @@ export class Api<
      *
      * @tags Master - Dana Operasional
      * @name DanaOperasionalControllerGetLedger
-     * @summary Get ledger Dana Operasional (Superadmin, Koordinator, Keuangan)
+     * @summary Get ledger Dana Operasional (Superadmin, Koordinator, Keuangan, Keuangan - Bendahara)
      * @request GET:/api/dana-operasional/{id}/ledger
      * @secure
      */
@@ -3031,6 +3110,9 @@ export class Api<
           | "SUBKOOR"
           | "KARYAWAN"
           | "KEUANGAN"
+          | "KEU_BILLING"
+          | "KEU_BENDAHARA"
+          | "KEU_KARWAS"
           | "PIMPINAN"
           | "SPI";
         status?: "AKTIF" | "NONAKTIF";
@@ -3575,6 +3657,225 @@ export class Api<
         path: `/api/master-mak/${id}`,
         method: "DELETE",
         secure: true,
+        ...params,
+      }),
+  };
+  keuanganPengajuanBelanja = {
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaControllerList
+     * @summary Daftar pengajuan belanja (Superadmin, Koordinator, Subkoordinator, Keuangan, Keuangan - KARWAS, Keuangan - Bendahara, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @request GET:/api/pengajuan-belanja
+     * @secure
+     */
+    pengajuanBelanjaControllerList: (
+      query?: {
+        /** Pencarian / filter bebas */
+        query?: string;
+        /** @default 10 */
+        limit?: number;
+        /** @default 1 */
+        page?: number;
+        ro_id?: string;
+        status?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaControllerCreate
+     * @summary Ajukan belanja (Superadmin, Koordinator, Subkoordinator)
+     * @request POST:/api/pengajuan-belanja
+     * @secure
+     */
+    pengajuanBelanjaControllerCreate: (
+      data: CreatePengajuanBelanjaDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaControllerReview
+     * @summary Review KARWAS (Superadmin, Keuangan - KARWAS)
+     * @request POST:/api/pengajuan-belanja/{id}/review
+     * @secure
+     */
+    pengajuanBelanjaControllerReview: (
+      id: string,
+      data: ReviewPengajuanBelanjaDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/review`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaControllerBayar
+     * @summary Bayar pengajuan belanja (Superadmin, Keuangan - Bendahara)
+     * @request POST:/api/pengajuan-belanja/{id}/bayar
+     * @secure
+     */
+    pengajuanBelanjaControllerBayar: (
+      id: string,
+      data: BayarPengajuanBelanjaDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/bayar`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+  };
+  keuanganInvoiceDanSettlement = {
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceControllerList
+     * @summary Daftar invoice (Superadmin, Keuangan, Keuangan - Billing, Keuangan - Bendahara, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @request GET:/api/keuangan/invoice
+     * @secure
+     */
+    invoiceControllerList: (
+      query?: {
+        /** Pencarian / filter bebas */
+        query?: string;
+        /** @default 10 */
+        limit?: number;
+        /** @default 1 */
+        page?: number;
+        status?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceControllerCreateInvoice
+     * @summary Terbitkan invoice (Superadmin, Keuangan - Billing)
+     * @request POST:/api/keuangan/invoice
+     * @secure
+     */
+    invoiceControllerCreateInvoice: (
+      data: CreateInvoiceDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceControllerValidasiInvoiceKeuangan
+     * @summary Validasi invoice proyek (Superadmin, Keuangan)
+     * @request POST:/api/keuangan/invoice/{id}/validasi-keuangan
+     * @secure
+     */
+    invoiceControllerValidasiInvoiceKeuangan: (
+      id: string,
+      data: ValidasiInvoiceKeuanganDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/${id}/validasi-keuangan`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceControllerCreateMutasi
+     * @summary Catat mutasi bank (Superadmin, Keuangan - Bendahara)
+     * @request POST:/api/keuangan/mutasi-bank
+     * @secure
+     */
+    invoiceControllerCreateMutasi: (
+      data: CreateMutasiBankDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/mutasi-bank`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceControllerBayar
+     * @summary Validasi pembayaran invoice (Superadmin, Keuangan - Bendahara)
+     * @request POST:/api/keuangan/invoice/{id}/bayar
+     * @secure
+     */
+    invoiceControllerBayar: (
+      id: string,
+      data: BayarInvoiceDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/${id}/bayar`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
   };

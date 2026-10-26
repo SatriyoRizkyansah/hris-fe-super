@@ -11,8 +11,10 @@ import { LoadingCard } from "@/components/loading";
 import { selectSessionRole, type RoleAccess } from "@/lib/auth";
 import { browserApi } from "@/lib/api/browser-client";
 
-const all = ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"];
+const all = ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas", "pimpinan", "spi", "karyawan"];
 const finance = ["superadmin", "keuangan"];
+const billing = [...finance, "keu_billing"];
+const treasury = [...finance, "keu_bendahara"];
 const coordinators = ["superadmin", "koordinator"];
 const sections = [
   { title: "Ringkasan", items: [{ href: "/dashboard", label: "Dashboard", icon: Gauge, roles: all }] },
@@ -30,13 +32,15 @@ const sections = [
   {
     title: "Keuangan",
     items: [
-      { href: "/dashboard/proyek", label: "Proyek", icon: BriefcaseBusiness, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan"] },
-      { href: "/dashboard/termin", label: "Termin Proyek", icon: ClipboardCheck, roles: finance },
-      { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan"] },
-      { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "koordinator", "keuangan"] },
-      { href: "/dashboard/rekening", label: "Rekening Bank", icon: Landmark, roles: finance },
+      { href: "/dashboard/proyek", label: "Proyek", icon: BriefcaseBusiness, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_karwas", "pimpinan"] },
+      { href: "/dashboard/termin", label: "Termin Proyek", icon: ClipboardCheck, roles: billing },
+      { href: "/dashboard/invoice", label: "Invoice", icon: FileText, roles: ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "pimpinan", "spi"] },
+      { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"] },
+      { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"] },
+      { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "koordinator", "keuangan", "keu_bendahara"] },
+      { href: "/dashboard/rekening", label: "Rekening Bank", icon: Landmark, roles: treasury },
       { href: "/dashboard/mak", label: "MAK", icon: FileText, roles: finance },
-      { href: "/dashboard/rekonsiliasi-bank", label: "Rekonsiliasi Bank", icon: ClipboardCheck, roles: finance },
+      { href: "/dashboard/rekonsiliasi-bank", label: "Rekonsiliasi Bank", icon: ClipboardCheck, roles: treasury },
       { href: "/dashboard/pengaturan-margin", label: "Pengaturan Margin", icon: Settings, roles: ["superadmin"] },
     ],
   },
@@ -44,23 +48,49 @@ const sections = [
 ];
 
 type Props = { collapsed: boolean; open: boolean; onToggle: () => void; role?: string; accesses?: RoleAccess[]; activeToken?: string };
-const roleLabels: Record<string, string> = { superadmin: "Superadmin", koordinator: "Koordinator", subkoor: "Subkoordinator", keuangan: "Keuangan", pimpinan: "Pimpinan", spi: "SPI", karyawan: "Karyawan" };
+const roleLabels: Record<string, string> = {
+  superadmin: "Superadmin",
+  koordinator: "Koordinator",
+  subkoor: "Subkoordinator",
+  keuangan: "Keuangan",
+  keu_billing: "Keuangan Billing",
+  keu_bendahara: "Keuangan Bendahara",
+  keu_karwas: "Keuangan KARWAS",
+  pimpinan: "Pimpinan",
+  spi: "SPI",
+  karyawan: "Karyawan",
+};
 const allowedPath: Record<string, string[]> = {
   "/dashboard/pegawai": ["superadmin", "koordinator"],
   "/dashboard/unit-kerja": ["superadmin", "koordinator"],
-  "/dashboard/proyek": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan"],
-  "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan"],
-  "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan"],
-  "/dashboard/rekening": ["superadmin", "keuangan"],
+  "/dashboard/proyek": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_karwas", "pimpinan"],
+  "/dashboard/termin": ["superadmin", "keuangan", "keu_billing"],
+  "/dashboard/invoice": ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "pimpinan", "spi"],
+  "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"],
+  "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"],
+  "/dashboard/karwas": ["superadmin", "keu_karwas"],
+  "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan", "keu_bendahara"],
+  "/dashboard/rekening": ["superadmin", "keuangan", "keu_bendahara"],
   "/dashboard/mak": ["superadmin", "keuangan"],
   "/dashboard/sk": ["superadmin", "koordinator", "keuangan"],
   "/dashboard/alokasi-gaji": ["superadmin", "koordinator", "keuangan"],
-  "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan"],
+  "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan", "keu_bendahara"],
   "/dashboard/pengguna": ["superadmin"],
   "/dashboard/pengaturan-margin": ["superadmin"],
-  "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "pimpinan", "spi", "karyawan"],
+  "/dashboard/profil": all,
 };
-const homeForRole = (value: string) => (value === "pimpinan" ? "/dashboard/proyek" : value === "keuangan" ? "/dashboard/termin" : ["subkoor", "spi", "karyawan"].includes(value) ? "/dashboard/profil" : "/dashboard");
+const homeForRole = (value: string) =>
+  value === "pimpinan" || value === "keu_karwas"
+    ? "/dashboard/proyek"
+    : value === "keu_billing"
+      ? "/dashboard/termin"
+      : value === "keuangan"
+        ? "/dashboard/invoice"
+        : value === "keu_bendahara"
+          ? "/dashboard/pengajuan-belanja"
+          : ["subkoor", "spi", "karyawan"].includes(value)
+            ? "/dashboard/profil"
+            : "/dashboard";
 
 export default function Sidebar({ collapsed, open, onToggle, role = "", accesses = [], activeToken = "" }: Props) {
   const pathname = usePathname() ?? "";
