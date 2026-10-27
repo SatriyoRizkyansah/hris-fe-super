@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Banknote, BriefcaseBusiness, Building2, CircleDollarSign, Landmark, RefreshCw, UsersRound, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { browserApi } from "@/lib/api/browser-client";
@@ -20,13 +20,20 @@ const shortcuts = [
 ];
 
 export default function DashboardPage() {
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => setHasMounted(true), []);
+
   const rawSession = typeof document === "undefined"
     ? undefined
     : document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
   const sessionRole = readSession(rawSession)?.user?.role ?? "";
   const currentUser = useCurrentUser({}, sessionRole === "koordinator");
-  const canSeeOperationalFunds = ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"].includes(sessionRole)
-    || (sessionRole === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM");
+  // Cookies are unavailable during server rendering, so defer role-based links
+  // until hydration has completed to keep the server and initial client markup equal.
+  const canSeeOperationalFunds = hasMounted && (
+    ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"].includes(sessionRole)
+    || (sessionRole === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM")
+  );
   const stats = use_query({
     tag: "dashboard",
     method: "dashboardControllerGetSuperadminDashboard",

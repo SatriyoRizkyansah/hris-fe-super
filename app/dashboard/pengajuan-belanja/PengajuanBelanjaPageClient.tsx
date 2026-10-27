@@ -12,6 +12,7 @@ import { DataTable } from "@/components/table";
 import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentLinks } from "@/components/common/DocumentLinks";
+import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken, useCurrentUser } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
@@ -525,22 +526,29 @@ export default function PengajuanBelanjaPageClient() {
         {detailRequest && (
           <>
             <ModalSection title="Rincian pengajuan">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
                 <p className="text-sm text-muted-foreground">Status saat ini</p>
                 <StatusBadge status={statusTone(detailStatus)}>{statusLabels[detailStatus] ?? detailStatus}</StatusBadge>
               </div>
-              <ModalDetailGrid>
-                <ModalDetailItem label="Pemohon" value={detailRequest.pembuat?.nama ?? "—"} />
-                <ModalDetailItem label="Tanggal pengajuan" value={formatDateTime(detailRequest.diajukan_pada ?? detailRequest.created_at)} />
-                <ModalDetailItem label="Nama kegiatan" value={detailRequest.nama_kegiatan} />
-                <ModalDetailItem label="Nominal" value={formatRupiah(detailRequest.jumlah)} />
-                <ModalDetailItem label="Proyek" value={`${detailRequest.ro?.proyek?.kode_proyek ?? "—"} · ${detailRequest.ro?.proyek?.nama_proyek ?? "—"}`} />
-                <ModalDetailItem label="RO" value={`${detailRequest.ro?.kode_ro ?? "—"} · ${detailRequest.ro?.nama_ro ?? "—"}`} />
-                <ModalDetailItem label="Koordinator" value={detailRequest.ro?.unit_koordinator?.nama_unit ?? "—"} />
-                <ModalDetailItem label="MAK" value={`${detailRequest.ro?.mak?.kode_mak ?? "—"} · ${detailRequest.ro?.mak?.nama_mak ?? "—"}`} />
-                <ModalDetailItem label="Nomor kuitansi" value={detailRequest.no_kuitansi || "Belum dicantumkan"} />
-                <ModalDetailItem label="Keterangan" value={detailRequest.keterangan || "Tidak ada keterangan tambahan."} className="sm:col-span-2" />
-              </ModalDetailGrid>
+              <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
+                {[
+                  ["Pemohon", detailRequest.pembuat?.nama ?? "—"],
+                  ["Tanggal pengajuan", formatDateTime(detailRequest.diajukan_pada ?? detailRequest.created_at)],
+                  ["Nama kegiatan", detailRequest.nama_kegiatan ?? "—"],
+                  ["Nominal", formatRupiah(detailRequest.jumlah)],
+                  ["Proyek", `${detailRequest.ro?.proyek?.kode_proyek ?? "—"} · ${detailRequest.ro?.proyek?.nama_proyek ?? "—"}`],
+                  ["RO", `${detailRequest.ro?.kode_ro ?? "—"} · ${detailRequest.ro?.nama_ro ?? "—"}`],
+                  ["Koordinator", detailRequest.ro?.unit_koordinator?.nama_unit ?? "—"],
+                  ["MAK", `${detailRequest.ro?.mak?.kode_mak ?? "—"} · ${detailRequest.ro?.mak?.nama_mak ?? "—"}`],
+                  ["Nomor kuitansi", detailRequest.no_kuitansi || "Belum dicantumkan"],
+                  ["Keterangan", detailRequest.keterangan || "Tidak ada keterangan tambahan.", "sm:col-span-2"],
+                ].map(([label, value, className]) => (
+                  <div key={String(label)} className={`min-w-0 py-3 sm:border-b ${className ?? ""}`}>
+                    <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+                    <dd className={`mt-1 break-words text-sm ${label === "Nominal" ? "font-semibold tabular-nums text-foreground" : "text-foreground"}`}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
               <div className="mt-3">
                 <DocumentLinks documents={[{ label: "Bukti kuitansi", path: detailRequest.file_bukti }, { label: "RAB RO", path: detailRequest.ro?.file_rab }, { label: "SK RO", path: detailRequest.ro?.file_sk }]} />
               </div>
@@ -717,18 +725,25 @@ export default function PengajuanBelanjaPageClient() {
         {!reviewContextQuery.isLoading && !reviewContextQuery.isError && (
           <>
             <ModalSection title="Rincian pengajuan" description="Periksa kegiatan, pemohon, dokumen, dan sumber anggaran sebelum memberi keputusan.">
-              <ModalDetailGrid>
-                <ModalDetailItem label="Nomor pengajuan" value={reviewRequest.nomor_pengajuan} />
-                <ModalDetailItem label="Diajukan oleh" value={reviewRequest.pembuat?.nama ?? "—"} />
-                <ModalDetailItem label="Kegiatan" value={reviewRequest.nama_kegiatan} />
-                <ModalDetailItem label="Nilai pengajuan" value={formatRupiah(reviewRequest.jumlah)} />
-                <ModalDetailItem label="Tanggal transaksi" value={reviewRequest.tanggal ? new Date(reviewRequest.tanggal).toLocaleDateString("id-ID") : "—"} />
-                <ModalDetailItem label="No. kuitansi" value={reviewRequest.no_kuitansi || "Belum dicantumkan"} />
-                <ModalDetailItem label="Status reservasi" value={reviewRequest.reservasi?.status ?? "Belum direservasi"} />
-                <ModalDetailItem label="Unit koordinator" value={reviewRequest.ro?.unit_koordinator?.nama_unit ?? "—"} />
-                <ModalDetailItem label="MAK" value={`${reviewRequest.ro?.mak?.kode_mak ?? "—"} · ${reviewRequest.ro?.mak?.nama_mak ?? "Belum terhubung"}`} />
-                <ModalDetailItem label="Keterangan pemohon" value={reviewRequest.keterangan || "Tidak ada keterangan tambahan."} className="sm:col-span-2" />
-              </ModalDetailGrid>
+              <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
+                {[
+                  ["Nomor pengajuan", reviewRequest.nomor_pengajuan ?? "—"],
+                  ["Diajukan oleh", reviewRequest.pembuat?.nama ?? "—"],
+                  ["Kegiatan", reviewRequest.nama_kegiatan ?? "—"],
+                  ["Nilai pengajuan", formatRupiah(reviewRequest.jumlah)],
+                  ["Tanggal transaksi", reviewRequest.tanggal ? new Date(reviewRequest.tanggal).toLocaleDateString("id-ID") : "—"],
+                  ["No. kuitansi", reviewRequest.no_kuitansi || "Belum dicantumkan"],
+                  ["Status reservasi", reviewRequest.reservasi?.status ?? "Belum direservasi"],
+                  ["Unit koordinator", reviewRequest.ro?.unit_koordinator?.nama_unit ?? "—"],
+                  ["MAK", `${reviewRequest.ro?.mak?.kode_mak ?? "—"} · ${reviewRequest.ro?.mak?.nama_mak ?? "Belum terhubung"}`],
+                  ["Keterangan pemohon", reviewRequest.keterangan || "Tidak ada keterangan tambahan.", "sm:col-span-2"],
+                ].map(([label, value, className]) => (
+                  <div key={String(label)} className={`min-w-0 py-3 sm:border-b ${className ?? ""}`}>
+                    <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+                    <dd className={`mt-1 break-words text-sm ${label === "Nilai pengajuan" ? "font-semibold tabular-nums" : ""}`}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
               <div className="mt-3">
                 <DocumentLinks documents={[
                   { label: "Bukti kuitansi", path: reviewRequest.file_bukti },
@@ -741,22 +756,30 @@ export default function PengajuanBelanjaPageClient() {
             </ModalSection>
 
             <ModalSection title="Kondisi RO yang diajukan" description="Pagu menunjukkan hak belanja. Posisi kas menunjukkan penerimaan kas dikurangi realisasi; keduanya bukan angka yang sama.">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {[
-                  ["Pagu disetujui", reviewRoBalance.pagu_disetujui, "text-slate-900"],
-                  ["Realisasi", reviewRoBalance.realisasi, "text-rose-700"],
-                  ["Komitmen aktif", reviewRoBalance.komitmen_aktif, "text-amber-700"],
-                  ["Sisa hak belanja", reviewRoBalance.sisa_dapat_direservasi, "text-emerald-700"],
-                  ["Penerimaan kas", reviewRoBalance.penerimaan_kas, "text-sky-700"],
-                  ["Posisi kas", reviewRoBalance.posisi_kas, Number(reviewRoBalance.posisi_kas) < 0 ? "text-rose-700" : "text-slate-900"],
-                  ["Talangan belum lunas", reviewRoBalance.saldo_talangan, "text-orange-700"],
-                  ["Sisa setelah pengajuan ini", reviewChecks.sisa_setelah_reservasi, Number(reviewChecks.sisa_setelah_reservasi) < 0 ? "text-rose-700" : "text-emerald-700"],
-                ].map(([label, amount, tone]) => (
-                  <div key={String(label)} className="rounded-lg border bg-white p-3">
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className={`mt-1 text-base font-semibold tabular-nums ${tone}`}>{formatRupiah(amount)}</p>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hak belanja RO</p>
+                <MoneyFlow items={[
+                  { label: "Pagu disetujui", amount: reviewRoBalance.pagu_disetujui },
+                  { label: "Realisasi", amount: reviewRoBalance.realisasi, operator: "−", tone: "text-rose-700" },
+                  { label: "Komitmen aktif", amount: reviewRoBalance.komitmen_aktif, operator: "−", tone: "text-amber-700" },
+                  { label: "Sisa hak belanja", amount: reviewRoBalance.sisa_dapat_direservasi, operator: "=", tone: "text-emerald-700" },
+                ]} />
+                <MoneyFlow items={[
+                  { label: "Sisa hak belanja", amount: reviewRoBalance.sisa_dapat_direservasi },
+                  { label: "Pengajuan ini", amount: reviewRequest.jumlah, operator: "−", tone: "text-amber-700" },
+                  { label: "Sisa setelah pengajuan", amount: reviewChecks.sisa_setelah_reservasi, operator: "=", tone: Number(reviewChecks.sisa_setelah_reservasi) < 0 ? "text-rose-700" : "text-emerald-700" },
+                ]} />
+                <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Arus kas RO</p>
+                <MoneyFlow items={[
+                  { label: "Penerimaan kas", amount: reviewRoBalance.penerimaan_kas, tone: "text-sky-700" },
+                  { label: "Realisasi", amount: reviewRoBalance.realisasi, operator: "−", tone: "text-rose-700" },
+                  { label: "Posisi kas", amount: reviewRoBalance.posisi_kas, operator: "=", tone: Number(reviewRoBalance.posisi_kas) < 0 ? "text-rose-700" : "text-foreground" },
+                ]} />
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-sm">
+                  <span className="text-muted-foreground">Talangan belum lunas</span>
+                  <strong className="tabular-nums text-orange-700">{formatRupiah(reviewRoBalance.saldo_talangan)}</strong>
+                </div>
+                <p className="text-xs text-muted-foreground">Pengajuan yang masih menunggu review belum dihitung sebagai komitmen pagu.</p>
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <span className={`rounded-full px-2.5 py-1 font-medium ${reviewChecks.ro_reguler ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{reviewChecks.ro_reguler ? "RO reguler" : "Bukan RO reguler"}</span>
@@ -770,25 +793,39 @@ export default function PengajuanBelanjaPageClient() {
 
             {reviewProject.id && (
               <ModalSection title={`Ringkasan proyek · ${String(reviewProject.kode_proyek ?? "")}`} description={`${String(reviewProject.nama_proyek ?? "Proyek")}${reviewProject.nama_client ? ` · ${String(reviewProject.nama_client)}` : ""} · TA ${String(reviewProject.tahun_fiscal ?? "—")} · Status ${String(reviewProject.status_proyek ?? "—").replaceAll("_", " ")}`}>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
                   {[
                     ["Nilai kontrak", reviewProject.nilai_kontrak],
                     ["Direct Cost", reviewProject.total_direct_cost],
-                    ["Tagihan terbit", reviewCashFlow.nilai_tagihan_terbit],
-                    ["Penerimaan terverifikasi", reviewCashFlow.penerimaan_terverifikasi],
-                    ["Sisa tagihan", reviewCashFlow.sisa_tagihan],
-                    ["Talangan proyek belum lunas", reviewCashFlow.saldo_talangan],
-                    ["Belanja terealisasi", reviewCashFlow.realisasi],
-                    ["Komitmen RO aktif", reviewCashFlow.komitmen],
-                    ["Sisa hak belanja seluruh RO", reviewCashFlow.sisa_hak_belanja],
-                    ["Pengajuan menunggu review", reviewCashFlow.pengajuan_menunggu],
                   ].map(([label, amount]) => (
-                    <div key={String(label)} className="rounded-lg border bg-white p-3">
-                      <p className="text-xs text-muted-foreground">{label}</p>
-                      <p className="mt-1 text-base font-semibold tabular-nums">{formatRupiah(amount)}</p>
+                    <div key={String(label)} className="flex items-center justify-between gap-4 py-3 sm:border-b">
+                      <dt className="text-sm text-muted-foreground">{label}</dt>
+                      <dd className="text-sm font-semibold tabular-nums">{formatRupiah(amount)}</dd>
                     </div>
                   ))}
+                </dl>
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Penagihan proyek</p>
+                  <MoneyFlow items={[
+                    { label: "Tagihan terbit", amount: reviewCashFlow.nilai_tagihan_terbit },
+                    { label: "Penerimaan terverifikasi", amount: reviewCashFlow.penerimaan_terverifikasi, operator: "−", tone: "text-sky-700" },
+                    { label: "Sisa tagihan", amount: reviewCashFlow.sisa_tagihan, operator: "=", tone: "text-amber-700" },
+                  ]} />
                 </div>
+                <dl className="mt-3 grid grid-cols-1 divide-y border-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
+                  {[
+                    ["Belanja terealisasi", reviewCashFlow.realisasi, "text-rose-700"],
+                    ["Komitmen RO aktif", reviewCashFlow.komitmen, "text-amber-700"],
+                    ["Pengajuan menunggu review", reviewCashFlow.pengajuan_menunggu, "text-slate-700"],
+                    ["Sisa hak belanja seluruh RO", reviewCashFlow.sisa_hak_belanja, "text-emerald-700"],
+                    ["Talangan proyek belum lunas", reviewCashFlow.saldo_talangan, "text-orange-700"],
+                  ].map(([label, amount, tone]) => (
+                    <div key={String(label)} className="flex items-center justify-between gap-4 py-3 sm:border-b">
+                      <dt className="text-sm text-muted-foreground">{label}</dt>
+                      <dd className={`text-sm font-semibold tabular-nums ${tone}`}>{formatRupiah(amount)}</dd>
+                    </div>
+                  ))}
+                </dl>
                 <div className="mt-4 overflow-hidden rounded-lg border bg-white">
                   <div className="flex items-center gap-2 border-b px-3 py-2.5 text-sm font-semibold"><Banknote size={16} className="text-primary" /> Posisi pagu dan komitmen per RO</div>
                   <div className="overflow-x-auto">

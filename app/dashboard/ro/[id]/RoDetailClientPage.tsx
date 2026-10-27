@@ -10,6 +10,7 @@ import { Modal } from "@/components/modal/Modal";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
+import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { MoneyInput } from "@/components/ui/money-input";
 import { DataTable } from "@/components/table";
 import { browserApi } from "@/lib/api/browser-client";
@@ -253,10 +254,15 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     );
   const incomplete = missing(ro);
   const plannedPlafon = Number((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana) || Number(ro.total_plafon) || 0;
-  const totalPlafon = Number(ro.total_plafon) || 0;
-  const totalUsed = Number(ro.total_terpakai) || 0;
-  const balance = Number(ro.sisa_saldo ?? totalPlafon - totalUsed);
-  const percent = totalPlafon ? Math.min(100, (totalUsed / totalPlafon) * 100) : 0;
+  const finance = ((ro as unknown as AnyRow).balance as AnyRow | undefined) ?? {};
+  const approvedBudget = Number(finance.pagu_disetujui ?? plannedPlafon) || 0;
+  const totalUsed = Number(finance.realisasi ?? ro.total_terpakai) || 0;
+  const commitments = Number(finance.komitmen_aktif) || 0;
+  const remainingRight = Number(finance.sisa_dapat_direservasi ?? (approvedBudget - totalUsed - commitments)) || 0;
+  const cashIn = Number(finance.penerimaan_kas ?? (ro as unknown as AnyRow).total_debit) || 0;
+  const cashPosition = Number(finance.posisi_kas ?? (cashIn - totalUsed)) || 0;
+  const outstandingAdvance = Number(finance.saldo_talangan) || 0;
+  const percent = Number(finance.persentase_pagu ?? (approvedBudget ? ((totalUsed + commitments) / approvedBudget) * 100 : 0));
   return (
     <section className="hris-page space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
@@ -286,26 +292,39 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           </AlertDescription>
         </Alert>
       )}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-          <p className="text-xs text-muted-foreground">Alokasi Rencana</p>
-          <p className="mt-1 text-lg font-semibold">{formatRupiah(plannedPlafon)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Anggaran awal proyek untuk RO ini</p>
+      <section className="space-y-4 rounded-2xl border border-border bg-background p-5 shadow-sm">
+        <header>
+          <h2 className="text-base font-semibold">Pagu dan arus kas RO</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Hak belanja dihitung dari pagu disetujui dikurangi realisasi dan komitmen aktif. Posisi kas dihitung terpisah dari penerimaan kas dikurangi realisasi.</p>
+        </header>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hak belanja</p>
+          <MoneyFlow items={[
+            { label: "Pagu disetujui", amount: approvedBudget },
+            { label: "Realisasi", amount: totalUsed, operator: "−", tone: "text-rose-700" },
+            { label: "Komitmen aktif", amount: commitments, operator: "−", tone: "text-amber-700" },
+            { label: "Sisa hak belanja", amount: remainingRight, operator: "=", tone: remainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
+          ]} />
         </div>
-        <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dana Tersedia</p>
-          <p className="mt-1 text-lg font-semibold">{formatRupiah(balance)}</p>
-          <p className={`mt-1 text-xs ${totalPlafon > 0 ? "text-emerald-700" : "text-amber-700"}`}>{totalPlafon > 0 ? "Saldo setelah memperhitungkan pengeluaran" : "Belum ada termin dicairkan"}</p>
-          <div className="mt-2 h-2 overflow-hidden rounded bg-muted">
-            <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Arus kas</p>
+          <MoneyFlow items={[
+            { label: "Penerimaan kas", amount: cashIn, tone: "text-sky-700" },
+            { label: "Realisasi", amount: totalUsed, operator: "−", tone: "text-rose-700" },
+            { label: "Posisi kas", amount: cashPosition, operator: "=", tone: cashPosition < 0 ? "text-rose-700" : "text-foreground" },
+          ]} />
+        </div>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Talangan belum lunas</span>
+            <strong className="tabular-nums text-orange-700">{formatRupiah(outstandingAdvance)}</strong>
           </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
+          </div>
+          <p className="text-xs text-muted-foreground">{Math.max(0, percent).toFixed(1)}% pagu telah digunakan atau dikomitmenkan.</p>
         </div>
-        <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Pengeluaran</p>
-          <p className="mt-1 text-lg font-semibold text-destructive">{formatRupiah(totalUsed)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Sisa tersedia {formatRupiah(balance)}</p>
-        </div>
-      </div>
+      </section>
       <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-3">
         <p>
           <span className="block text-xs text-muted-foreground">Unit Koordinator</span>
