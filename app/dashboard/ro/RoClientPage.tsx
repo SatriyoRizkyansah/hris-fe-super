@@ -17,6 +17,13 @@ import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 import type { ProyekItemDto, RoItemDto } from "@/lib/api/generated/api-generated";
 
 const missing = (row: RoItemDto) => [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", !row.no_sk && "No SK", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean);
+type RoListItem = RoItemDto & {
+  balance?: { pagu_disetujui?: number; sisa_dapat_direservasi?: number; penerimaan_kas?: number; posisi_kas?: number };
+  status_pencairan?: "BELUM_CAIR" | "SEBAGIAN_CAIR" | "CAIR";
+  termin_cair_count?: number;
+  termin_sebagian_count?: number;
+  termin_total_count?: number;
+};
 
 export default function RoClientPage() {
   const [search, setSearch] = useState("");
@@ -51,13 +58,13 @@ export default function RoClientPage() {
       return browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 });
     },
   });
-  const rows = envelopeRows<RoItemDto>(list.data);
-  const pagination = unwrapEnvelope<RoItemDto[]>(list.data).pagination;
+  const rows = envelopeRows<RoListItem>(list.data);
+  const pagination = unwrapEnvelope<RoListItem[]>(list.data).pagination;
   const projectRows = envelopeRows<ProyekItemDto>(projects.data);
   const projectOptions = projectRows.map((item) => ({ value: item.id, label: `${item.kode_proyek} — ${item.nama_proyek}` }));
   const unitOptions = envelopeRows<Record<string, unknown>>(units.data).map((item) => ({ value: String(item.id), label: `${String(item.kode_unit ?? "")} — ${String(item.nama_unit ?? "")}` }));
   const projectGroups = useMemo(() => {
-    const groups = new Map<string, RoItemDto[]>();
+    const groups = new Map<string, RoListItem[]>();
     for (const row of rows) {
       const projectId = String(row.id_proyek ?? "");
       const key = projectId || `unassigned-${row.id}`;
@@ -99,16 +106,25 @@ export default function RoClientPage() {
     },
     {
       key: "budget",
-      header: "Rencana / Dana Tersedia",
+      header: "Pagu / Sisa Hak Belanja",
       className: "w-[28%] text-right",
-      render: (row: RoItemDto) => {
+      render: (row: RoListItem) => {
         const planned = Number((row as RoItemDto & { nilai_rencana?: number }).nilai_rencana) || Number(row.total_plafon) || 0;
-        const available = Number(row.total_plafon) || 0;
+        const approved = Number(row.balance?.pagu_disetujui ?? planned) || 0;
+        const remaining = Number(row.balance?.sisa_dapat_direservasi ?? row.sisa_saldo) || 0;
+        const cashPosition = Number(row.balance?.posisi_kas) || 0;
+        const payoutStatus = row.status_pencairan ?? "BELUM_CAIR";
+        const payoutTone = payoutStatus === "CAIR" ? "ok" : payoutStatus === "SEBAGIAN_CAIR" ? "warn" : "neutral";
         return (
-          <span className="block break-words text-sm">
-            <span className="block">Rencana {formatRupiah(planned)}</span>
-            <span className={`mt-1 block text-xs ${available > 0 ? "text-emerald-700" : "text-amber-700"}`}>{available > 0 ? `Tersedia ${formatRupiah(available)} · sisa ${formatRupiah(row.sisa_saldo)}` : "Belum cair · Rp0 tersedia"}</span>
-          </span>
+          <div className="space-y-1 text-sm">
+            <span className="block">Pagu disetujui {formatRupiah(approved)}</span>
+            <span className={`block text-xs ${remaining < 0 ? "text-rose-700" : "text-emerald-700"}`}>Sisa hak belanja {formatRupiah(remaining)}</span>
+            <span className={`block text-xs ${cashPosition < 0 ? "text-rose-700" : "text-muted-foreground"}`}>Posisi kas RO {formatRupiah(cashPosition)}</span>
+            <span className="flex flex-wrap items-center justify-end gap-1.5 pt-1">
+              <StatusBadge status={payoutTone}>{payoutStatus === "CAIR" ? "Dana cair" : payoutStatus === "SEBAGIAN_CAIR" ? "Sebagian cair" : "Belum cair"}</StatusBadge>
+              <span className="text-[11px] text-muted-foreground">{row.termin_cair_count ?? 0}/{row.termin_total_count ?? 0} cair{row.termin_sebagian_count ? ` · ${row.termin_sebagian_count} sebagian` : ""}</span>
+            </span>
+          </div>
         );
       },
     },
@@ -139,7 +155,7 @@ export default function RoClientPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Rencana Operasi</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Plafon, saldo, dokumen, dan ledger RO.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Pagu, sisa hak belanja, posisi kas, dan status pencairan termin proyek.</p>
         </div>
       </header>
       <Card>
