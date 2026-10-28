@@ -44,7 +44,14 @@ type TerminRow = {
 type TerminQueueQuery = { query?: string; status?: string; tahun_fiscal?: number; page: number; limit: number };
 type QueueResponse = { data?: TerminRow[]; pagination?: { page?: number; limit?: number; total_datas?: number; total_pages?: number } };
 const ALL = "__all";
-const statusOptions = ["MENUNGGU_VALIDASI_KEUANGAN", "DISETUJUI_KEUANGAN", "CAIR", "DITOLAK_KEUANGAN"];
+const statusLabels: Record<string, string> = {
+  MENUNGGU_INVOICE: "Menunggu invoice",
+  DITOLAK_KEUANGAN: "Invoice ditolak",
+  MENUNGGU_PEMBAYARAN: "Menunggu pembayaran",
+  SEBAGIAN_DIBAYAR: "Dibayar sebagian",
+  CAIR: "Cair",
+};
+const statusOptions = Object.keys(statusLabels);
 
 export default function TerminQueuePage() {
   const [search, setSearch] = useState("");
@@ -86,89 +93,11 @@ export default function TerminQueuePage() {
     return Array.from(groups.entries()).map(([key, projectRows]) => ({ key, rows: projectRows.sort((a, b) => a.nomor_termin - b.nomor_termin), project: projectRows[0]?.proyek }));
   }, [rows]);
   const priorUnpaid = (row: TerminRow) => row.proyek?.termin_list?.find((term) => term.nomor_termin < row.nomor_termin && term.status !== "CAIR");
-  const columns = [
-    {
-      key: "proyek",
-      header: "Proyek",
-      render: (row: TerminRow) => (
-        <div>
-          <div className="font-semibold">{row.proyek?.nama_proyek ?? "—"}</div>
-          <div className="text-xs text-muted-foreground">
-            {row.proyek?.kode_proyek ?? "—"} · TA {row.proyek?.tahun_fiscal ?? "—"}
-          </div>
-          <div className="mt-1">
-            <StatusBadge status={projectStatusTone(row.proyek?.status_proyek)}>{humanizeStatus(row.proyek?.status_proyek)}</StatusBadge>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "nomor",
-      header: "Termin",
-      render: (row: TerminRow) => (
-        <div>
-          <div className="font-semibold">Termin {row.nomor_termin}</div>
-          <div className="text-xs text-muted-foreground">{Number(row.persentase ?? 0)}% dari kontrak</div>
-        </div>
-      ),
-    },
-    {
-      key: "nilai",
-      header: "Nilai Termin",
-      className: "text-right",
-      render: (row: TerminRow) => (
-        <div className="font-semibold">
-          {formatRupiah(row.nilai_termin ?? row.nilai ?? row.nominal ?? 0)}
-          <div className="text-xs font-normal text-muted-foreground">Nilai tagihan</div>
-        </div>
-      ),
-    },
-    {
-      key: "tanggal",
-      header: "Tanggal diajukan",
-      render: (row: TerminRow) => (
-        <div>
-          {formatDate(row.created_at)}
-          <div className="text-xs text-muted-foreground">Termin #{row.nomor_termin}</div>
-        </div>
-      ),
-    },
-    { key: "status", header: "Status termin", render: (row: TerminRow) => <StatusBadge status={projectStatusTone(row.status)}>{humanizeStatus(row.status)}</StatusBadge> },
-    {
-      key: "aksi",
-      header: "Aksi",
-      className: "text-right",
-      render: (row: TerminRow) => {
-        const blocked = priorUnpaid(row);
-        return (
-          <div className="flex justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={() => setDetail(row)}>
-              <Eye size={14} /> Rincian
-            </Button>
-            {row.proyek?.status_proyek === "DISETUJUI_PIMPINAN" && row.status === "DISETUJUI_KEUANGAN" && !row.invoice && (
-              <>
-                <Button
-                  size="sm"
-                  disabled={Boolean(blocked)}
-                  title={blocked ? `Menunggu Termin ${blocked.nomor_termin} cair` : undefined}
-                  render={<Link href="/dashboard/invoice" />}
-                >
-                  <FilePlus2 size={14} /> Proses Invoice
-                </Button>
-                {blocked && <span className="max-w-24 text-right text-[11px] leading-tight text-muted-foreground">Tunggu Termin {blocked.nomor_termin} cair</span>}
-              </>
-            )}
-          </div>
-        );
-      },
-    },
-  ];
-
   return (
     <section className="hris-page space-y-5">
       <header>
         <h1 className="text-2xl font-bold">Antrean Termin</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Kesiapan termin sebagai sumber invoice proyek. Pencairan kas diproses lewat penerimaan invoice, bukan penambahan plafon RO.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Billing menerbitkan invoice dari jadwal termin. Bendahara mencocokkan dana masuk; termin cair setelah invoice lunas.</p>
       </header>
       {request.error && (
         <Alert variant="destructive">
@@ -185,8 +114,8 @@ export default function TerminQueuePage() {
         </Card>
         <Card>
           <CardContent className="termin-summary-content">
-            <p className="text-sm text-muted-foreground">Menunggu validasi</p>
-            <p className="mt-1 text-2xl font-bold">{request.isLoading ? "—" : Number(responseSummary.MENUNGGU_VALIDASI_KEUANGAN ?? 0)}</p>
+            <p className="text-sm text-muted-foreground">Menunggu invoice</p>
+            <p className="mt-1 text-2xl font-bold">{request.isLoading ? "—" : Number(responseSummary.MENUNGGU_INVOICE ?? 0)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -226,7 +155,7 @@ export default function TerminQueuePage() {
                   <option value={ALL}>Semua status</option>
                   {statusOptions.map((value) => (
                     <option key={value} value={value}>
-                      {value.replaceAll("_", " ")}
+                      {statusLabels[value]}
                     </option>
                   ))}
                 </select>
@@ -273,29 +202,49 @@ export default function TerminQueuePage() {
                         </span>
                       </div>
                     </header>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[55rem] text-sm">
-                        <thead className="bg-muted/20">
-                          <tr>
-                            {columns.map((column) => (
-                              <th key={column.key} className={`h-10 px-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground ${column.className ?? ""}`}>
-                                {column.header}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {projectRows.map((row, index) => (
-                            <tr key={row.id} className="border-t hover:bg-muted/20">
-                              {columns.map((column) => (
-                                <td key={column.key} className={`px-3 py-3 align-middle ${column.className ?? ""}`}>
-                                  {column.render(row)}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div>
+                      <div className="hidden grid-cols-[minmax(7rem,0.8fr)_minmax(9rem,1.1fr)_minmax(8rem,0.9fr)_minmax(12rem,1.3fr)_auto] items-center gap-4 bg-muted/20 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid">
+                        <span>Termin</span>
+                        <span>Nilai tagihan</span>
+                        <span>Terdaftar</span>
+                        <span>Status proses</span>
+                        <span className="text-right">Aksi</span>
+                      </div>
+                      {projectRows.map((row) => {
+                        const blocked = priorUnpaid(row);
+                        const canProcess = project?.status_proyek === "DISETUJUI_PIMPINAN" && row.status === "MENUNGGU_INVOICE" && !row.invoice && !blocked;
+                        return (
+                          <div key={row.id} className="grid gap-3 border-t px-4 py-4 hover:bg-muted/20 lg:grid-cols-[minmax(7rem,0.8fr)_minmax(9rem,1.1fr)_minmax(8rem,0.9fr)_minmax(12rem,1.3fr)_auto] lg:items-center lg:gap-4">
+                            <div>
+                              <p className="font-semibold">Termin {row.nomor_termin}</p>
+                              <p className="text-xs text-muted-foreground">{Number(row.persentase ?? 0)}% dari kontrak</p>
+                            </div>
+                            <p className="font-semibold tabular-nums">{formatRupiah(row.nilai_termin ?? row.nilai ?? row.nominal ?? 0)}</p>
+                            <p className="text-sm text-muted-foreground">{formatDate(row.created_at)}</p>
+                            <div>
+                              <StatusBadge status={projectStatusTone(row.status)}>
+                                <span className="whitespace-normal">{statusLabels[row.status] ?? humanizeStatus(row.status)}</span>
+                              </StatusBadge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                              <Button size="sm" variant="outline" onClick={() => setDetail(row)}>
+                                <Eye size={14} /> Rincian
+                              </Button>
+                              {canProcess && (
+                                <Button
+                                  size="sm"
+                                  render={<Link href={`/dashboard/invoice?createInvoice=1&terminId=${encodeURIComponent(row.id)}`} />}
+                                >
+                                  <FilePlus2 size={14} /> Proses Invoice
+                                </Button>
+                              )}
+                              {blocked && row.status === "MENUNGGU_INVOICE" && !row.invoice && (
+                                <span className="text-xs text-muted-foreground">Menunggu Termin {blocked.nomor_termin} cair</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </section>
                 );
@@ -337,7 +286,7 @@ export default function TerminQueuePage() {
                         {project?.kode_proyek} · Tahun fiskal {project?.tahun_fiscal}
                       </p>
                     </div>
-                    <StatusBadge status={projectStatusTone(detail.status)}>{humanizeStatus(detail.status)}</StatusBadge>
+                    <StatusBadge status={projectStatusTone(detail.status)}>{statusLabels[detail.status] ?? humanizeStatus(detail.status)}</StatusBadge>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     <div>
@@ -365,7 +314,7 @@ export default function TerminQueuePage() {
                           </p>
                           <p className="text-xs text-muted-foreground">{formatRupiah(term.nilai_termin)}</p>
                         </div>
-                        <StatusBadge status={projectStatusTone(term.status)}>{humanizeStatus(term.status)}</StatusBadge>
+                        <StatusBadge status={projectStatusTone(term.status)}>{statusLabels[term.status] ?? humanizeStatus(term.status)}</StatusBadge>
                       </div>
                     ))}
                   </div>
@@ -374,7 +323,7 @@ export default function TerminQueuePage() {
                       <LockKeyhole size={16} />
                       <AlertTitle>Tertahan urutan termin</AlertTitle>
                       <AlertDescription>
-                        Termin {blocked.nomor_termin} masih {humanizeStatus(blocked.status)}. Termin {detail.nomor_termin} baru dapat diproses setelah termin sebelumnya berstatus CAIR.
+                        Termin {blocked.nomor_termin} masih {statusLabels[blocked.status] ?? humanizeStatus(blocked.status)}. Invoice Termin {detail.nomor_termin} baru dapat diajukan setelah termin sebelumnya cair.
                       </AlertDescription>
                     </Alert>
                   ) : null}
@@ -382,7 +331,7 @@ export default function TerminQueuePage() {
                 <Alert className="border-sky-200 bg-sky-50/70 text-sky-950">
                   <AlertTitle>Alur invoice proyek</AlertTitle>
                   <AlertDescription>
-                    Billing membuat invoice dari termin ini. Keuangan memvalidasi dan menerbitkan invoice. Bendahara mencatat penerimaan bank; penerimaan proyek melunasi talangan dana operasional lebih dulu.
+                    Termin langsung tersedia setelah proyek disetujui Pimpinan. Billing menerbitkan invoice, kemudian Bendahara mencocokkan penerimaan bank. Termin berstatus cair setelah invoice lunas; dana masuk dipakai untuk melunasi talangan operasional lebih dulu.
                   </AlertDescription>
                 </Alert>
                 {project?.ro_list?.length ? (

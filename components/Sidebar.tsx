@@ -53,7 +53,7 @@ const roleLabels: Record<string, string> = {
   superadmin: "Superadmin",
   koordinator: "Koordinator",
   subkoor: "Subkoordinator",
-  keuangan: "Keuangan",
+  keuangan: "Keuangan (Legacy)",
   keu_billing: "Keuangan Billing",
   keu_bendahara: "Keuangan Bendahara",
   keu_karwas: "Keuangan KARWAS",

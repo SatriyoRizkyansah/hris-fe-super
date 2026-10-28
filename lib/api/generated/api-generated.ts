@@ -249,6 +249,12 @@ export interface ProyekItemDto {
   divalidasi_pimpinan_pada?: object | null;
   jumlah_ro?: number;
   total_plafon_ro?: number;
+  /** Posisi kas RO gabungan (penerimaan kas dikurangi realisasi) */
+  total_saldo_ro?: number;
+  total_penerimaan_kas_ro?: number;
+  total_realisasi_ro?: number;
+  total_komitmen_ro?: number;
+  total_sisa_hak_belanja_ro?: number;
   mulai_proyek?: object | null;
   estimasi_selesai_proyek?: object | null;
   /** @format date-time */
@@ -358,13 +364,6 @@ export interface ProyekValidationDto {
    */
   disetujui: boolean;
   /** @example "Dokumen sudah sesuai" */
-  catatan?: string;
-}
-
-export interface TerminKeuanganValidationDto {
-  /** @example true */
-  disetujui: boolean;
-  /** @example "Dokumen termin lengkap" */
   catatan?: string;
 }
 
@@ -870,11 +869,6 @@ export interface CreateInvoiceDto {
   tanggal_terbit: string;
   /** @example "2026-11-25" */
   tanggal_jatuh_tempo?: string;
-}
-
-export interface ValidasiInvoiceKeuanganDto {
-  disetujui: boolean;
-  catatan?: string;
 }
 
 export interface CreateMutasiBankDto {
@@ -1718,42 +1712,6 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         method: "GET",
         secure: true,
         format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Master - Proyek
-     * @name ProyekControllerValidasiTerminKeuangan
-     * @summary Validasi termin proyek (Superadmin, Keuangan)
-     * @request POST:/api/proyek/{id}/termin/{terminId}/validasi-keuangan
-     * @secure
-     */
-    proyekControllerValidasiTerminKeuangan: (id: string, terminId: string, data: TerminKeuanganValidationDto, params: RequestParams = {}) =>
-      this.request<void, any>({
-        path: `/api/proyek/${id}/termin/${terminId}/validasi-keuangan`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Master - Proyek
-     * @name ProyekControllerCairkanTermin
-     * @summary Cairkan termin proyek (Superadmin, Keuangan)
-     * @request POST:/api/proyek/{id}/termin/{terminId}/cairkan
-     * @secure
-     */
-    proyekControllerCairkanTermin: (id: string, terminId: string, params: RequestParams = {}) =>
-      this.request<void, any>({
-        path: `/api/proyek/${id}/termin/${terminId}/cairkan`,
-        method: "POST",
-        secure: true,
         ...params,
       }),
 
@@ -3544,25 +3502,6 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     invoiceControllerCreateInvoice: (data: CreateInvoiceDto, params: RequestParams = {}) =>
       this.request<void, any>({
         path: `/api/keuangan/invoice`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Keuangan - Invoice dan Settlement
-     * @name InvoiceControllerValidasiInvoiceKeuangan
-     * @summary Validasi invoice proyek (Superadmin, Keuangan)
-     * @request POST:/api/keuangan/invoice/{id}/validasi-keuangan
-     * @secure
-     */
-    invoiceControllerValidasiInvoiceKeuangan: (id: string, data: ValidasiInvoiceKeuanganDto, params: RequestParams = {}) =>
-      this.request<void, any>({
-        path: `/api/keuangan/invoice/${id}/validasi-keuangan`,
         method: "POST",
         body: data,
         secure: true,

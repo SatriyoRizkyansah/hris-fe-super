@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentLinks } from "@/components/common/DocumentLinks";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
+import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -22,6 +23,7 @@ import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
 type Workflow = "umum" | "pimpinan" | "notulen" | null;
 type Row = Record<string, unknown>;
 const text = (value: unknown, fallback = "—") => (value === null || value === undefined || value === "" ? fallback : String(value));
+const financeOf = (row: Row): Row => (row.balance && typeof row.balance === "object" ? (row.balance as Row) : {});
 
 function Card({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -133,16 +135,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       setWorkflow(null);
     },
   });
-  const terminMutation = use_mutation({
-    tag: "masterProyek",
-    method: "terminAction",
-    mutationFn: async ({ termId, action }: { termId: string; action: "validasi" | "cairkan" }) => {
-      setBrowserToken();
-      return action === "validasi" ? browserApi.masterProyek.proyekControllerValidasiTerminKeuangan(id, termId, { disetujui: true }) : browserApi.masterProyek.proyekControllerCairkanTermin(id, termId);
-    },
-    onSuccess: invalidate,
-  });
-
   function openWorkflow(action: Exclude<Workflow, null>) {
     setWorkflow(action);
     setApproved(true);
@@ -173,9 +165,12 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     );
   const status = project.status_proyek;
   const roPlan = roRows.reduce((total, row) => total + (Number(row.nilai_rencana) || Number(row.total_plafon) || 0), 0);
-  const roTotal = roRows.reduce((total, row) => total + (Number(row.total_plafon) || 0), 0);
-  const roUsed = roRows.reduce((total, row) => total + (Number(row.total_terpakai) || 0), 0);
-  const termsPaid = termRows.some((term) => String(term.status) === "CAIR");
+  const approvedRoBudget = roRows.reduce((total, row) => total + (Number(financeOf(row).pagu_disetujui) || 0), 0);
+  const roUsed = roRows.reduce((total, row) => total + (Number(financeOf(row).realisasi ?? row.total_terpakai) || 0), 0);
+  const roCommitments = roRows.reduce((total, row) => total + (Number(financeOf(row).komitmen_aktif) || 0), 0);
+  const roCashReceived = roRows.reduce((total, row) => total + (Number(financeOf(row).penerimaan_kas ?? row.trx_debit) || 0), 0);
+  const roCashPosition = roRows.reduce((total, row) => total + (Number(financeOf(row).posisi_kas) || 0), 0);
+  const roRemainingRight = roRows.reduce((total, row) => total + (Number(financeOf(row).sisa_hak_belanja ?? row.sisa_saldo) || 0), 0);
   const termTotal = termRows.reduce((sum, term) => sum + (Number(term.nilai_termin ?? term.nilai ?? term.nominal) || 0), 0);
   const termPaid = termRows.filter((term) => String(term.status) === "CAIR").reduce((sum, term) => sum + (Number(term.nilai_termin ?? term.nilai ?? term.nominal) || 0), 0);
   const termRemaining = Math.max(0, termTotal - termPaid);
@@ -184,7 +179,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const margin = Number(project.total_margin) || 0;
   const marginRemaining = Math.max(0, margin - marginDistributed);
   const contract = Number(project.nilai_kontrak) || 0;
-  const usedPercent = roTotal ? Math.min(100, (roUsed / roTotal) * 100) : 0;
+  const usedPercent = approvedRoBudget ? Math.min(100, ((roUsed + roCommitments) / approvedRoBudget) * 100) : 0;
   const marginPercent = margin ? (marginDistributed / margin) * 100 : 0;
   const groupedDistribution = new Map<string, { category: string; unit: string; amount: number; count: number }>();
   distributionRows.forEach((row) => {
@@ -290,7 +285,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           })()}
           {String(status).startsWith("DITOLAK") && <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">Pengajuan ditolak. Silakan periksa catatan validasi.</p>}
           {status === "DISETUJUI_PIMPINAN" && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Proyek disetujui pimpinan. RO telah memasuki tahap aktif.</p>}
-          <p className="mt-4 text-xs text-muted-foreground">Setelah persetujuan pimpinan: validasi Keuangan dan pencairan setiap termin.</p>
+          <p className="mt-4 text-xs text-muted-foreground">Setelah proyek disetujui, Billing menerbitkan invoice dan Bendahara mencatat pembayaran setelah dana masuk.</p>
         </div>
       </div>
       <section className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
@@ -307,19 +302,44 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           <Card label="Nilai Kontrak" value={formatRupiah(contract)} />
           <Card label="Direct Cost" value={formatRupiah(directCost)} hint={`${roRows.length} RO · alokasi rencana ${formatRupiah(roPlan)}`} />
           <Card label="Total Margin" value={formatRupiah(margin)} hint={`Distribusi ${formatRupiah(marginDistributed)}`} />
-          <Card label="Dana RO tersedia" value={formatRupiah(roTotal)} hint={termsPaid ? `Termin telah cair · terpakai ${formatRupiah(roUsed)}` : "Belum ada termin cair · dana belum tersedia"} />
+          <Card label="Posisi kas seluruh RO" value={formatRupiah(roCashPosition)} hint={`Kas masuk ${formatRupiah(roCashReceived)} · realisasi ${formatRupiah(roUsed)}`} />
+        </div>
+        <div className="mt-5 grid gap-4 border-t pt-5 xl:grid-cols-2">
+          <div className="space-y-2">
+            <div>
+              <p className="text-sm font-semibold">Hak belanja seluruh RO</p>
+              <p className="text-xs text-muted-foreground">Pagu yang disetujui dikurangi realisasi dan komitmen aktif.</p>
+            </div>
+            <MoneyFlow items={[
+              { label: "Pagu disetujui", amount: approvedRoBudget },
+              { label: "Realisasi", amount: roUsed, operator: "−", tone: "text-rose-700" },
+              { label: "Komitmen aktif", amount: roCommitments, operator: "−", tone: "text-amber-700" },
+              { label: "Sisa hak belanja", amount: roRemainingRight, operator: "=", tone: roRemainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
+            ]} />
+          </div>
+          <div className="space-y-2">
+            <div>
+              <p className="text-sm font-semibold">Arus kas seluruh RO</p>
+              <p className="text-xs text-muted-foreground">Penerimaan dari invoice dikurangi realisasi belanja.</p>
+            </div>
+            <MoneyFlow items={[
+              { label: "Penerimaan kas", amount: roCashReceived, tone: "text-sky-700" },
+              { label: "Realisasi", amount: roUsed, operator: "−", tone: "text-rose-700" },
+              { label: "Posisi kas", amount: roCashPosition, operator: "=", tone: roCashPosition < 0 ? "text-rose-700" : "text-foreground" },
+            ]} />
+          </div>
         </div>
         <div className="mt-5 grid gap-5 border-t pt-4 md:grid-cols-2">
           <div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Pemakaian plafon RO</span>
+              <span className="text-muted-foreground">Pemakaian pagu RO</span>
               <strong>{usedPercent.toFixed(1)}%</strong>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
               <div className="h-full rounded-full bg-primary" style={{ width: `${usedPercent}%` }} />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatRupiah(roUsed)} dari {formatRupiah(roTotal)}
+              {formatRupiah(roUsed + roCommitments)} dari {formatRupiah(approvedRoBudget)}
             </p>
           </div>
           <div>
@@ -339,9 +359,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
         <div className="border-b bg-muted/40 px-5 py-4">
           <h2 className="font-semibold">
-            Termin pencairan <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-xs">{termRows.length}</span>
+            Jadwal termin invoice <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-xs">{termRows.length}</span>
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Alur Keuangan per termin: menunggu validasi → disetujui Keuangan → dicairkan. Pencairan menambah saldo RO dan mengalokasikan sisa ke dana operasional.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Termin menjadi jadwal tagihan. Status cair hanya berubah setelah Bendahara mencatat pembayaran invoice hingga lunas.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card label="Total nilai termin" value={formatRupiah(termTotal)} hint={`${termRows.length} termin`} />
             <Card label="Sudah cair" value={formatRupiah(termPaid)} hint={`${termRows.filter((term) => String(term.status) === "CAIR").length} termin dicairkan`} />
@@ -355,43 +375,30 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         <div className="grid gap-3 p-5">
           {termRows.length ? (
             termRows.map((term) => {
-              const termId = String(term.id);
               const termStatus = String(term.status ?? "—");
-              const finance = identity.role === "keuangan" || identity.role === "superadmin";
+              const invoice = term.invoice && typeof term.invoice === "object" ? (term.invoice as Row) : undefined;
+              const invoiceStatus = String(invoice?.status ?? "");
+              const stage = termStatus === "CAIR" || invoiceStatus === "LUNAS"
+                ? "Cair · invoice lunas"
+                : invoiceStatus === "DITOLAK_KEUANGAN"
+                    ? "Invoice ditolak Keuangan"
+                    : invoiceStatus === "SEBAGIAN_DIBAYAR"
+                      ? "Invoice dibayar sebagian"
+                      : invoiceStatus === "DITERBITKAN"
+                        ? "Menunggu pembayaran invoice"
+                        : "Menunggu pengajuan invoice oleh Billing";
               return (
-                <div key={termId} className="flex flex-col gap-2 rounded-xl border border-border bg-muted/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div key={String(term.id)} className="flex flex-col gap-2 rounded-xl border border-border bg-muted/10 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="font-medium">
                       Termin {String(term.nomor_termin ?? "—")} · {String(term.persentase ?? 0)}%
                     </p>
                     <p className="text-sm font-semibold">{formatRupiah(term.nilai_termin ?? term.nilai ?? term.nominal)}</p>
                     <p className="text-xs text-muted-foreground">
-                      Tahap:{" "}
-                      {termStatus === "MENUNGGU_VALIDASI_KEUANGAN"
-                        ? "Menunggu validasi Keuangan"
-                        : termStatus === "DISETUJUI_KEUANGAN"
-                          ? "Disetujui Keuangan · Menunggu pencairan"
-                          : termStatus === "CAIR"
-                            ? "Sudah dicairkan"
-                            : humanizeStatus(termStatus)}
+                      Tahap: {stage}
                       {term.dicairkan_pada ? ` · Dicairkan ${formatDate(String(term.dicairkan_pada))}` : ""}
-                      {term.catatan_keuangan ? ` · ${String(term.catatan_keuangan)}` : ""}
                     </p>
                   </div>
-                  {finance && (
-                    <div className="flex gap-2">
-                      {termStatus === "MENUNGGU_VALIDASI_KEUANGAN" && (
-                        <Button size="sm" variant="outline" disabled={terminMutation.isPending} onClick={() => terminMutation.mutate({ termId, action: "validasi" })}>
-                          Validasi termin
-                        </Button>
-                      )}
-                      {termStatus === "DISETUJUI_KEUANGAN" && status === "DISETUJUI_PIMPINAN" && (
-                        <Button size="sm" disabled={terminMutation.isPending} onClick={() => terminMutation.mutate({ termId, action: "cairkan" })}>
-                          Cairkan termin
-                        </Button>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })
@@ -399,7 +406,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             <p className="mt-3 text-sm text-muted-foreground">Belum ada termin.</p>
           )}
         </div>
-        {terminMutation.error && <p className="mt-3 text-sm text-destructive">{apiErrorMessage(terminMutation.error)}</p>}
       </section>
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
         <div className="border-b bg-muted/40 px-5 py-4">
@@ -414,8 +420,14 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               const roId = String(row.id);
               const detailRow = roDetails[roId];
               const planned = Number(row.nilai_rencana) || Number(row.total_plafon) || 0;
-              const available = Number(row.total_plafon) || 0;
-              const usage = available > 0 ? Math.min(100, (Number(row.total_terpakai ?? 0) / available) * 100) : 0;
+              const roFinance = { ...financeOf(row), ...financeOf(detailRow ?? {}) };
+              const approved = Number(roFinance.pagu_disetujui) || 0;
+              const realized = Number(roFinance.realisasi ?? row.total_terpakai) || 0;
+              const commitments = Number(roFinance.komitmen_aktif) || 0;
+              const remainingRight = Number(roFinance.sisa_hak_belanja ?? row.sisa_saldo) || 0;
+              const cashReceived = Number(roFinance.penerimaan_kas ?? row.trx_debit) || 0;
+              const cashPosition = Number(roFinance.posisi_kas) || 0;
+              const usage = approved > 0 ? Math.min(100, ((realized + commitments) / approved) * 100) : 0;
               const missing = [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", !row.no_sk && "No SK", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean) as string[];
               const allocations = Array.isArray(detailRow?.alokasi_list) ? (detailRow.alokasi_list as Row[]) : [];
               const ledger = Array.isArray(detailRow?.transaksi_list) ? (detailRow.transaksi_list as Row[]) : [];
@@ -435,9 +447,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                     </span>
                     <span className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={roStatusTone(String(row.status_ro ?? ""))}>{text(row.status_ro)}</StatusBadge>
-                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Alokasi RO {formatRupiah(planned)}</span>
-                      <span className={`rounded-lg px-2.5 py-1 text-xs ${available > 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>Sisa saldo {formatRupiah(row.sisa_saldo ?? available)}</span>
-                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Terpakai {formatRupiah(row.total_terpakai)}</span>
+                      <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Pagu {formatRupiah(approved || planned)}</span>
+                      <span className={`rounded-lg px-2.5 py-1 text-xs ${remainingRight < 0 ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"}`}>Sisa hak {formatRupiah(remainingRight)}</span>
+                      <span className={`rounded-lg px-2.5 py-1 text-xs ${cashPosition < 0 ? "bg-rose-100 text-rose-800" : "bg-muted text-foreground"}`}>Posisi kas {formatRupiah(cashPosition)}</span>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${usage >= 90 ? "bg-rose-100 text-rose-800" : usage >= 70 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
                         {usage.toFixed(0)}% terpakai
                       </span>
@@ -463,19 +475,28 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                         </Alert>
                       ) : (
                         <>
-                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                            {[
-                              ["Alokasi RO", formatRupiah(planned)],
-                              ["Terpakai", formatRupiah(row.total_terpakai)],
-                              ["Sisa saldo", formatRupiah(row.sisa_saldo)],
-                              ["Penanggung jawab", text(row.pj)],
-                              ["Periode SK", `${formatDate(String(row.mulai_sk ?? ""))} – ${formatDate(String(row.berakhir_sk ?? ""))}`],
-                            ].map(([label, value]) => (
-                              <div key={label} className="rounded-lg border bg-background p-3">
-                                <p className="text-xs text-muted-foreground">{label}</p>
-                                <p className="mt-1 text-sm font-semibold">{value}</p>
-                              </div>
-                            ))}
+                          <div className="grid gap-4 xl:grid-cols-2">
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hak belanja</p>
+                              <MoneyFlow items={[
+                                { label: "Pagu disetujui", amount: approved },
+                                { label: "Realisasi", amount: realized, operator: "−", tone: "text-rose-700" },
+                                { label: "Komitmen aktif", amount: commitments, operator: "−", tone: "text-amber-700" },
+                                { label: "Sisa hak belanja", amount: remainingRight, operator: "=", tone: remainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
+                              ]} />
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Arus kas</p>
+                              <MoneyFlow items={[
+                                { label: "Penerimaan kas", amount: cashReceived, tone: "text-sky-700" },
+                                { label: "Realisasi", amount: realized, operator: "−", tone: "text-rose-700" },
+                                { label: "Posisi kas", amount: cashPosition, operator: "=", tone: cashPosition < 0 ? "text-rose-700" : "text-foreground" },
+                              ]} />
+                            </div>
+                          </div>
+                          <div className="grid gap-3 text-sm sm:grid-cols-2">
+                            <p><span className="text-muted-foreground">Penanggung jawab:</span> {text(row.pj)}</p>
+                            <p><span className="text-muted-foreground">Periode SK:</span> {formatDate(String(row.mulai_sk ?? ""))} – {formatDate(String(row.berakhir_sk ?? ""))}</p>
                           </div>
                           <p className="text-xs text-muted-foreground">
                             No. kontrak: {text(row.no_kontrak)} · No. SK: {text(row.no_sk)}

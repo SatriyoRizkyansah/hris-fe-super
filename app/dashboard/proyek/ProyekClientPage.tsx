@@ -469,16 +469,20 @@ export default function ProyekClientPage() {
               { key: "kontrak", header: "Nilai Kontrak", className: "min-w-[10rem] whitespace-nowrap text-right tabular-nums", render: (row: ProyekItemDto) => <span>{formatRupiah(row.nilai_kontrak)}</span> },
               {
                 key: "ro",
-                header: "Alokasi RO / Saldo",
-                className: "min-w-[12rem] whitespace-nowrap text-right tabular-nums",
-                render: (row: ProyekItemDto) => (
-                  <span className="text-sm">
-                    <span className="block">Rencana {formatRupiah(row.total_plafon_ro)}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      Tersedia {formatRupiah((row as ProyekItemDto & { total_saldo_ro?: number }).total_saldo_ro ?? 0)} · {row.jumlah_ro ?? 0} RO
-                    </span>
-                  </span>
-                ),
+                header: "Pagu RO / Posisi Kas",
+                className: "min-w-[15rem] whitespace-nowrap text-right tabular-nums",
+                render: (row: ProyekItemDto) => {
+                  const financial = row as ProyekItemDto & { total_saldo_ro?: number; total_sisa_hak_belanja_ro?: number };
+                  const cashPosition = Number(financial.total_saldo_ro) || 0;
+                  const remainingRight = Number(financial.total_sisa_hak_belanja_ro) || 0;
+                  return (
+                    <div className="space-y-1 text-sm">
+                      <span className="block">Pagu RO {formatRupiah(row.total_plafon_ro)}</span>
+                      <span className={`block text-xs ${cashPosition < 0 ? "text-rose-700" : "text-emerald-700"}`}>Posisi kas {formatRupiah(cashPosition)}</span>
+                      <span className={`block text-xs ${remainingRight < 0 ? "text-rose-700" : "text-muted-foreground"}`}>Sisa hak belanja {formatRupiah(remainingRight)} · {row.jumlah_ro ?? 0} RO</span>
+                    </div>
+                  );
+                },
               },
               { key: "status", header: "Status", className: "min-w-[9rem] whitespace-nowrap", render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{humanizeStatus(row.status_proyek)}</StatusBadge> },
               {

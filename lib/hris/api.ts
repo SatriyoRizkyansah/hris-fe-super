@@ -55,9 +55,10 @@ function browserToken() {
   return readSession(cookie)?.token ?? "";
 }
 
-export async function uploadHrisFile(path: string, file: File) {
+export async function uploadHrisFile(path: string, file: File, fields: Record<string, string> = {}) {
   const form = new FormData();
   form.append("file", file);
+  Object.entries(fields).forEach(([key, value]) => form.append(key, value));
   const token = browserToken();
   const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? ""}${path}`, {
     method: "POST",

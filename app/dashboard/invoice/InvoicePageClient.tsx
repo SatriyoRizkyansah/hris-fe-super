@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, CircleDollarSign, Eye, FilePlus2, LoaderCircle, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CircleDollarSign, Eye, FilePlus2, LoaderCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Modal, ModalSection } from "@/components/modal/Modal";
 import { MoneyFlow } from "@/components/common/MoneyFlow";
+import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DataTable } from "@/components/table";
 import { browserApi } from "@/lib/api/browser-client";
@@ -16,9 +17,9 @@ import { apiData, setBrowserToken, useCurrentUser } from "@/lib/api/hooks";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage } from "@/lib/hris/api";
+import { apiErrorMessage, uploadHrisFile } from "@/lib/hris/api";
 import { formatRupiah } from "@/lib/hris/format";
-import type { BayarInvoiceDto, CreateInvoiceDto, CreateMutasiBankDto, ValidasiInvoiceKeuanganDto } from "@/lib/api/generated/api-generated";
+import type { BayarInvoiceDto, CreateInvoiceDto, CreateMutasiBankDto } from "@/lib/api/generated/api-generated";
 
 type Row = Record<string, any>;
 type InvoiceForm = { termin_id: string; nomor_invoice: string; tanggal_jatuh_tempo: string };
@@ -28,8 +29,6 @@ const blankInvoice = (): InvoiceForm => ({ termin_id: "", nomor_invoice: "", tan
 const blankReceipt = (): ReceiptForm => ({ rekening_id: "", tanggal_transaksi: today(), nominal: "", referensi_bank: "", nama_pengirim: "", keterangan: "" });
 const statusLabels: Record<string, string> = {
   DRAFT: "Draft",
-  MENUNGGU_VALIDASI_KEUANGAN: "Menunggu Validasi Keuangan",
-  DITOLAK_KEUANGAN: "Ditolak Keuangan",
   DITERBITKAN: "Diterbitkan",
   SEBAGIAN_DIBAYAR: "Sebagian Dibayar",
   LUNAS: "Lunas",
@@ -50,6 +49,11 @@ function payload(value: unknown): Row {
   return current && typeof current === "object" ? current : {};
 }
 const nested = (row: Row, key: string) => (row[key] && typeof row[key] === "object" ? (row[key] as Row) : undefined);
+const uploadedFileUrl = (path: string) => {
+  const normalized = path.replace(/^\/+/, "").replace(/^uploads\//, "").replace(/^api\//, "");
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+  return `${base}/api/${normalized.startsWith("uploaded/") ? normalized : `uploaded/${normalized}`}`;
+};
 const date = (value: unknown) => (typeof value === "string" ? new Date(value).toLocaleDateString("id-ID") : "—");
 const sourceLabel = (row: Row) => {
   const termin = nested(row, "termin");
@@ -64,18 +68,25 @@ export default function InvoicePageClient() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("__all");
   const [creating, setCreating] = useState(false);
-  const [validating, setValidating] = useState<Row | null>(null);
   const [settling, setSettling] = useState<Row | null>(null);
   const [detailInvoice, setDetailInvoice] = useState<Row | null>(null);
   const [invoiceForm, setInvoiceForm] = useState<InvoiceForm>(blankInvoice);
   const [receiptForm, setReceiptForm] = useState<ReceiptForm>(blankReceipt);
-  const [note, setNote] = useState("");
+  const [receiptProof, setReceiptProof] = useState<File | null>(null);
   const [error, setError] = useState("");
   const user = useCurrentUser();
   const role = user.data?.role?.toLowerCase() ?? "";
-  const canCreate = ["superadmin", "keu_billing"].includes(role);
-  const canValidate = ["superadmin", "keuangan"].includes(role);
-  const canSettle = ["superadmin", "keu_bendahara"].includes(role);
+  const canCreate = ["superadmin", "keuangan", "keu_billing"].includes(role);
+  const canSettle = ["superadmin", "keuangan", "keu_bendahara"].includes(role);
+  useEffect(() => {
+    if (!canCreate) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("createInvoice") !== "1") return;
+    setInvoiceForm({ ...blankInvoice(), termin_id: params.get("terminId") ?? "" });
+    setCreating(true);
+    setError("");
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+  }, [canCreate]);
   const listQuery = use_query({
     tag: "keuanganInvoiceDanSettlement",
     method: "invoiceControllerList",
@@ -97,7 +108,10 @@ export default function InvoicePageClient() {
       return apiData(endpoint({ query: { page: 1, limit: 100 }, format: "json" }));
     },
   });
-  const terminRows = listRows(terminQuery.data).filter((item) => item.proyek?.status_proyek === "DISETUJUI_PIMPINAN");
+  const terminRows = listRows(terminQuery.data).filter((item) => {
+    if (item.proyek?.status_proyek !== "DISETUJUI_PIMPINAN" || item.status !== "MENUNGGU_INVOICE" || item.invoice) return false;
+    return !(item.proyek?.termin_list ?? []).some((term: Row) => Number(term.nomor_termin) < Number(item.nomor_termin) && term.status !== "CAIR");
+  });
   const accountsQuery = use_query({
     tag: "masterRekeningBank",
     method: "masterRekeningControllerFindAll",
@@ -129,27 +143,20 @@ export default function InvoicePageClient() {
       setError("");
     },
   });
-  const validateMutation = use_mutation<unknown, Error, { id: string; data: ValidasiInvoiceKeuanganDto }>({
-    tag: "keuanganInvoiceDanSettlement",
-    method: "invoiceControllerValidasiInvoiceKeuangan",
-    invalidateKeys: invalidate,
-    mutationFn: async ({ id, data }) => {
-      setBrowserToken();
-      return apiData(browserApi.keuanganInvoiceDanSettlement.invoiceControllerValidasiInvoiceKeuangan(id, data, { format: "json" }));
-    },
-    onSuccess: () => {
-      setValidating(null);
-      setNote("");
-      setError("");
-    },
-  });
-  const receiptMutation = use_mutation<unknown, Error, { mutasi: CreateMutasiBankDto; invoiceId: string; payment: Omit<BayarInvoiceDto, "mutasi_bank_id"> }>({
+  const receiptMutation = use_mutation<unknown, Error, { mutasi: CreateMutasiBankDto; invoiceId: string; payment: Omit<BayarInvoiceDto, "mutasi_bank_id">; proof: File }>({
     tag: "keuanganInvoiceDanSettlement",
     method: "invoiceReceiptSettlement",
     invalidateKeys: invalidate,
-    mutationFn: async ({ mutasi, invoiceId, payment }) => {
+    mutationFn: async ({ mutasi, invoiceId, payment, proof }) => {
       setBrowserToken();
-      const created = await apiData(browserApi.keuanganInvoiceDanSettlement.invoiceControllerCreateMutasi(mutasi, { format: "json" }));
+      const created = await uploadHrisFile("/api/keuangan/mutasi-bank", proof, {
+        rekening_id: mutasi.rekening_id,
+        tanggal_transaksi: mutasi.tanggal_transaksi,
+        nominal: String(mutasi.nominal),
+        referensi_bank: mutasi.referensi_bank,
+        ...(mutasi.nama_pengirim ? { nama_pengirim: mutasi.nama_pengirim } : {}),
+        ...(mutasi.keterangan ? { keterangan: mutasi.keterangan } : {}),
+      });
       const mutationId = String(payload(created).id ?? "");
       if (!mutationId) throw new Error("Server tidak mengembalikan ID mutasi bank.");
       return apiData(browserApi.keuanganInvoiceDanSettlement.invoiceControllerBayar(invoiceId, { ...payment, mutasi_bank_id: mutationId }, { format: "json" }));
@@ -157,6 +164,7 @@ export default function InvoicePageClient() {
     onSuccess: () => {
       setSettling(null);
       setReceiptForm(blankReceipt());
+      setReceiptProof(null);
       setError("");
     },
   });
@@ -172,25 +180,16 @@ export default function InvoicePageClient() {
       setError(apiErrorMessage(cause, "Invoice gagal dibuat."));
     }
   }
-  async function validate(disetujui: boolean) {
-    if (!validating) return;
-    if (!disetujui && !note.trim()) {
-      setError("Catatan penolakan wajib diisi.");
-      return;
-    }
-    try {
-      setError("");
-      await validateMutation.mutateAsync({ id: String(validating.id), data: { disetujui, catatan: note.trim() || undefined } });
-    } catch (cause) {
-      setError(apiErrorMessage(cause, "Validasi invoice gagal disimpan."));
-    }
-  }
   async function settle() {
     if (!settling) return;
     const amount = Number(receiptForm.nominal);
     const remaining = Number(settling.nominal ?? 0) - Number(settling.nominal_dibayar ?? 0);
-    if (!receiptForm.rekening_id || !receiptForm.tanggal_transaksi || !receiptForm.referensi_bank.trim() || amount <= 0) {
-      setError("Rekening, tanggal, referensi bank, dan nominal positif wajib diisi.");
+    if (!receiptForm.rekening_id || !receiptForm.tanggal_transaksi || !receiptForm.referensi_bank.trim() || !receiptProof || amount <= 0) {
+      setError("Rekening, tanggal, referensi bank, bukti penerimaan, dan nominal positif wajib diisi.");
+      return;
+    }
+    if (receiptProof.size > 10 * 1024 * 1024) {
+      setError("Ukuran bukti penerimaan maksimal 10 MB.");
       return;
     }
     if (amount > remaining) {
@@ -201,6 +200,7 @@ export default function InvoicePageClient() {
       setError("");
       await receiptMutation.mutateAsync({
         invoiceId: String(settling.id),
+        proof: receiptProof,
         mutasi: {
           rekening_id: receiptForm.rekening_id,
           tanggal_transaksi: receiptForm.tanggal_transaksi,
@@ -221,7 +221,7 @@ export default function InvoicePageClient() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Invoice</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Billing membuat invoice proyek, Keuangan menerbitkan, Bendahara mencatat penerimaan bank.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Billing menerbitkan invoice sebagai piutang. Bendahara mencatat pembayaran setelah dana masuk ke rekening.</p>
         </div>
         {canCreate && (
           <Button
@@ -265,25 +265,13 @@ export default function InvoicePageClient() {
                       <Button size="sm" variant="outline" onClick={() => setDetailInvoice(row)}>
                         <Eye size={14} /> Detail
                       </Button>
-                            {canValidate && row.status === "MENUNGGU_VALIDASI_KEUANGAN" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setValidating(row);
-                                  setNote("");
-                                  setError("");
-                                }}
-                              >
-                                Validasi
-                              </Button>
-                            )}
                             {canSettle && ["DITERBITKAN", "SEBAGIAN_DIBAYAR"].includes(String(row.status)) && (
                               <Button
                                 size="sm"
                                 onClick={() => {
                                   setSettling(row);
                                   setReceiptForm({ ...blankReceipt(), nominal: String(Number(row.nominal ?? 0) - Number(row.nominal_dibayar ?? 0)) });
+                                  setReceiptProof(null);
                                   setError("");
                                 }}
                               >
@@ -302,7 +290,7 @@ export default function InvoicePageClient() {
         open={creating}
         onClose={() => setCreating(false)}
         title="Buat Invoice Proyek"
-        description="Invoice masuk antrean validasi Keuangan sebelum resmi diterbitkan."
+        description="Invoice langsung diterbitkan sebagai piutang. Status lunas dicatat Bendahara setelah pembayaran terkonfirmasi di rekening."
         size="md"
         bodyClassName="space-y-4"
         footer={
@@ -311,7 +299,7 @@ export default function InvoicePageClient() {
               Batal
             </Button>
             <Button disabled={createMutation.isPending || terminQuery.isLoading} onClick={createInvoice}>
-              {createMutation.isPending && <LoaderCircle className="animate-spin" size={16} />} Kirim ke Keuangan
+              {createMutation.isPending && <LoaderCircle className="animate-spin" size={16} />} Terbitkan Invoice
             </Button>
           </>
         }
@@ -361,7 +349,7 @@ export default function InvoicePageClient() {
           const project = nested(nested(detailInvoice, "termin") ?? {}, "proyek");
           const payments = Array.isArray(detailInvoice.pembayaran) ? detailInvoice.pembayaran as Row[] : [];
           const invoiceStatus = String(detailInvoice.status ?? "");
-          const invoiceTone = invoiceStatus === "LUNAS" ? "ok" : invoiceStatus === "DITOLAK_KEUANGAN" || invoiceStatus === "DIBATALKAN" ? "danger" : ["SEBAGIAN_DIBAYAR", "MENUNGGU_VALIDASI_KEUANGAN"].includes(invoiceStatus) ? "warn" : "neutral";
+          const invoiceTone = invoiceStatus === "LUNAS" ? "ok" : invoiceStatus === "DITOLAK_KEUANGAN" || invoiceStatus === "DIBATALKAN" ? "danger" : invoiceStatus === "SEBAGIAN_DIBAYAR" ? "warn" : "neutral";
           return (
             <div className="space-y-4">
               <ModalSection title="Informasi invoice" action={<StatusBadge status={invoiceTone}>{statusLabels[invoiceStatus] ?? (invoiceStatus || "—")}</StatusBadge>}>
@@ -395,7 +383,7 @@ export default function InvoicePageClient() {
                   <div className="overflow-x-auto rounded-md border bg-white">
                     <table className="w-full min-w-[42rem] text-left text-xs">
                       <thead className="bg-muted/50 text-muted-foreground">
-                        <tr><th className="p-2.5">Tanggal</th><th className="p-2.5">Referensi / rekening</th><th className="p-2.5">Divalidasi oleh</th><th className="p-2.5 text-right">Nominal</th><th className="p-2.5">Catatan</th></tr>
+                        <tr><th className="p-2.5">Tanggal</th><th className="p-2.5">Referensi / rekening</th><th className="p-2.5">Divalidasi oleh</th><th className="p-2.5 text-right">Nominal</th><th className="p-2.5">Bukti</th><th className="p-2.5">Catatan</th></tr>
                       </thead>
                       <tbody>
                         {payments.map((payment, index) => {
@@ -410,6 +398,11 @@ export default function InvoicePageClient() {
                               </td>
                               <td className="p-2.5">{nested(payment, "validator")?.nama ?? "—"}</td>
                               <td className="whitespace-nowrap p-2.5 text-right font-semibold tabular-nums">{formatRupiah(payment.nominal)}</td>
+                              <td className="p-2.5">
+                                {typeof bankMutation?.file_bukti === "string" && bankMutation.file_bukti ? (
+                                  <a className="font-medium text-primary underline-offset-4 hover:underline" href={uploadedFileUrl(bankMutation.file_bukti)} target="_blank" rel="noreferrer">Lihat bukti</a>
+                                ) : "—"}
+                              </td>
                               <td className="p-2.5">{String(payment.catatan ?? bankMutation?.keterangan ?? "—")}</td>
                             </tr>
                           );
@@ -426,50 +419,19 @@ export default function InvoicePageClient() {
         })()}
       </Modal>
       <Modal
-        open={Boolean(validating)}
-        onClose={() => setValidating(null)}
-        title="Validasi Invoice"
-        description={validating ? `${String(validating.nomor_invoice)} · ${formatRupiah(validating.nominal)}` : "Validasi invoice proyek."}
-        size="md"
-        bodyClassName="space-y-4"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setValidating(null)}>
-              Batal
-            </Button>
-            <Button variant="outline" disabled={validateMutation.isPending} onClick={() => validate(false)}>
-              <X size={16} /> Tolak
-            </Button>
-            <Button disabled={validateMutation.isPending} onClick={() => validate(true)}>
-              {validateMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Check size={16} />} Setujui & Terbitkan
-            </Button>
-          </>
-        }
-      >
-        <label className="grid gap-1 text-sm">
-          Catatan
-          <textarea className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
-        </label>
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-      </Modal>
-      <Modal
         open={Boolean(settling)}
-        onClose={() => setSettling(null)}
+        onClose={() => { setSettling(null); setReceiptProof(null); }}
         title="Catat Penerimaan Invoice"
-        description={settling ? `${String(settling.nomor_invoice)} · sisa ${formatRupiah(Number(settling.nominal ?? 0) - Number(settling.nominal_dibayar ?? 0))}` : "Penerimaan invoice."}
+        description={settling ? `${String(settling.nomor_invoice)} · sisa ${formatRupiah(Number(settling.nominal ?? 0) - Number(settling.nominal_dibayar ?? 0))}. Catat dana yang sudah masuk rekening dan lampirkan bukti penerimaannya.` : "Penerimaan invoice."}
         size="md"
         bodyClassName="space-y-4"
         footer={
           <>
-            <Button variant="outline" onClick={() => setSettling(null)}>
+            <Button variant="outline" onClick={() => { setSettling(null); setReceiptProof(null); }}>
               Batal
             </Button>
             <Button disabled={receiptMutation.isPending || accountsQuery.isLoading} onClick={settle}>
-              {receiptMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <CircleDollarSign size={16} />} Catat & Validasi
+              {receiptMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <CircleDollarSign size={16} />} Konfirmasi Penerimaan
             </Button>
           </>
         }
@@ -494,7 +456,7 @@ export default function InvoicePageClient() {
           </label>
         </div>
         <label className="grid gap-1 text-sm">
-          Referensi bank *<Input maxLength={150} value={receiptForm.referensi_bank} onChange={(event) => setReceiptForm((current) => ({ ...current, referensi_bank: event.target.value }))} />
+          Nomor referensi bank *<Input maxLength={150} placeholder="Nomor transaksi yang tercantum pada bukti transfer" value={receiptForm.referensi_bank} onChange={(event) => setReceiptForm((current) => ({ ...current, referensi_bank: event.target.value }))} />
         </label>
         <label className="grid gap-1 text-sm">
           Nama pengirim
@@ -509,6 +471,17 @@ export default function InvoicePageClient() {
             onChange={(event) => setReceiptForm((current) => ({ ...current, keterangan: event.target.value }))}
           />
         </label>
+        <div>
+          <DocumentUploadField
+            label="Bukti penerimaan bank *"
+            accept=".pdf,.jpg,.jpeg,.png"
+            value={receiptProof}
+            onChange={setReceiptProof}
+            disabled={receiptMutation.isPending}
+            className="p-3 sm:p-3"
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">Unggah bukti transfer masuk atau cuplikan mutasi rekening agar pembayaran dapat diverifikasi. Format PDF, JPG, atau PNG; maksimal 10 MB.</p>
+        </div>
         {accountsQuery.isError && (
           <Alert variant="destructive">
             <AlertDescription>{apiErrorMessage(accountsQuery.error, "Gagal memuat rekening.")}</AlertDescription>
