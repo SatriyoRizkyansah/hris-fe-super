@@ -275,6 +275,8 @@ export interface RoInputDto {
   rekening_id?: string;
   /** @example "KONTRAK/2026/001" */
   no_kontrak?: string;
+  /** @example "JOB/2026/001" */
+  nomor_job?: string;
   /** @example "Budi Santoso" */
   pj?: string;
   /** @example "SK-RO-001" */
@@ -389,6 +391,7 @@ export interface RoItemDto {
   parent_ro_id?: object | null;
   ro_asal_id?: object | null;
   no_kontrak?: object | null;
+  nomor_job?: object | null;
   pj?: object | null;
   file_rab?: object | null;
   file_sk?: object | null;
@@ -422,6 +425,8 @@ export interface CreateRoDto {
   total_plafon: number;
   /** @example "KONTRAK/2026/001" */
   no_kontrak?: string;
+  /** @example "JOB/2026/001" */
+  nomor_job?: string;
   /** @example "Budi Santoso" */
   pj?: string;
   /** @example "SK-RO-001" */
@@ -442,6 +447,7 @@ export interface UpdateRoDto {
   id_rekening?: string;
   total_plafon?: number;
   no_kontrak?: string;
+  nomor_job?: string;
   pj?: string;
   no_sk?: string;
   mulai_sk?: string;

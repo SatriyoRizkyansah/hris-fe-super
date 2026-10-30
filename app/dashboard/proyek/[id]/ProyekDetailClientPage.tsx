@@ -428,7 +428,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               const cashReceived = Number(roFinance.penerimaan_kas ?? row.trx_debit) || 0;
               const cashPosition = Number(roFinance.posisi_kas) || 0;
               const usage = approved > 0 ? Math.min(100, ((realized + commitments) / approved) * 100) : 0;
-              const missing = [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", !row.no_sk && "No SK", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean) as string[];
+              const missing = [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", !row.nomor_job && !row.no_sk && "Nomor Job", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean) as string[];
               const allocations = Array.isArray(detailRow?.alokasi_list) ? (detailRow.alokasi_list as Row[]) : [];
               const ledger = Array.isArray(detailRow?.transaksi_list) ? (detailRow.transaksi_list as Row[]) : [];
               return (
@@ -499,7 +499,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                             <p><span className="text-muted-foreground">Periode SK:</span> {formatDate(String(row.mulai_sk ?? ""))} – {formatDate(String(row.berakhir_sk ?? ""))}</p>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            No. kontrak: {text(row.no_kontrak)} · No. SK: {text(row.no_sk)}
+                            No. kontrak: {text(row.no_kontrak)} · {row.nomor_job ? `No. Job: ${text(row.nomor_job)}` : `No. SK: ${text(row.no_sk)}`}
                           </p>
                           <div className="grid gap-4 xl:grid-cols-2">
                             {[

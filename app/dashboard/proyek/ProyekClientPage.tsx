@@ -36,7 +36,7 @@ type ProjectForm = {
   total_direct_cost: string;
   total_margin: string;
 };
-type RoDraft = RoInputDto & { key: string; plafonText: string; detailMode: "detail" | "later"; no_kontrak: string; pj: string; no_sk: string; mulai_sk: string; berakhir_sk: string };
+type RoDraft = RoInputDto & { key: string; plafonText: string; detailMode: "detail" | "later"; no_kontrak: string; pj: string; nomor_job: string; mulai_sk: string; berakhir_sk: string };
 type TerminDraft = TerminInputDto & { key: string; persentaseText: string };
 type LookupRow = { id: string; [key: string]: unknown };
 type UnitOption = LookupRow & { kode_unit?: string; nama_unit?: string };
@@ -70,7 +70,7 @@ const blankRo = (): RoDraft => ({
   detailMode: "later",
   no_kontrak: "",
   pj: "",
-  no_sk: "",
+  nomor_job: "",
   mulai_sk: "",
   berakhir_sk: "",
 });
@@ -234,7 +234,7 @@ export default function ProyekClientPage() {
     form.total_margin !== "" &&
     contractOk &&
     ros.length &&
-    ros.every((row) => row.nama_ro && row.mak_id && row.id_unit_koordinator && Number(row.plafonText) > 0 && (row.detailMode === "later" || (row.no_kontrak.trim() && row.pj.trim() && row.no_sk.trim() && row.mulai_sk && row.berakhir_sk))) &&
+    ros.every((row) => row.nama_ro && row.mak_id && row.id_unit_koordinator && Number(row.plafonText) > 0 && (row.detailMode === "later" || (row.no_kontrak.trim() && row.pj.trim() && row.nomor_job.trim() && row.mulai_sk && row.berakhir_sk))) &&
     roTotal === numeric("total_direct_cost") &&
     terms.length &&
     terms.every((term) => Number(term.persentaseText) > 0) &&
@@ -323,7 +323,7 @@ export default function ProyekClientPage() {
           id_unit_koordinator: row.id_unit_koordinator,
           ...(row.rekening_id ? { rekening_id: row.rekening_id } : {}),
           plafon: Number(row.plafonText),
-          ...(row.detailMode === "detail" ? { no_kontrak: row.no_kontrak, pj: row.pj, no_sk: row.no_sk, mulai_sk: row.mulai_sk, berakhir_sk: row.berakhir_sk } : {}),
+          ...(row.detailMode === "detail" ? { no_kontrak: row.no_kontrak, pj: row.pj, nomor_job: row.nomor_job, mulai_sk: row.mulai_sk, berakhir_sk: row.berakhir_sk } : {}),
         })),
         termin_list: terms.map(({ key, persentaseText }, index) => ({ nomor_termin: index + 1, persentase: Number(persentaseText) })),
       };
@@ -728,7 +728,7 @@ export default function ProyekClientPage() {
                         <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "detail"} onChange={() => updateRo(row.key, "detailMode", "detail")} className="mt-1 accent-primary" />
                         <span>
                           <strong className="block">Isi sekarang</strong>
-                          <span className="text-xs text-muted-foreground">Lengkapi nomor kontrak, PJ, dan SK RO.</span>
+                          <span className="text-xs text-muted-foreground">Lengkapi nomor kontrak, PJ, dan nomor Job RO.</span>
                         </span>
                       </label>
                       <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "later" ? "border-primary bg-primary/5" : ""}`}>
@@ -744,7 +744,7 @@ export default function ProyekClientPage() {
                     <>
                       <Field label="Nomor kontrak RO" required value={row.no_kontrak} onChange={(value) => updateRo(row.key, "no_kontrak", value)} />
                       <Field label="Penanggung jawab RO" required value={row.pj} onChange={(value) => updateRo(row.key, "pj", value)} />
-                      <Field label="Nomor SK RO" required value={row.no_sk} onChange={(value) => updateRo(row.key, "no_sk", value)} />
+                      <Field label="Nomor Job" required value={row.nomor_job ?? ""} onChange={(value) => updateRo(row.key, "nomor_job", value)} />
                       <Field label="Mulai SK" type="date" required value={row.mulai_sk} onChange={(value) => updateRo(row.key, "mulai_sk", value)} />
                       <Field label="Berakhir SK" type="date" required value={row.berakhir_sk} onChange={(value) => updateRo(row.key, "berakhir_sk", value)} />
                     </>

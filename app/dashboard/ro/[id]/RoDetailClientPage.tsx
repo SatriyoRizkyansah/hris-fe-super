@@ -23,13 +23,13 @@ import { browserIdentity } from "@/lib/hris/identity";
 import type { RoItemDto, UpdateRoDto } from "@/lib/api/generated/api-generated";
 
 type AnyRow = Record<string, unknown>;
-type EditForm = { nama_ro: string; total_plafon: string; no_kontrak: string; pj: string; no_sk: string; mulai_sk: string; berakhir_sk: string; status_ro: "AKTIF" | "NONAKTIF" | "SELESAI" };
+type EditForm = { nama_ro: string; total_plafon: string; no_kontrak: string; nomor_job: string; pj: string; no_sk: string; mulai_sk: string; berakhir_sk: string; status_ro: "AKTIF" | "NONAKTIF" | "SELESAI" };
 type TransactionForm = { nama_kegiatan: string; no_kuitansi: string; tanggal: string; debit: string; kredit: string; keterangan: string };
 type TransactionDirection = "debit" | "kredit";
-const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: "", pj: "", no_sk: "", mulai_sk: "", berakhir_sk: "", status_ro: "AKTIF" });
+const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: "", nomor_job: "", pj: "", no_sk: "", mulai_sk: "", berakhir_sk: "", status_ro: "AKTIF" });
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
 function missing(row: RoItemDto) {
-  return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", !row.no_sk && "No SK", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean);
+  return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", (row.id_proyek ? !row.nomor_job && !row.no_sk : !row.no_sk) && (row.id_proyek ? "Nomor Job" : "No SK"), !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean);
 }
 
 export default function RoDetailClientPage({ id }: { id: string }) {
@@ -139,6 +139,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       nama_ro: ro.nama_ro ?? "",
       total_plafon: String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro.total_plafon ?? ""),
       no_kontrak: String(ro.no_kontrak ?? ""),
+      nomor_job: String(ro.nomor_job ?? ""),
       pj: String(ro.pj ?? ""),
       no_sk: String(ro.no_sk ?? ""),
       mulai_sk: String(ro.mulai_sk ?? "").slice(0, 10),
@@ -163,6 +164,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       await update.mutateAsync({
         ...metadata,
         no_kontrak: edit.no_kontrak || undefined,
+        nomor_job: edit.nomor_job || undefined,
         pj: edit.pj || undefined,
         no_sk: edit.no_sk || undefined,
         mulai_sk: edit.mulai_sk || undefined,
@@ -325,7 +327,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           <p className="text-xs text-muted-foreground">{Math.max(0, percent).toFixed(1)}% pagu telah digunakan atau dikomitmenkan.</p>
         </div>
       </section>
-      <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-3">
+      <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-2 xl:grid-cols-4">
         <p>
           <span className="block text-xs text-muted-foreground">Unit Koordinator</span>
           {String(ro.nama_unit_koordinator ?? "—")}
@@ -333,6 +335,10 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         <p>
           <span className="block text-xs text-muted-foreground">No Kontrak / PJ</span>
           {String(ro.no_kontrak ?? "—")} / {String(ro.pj ?? "—")}
+        </p>
+        <p>
+          <span className="block text-xs text-muted-foreground">Nomor Job</span>
+          {String(ro.nomor_job ?? "—")}
         </p>
         <p>
           <span className="block text-xs text-muted-foreground">SK</span>
@@ -459,6 +465,10 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           <label className="grid gap-1 text-sm">
             No Kontrak
             <Input value={edit.no_kontrak} onChange={(event) => setEdit((state) => ({ ...state, no_kontrak: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Nomor Job
+            <Input value={edit.nomor_job} onChange={(event) => setEdit((state) => ({ ...state, nomor_job: event.target.value }))} />
           </label>
           <label className="grid gap-1 text-sm">
             PJ

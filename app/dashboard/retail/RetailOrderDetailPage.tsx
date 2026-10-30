@@ -34,12 +34,14 @@ import { formatRupiah } from "@/lib/hris/format";
 type Row = Record<string, any>;
 type ExpenseForm = { nama_kegiatan: string; tanggal: string; jumlah: string; keterangan: string };
 type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan: string };
+type HandoverForm = { tanggal_serah_terima: string; nama_penerima: string };
 const today = () => {
   const date = new Date();
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 };
 const blankExpense = (): ExpenseForm => ({ nama_kegiatan: "", tanggal: today(), jumlah: "", keterangan: "" });
 const blankPayment = (): PaymentForm => ({ nomor_pembayaran: "", tanggal_bayar: today(), catatan: "" });
+const blankHandover = (): HandoverForm => ({ tanggal_serah_terima: today(), nama_penerima: "" });
 
 function payload(value: unknown): Row {
   let current: any = value;
@@ -90,15 +92,15 @@ const flowSteps = [
   { title: "Input LHU", role: "SUBKOOR / PILT", detail: "Isi nomor dan file LHU setelah uji selesai." },
   { title: "Terbitkan invoice", role: "KEU_BILLING", detail: "Invoice menjadi piutang klien." },
   { title: "Catat penerimaan", role: "KEU_BENDAHARA", detail: "Cocokkan mutasi bank sampai lunas." },
-  { title: "Cetak / serah LHU", role: "SETELAH LUNAS", detail: "Akses LHU terbuka setelah pembayaran lunas." },
+  { title: "Serah terima LHU", role: "SUBKOOR / PILT", detail: "Unggah bukti dan catat penerima setelah pembayaran lunas." },
 ];
 
-function currentFlowIndex(status: string) {
+function currentFlowIndex(status: string, handoverRecorded: boolean, invoicePaid: boolean) {
+  if (handoverRecorded) return 5;
+  if (invoicePaid || ["LUNAS", "SELESAI"].includes(status)) return 4;
   if (["PENGUJIAN", "PERMOHONAN_DITERIMA", "PERCONTO_DITERIMA"].includes(status)) return 0;
   if (["LHU_TERBIT", "SIAP_DITAGIH"].includes(status)) return 1;
   if (status === "INVOICE_DITERBITKAN") return 2;
-  if (status === "LUNAS") return 4;
-  if (status === "SELESAI") return 5;
   return 0;
 }
 
@@ -121,10 +123,15 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   const [lhuDate, setLhuDate] = useState(today());
   const [lhuFile, setLhuFile] = useState<File | null>(null);
   const [lhuError, setLhuError] = useState("");
+  const [handoverOpen, setHandoverOpen] = useState(false);
+  const [handoverForm, setHandoverForm] = useState<HandoverForm>(blankHandover);
+  const [handoverFile, setHandoverFile] = useState<File | null>(null);
+  const [handoverError, setHandoverError] = useState("");
 
   const user = useCurrentUser();
   const role = user.data?.role?.toLowerCase() ?? "";
   const canManage = ["superadmin", "koordinator", "subkoor"].includes(role);
+  const canRecordHandover = ["superadmin", "subkoor"].includes(role);
   const canBill = ["superadmin", "keu_billing"].includes(role);
   const canSettle = ["superadmin", "keu_bendahara"].includes(role);
   const canReviewExpense = ["superadmin", "keu_karwas"].includes(role);
@@ -141,9 +148,12 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   const invoice = job.invoice && typeof job.invoice === "object" ? job.invoice as Row : {};
   const expenses = Array.isArray(job.pengajuan_belanja) ? job.pengajuan_belanja as Row[] : [];
   const serviceItems = Array.isArray(job.rincian_layanan) ? job.rincian_layanan as Row[] : [];
+  const documents = Array.isArray(job.dokumen) ? job.dokumen as Row[] : [];
+  const handoverDocument = documents.find((document) => document.jenis === "BUKTI_SERAH_TERIMA_LHU") ?? null;
   const paid = Number(invoice.nominal_dibayar ?? 0);
   const invoiceAmount = Number(invoice.nominal ?? 0);
   const receivable = Math.max(0, invoiceAmount - paid);
+  const isInvoicePaid = invoice.status === "LUNAS";
 
   const createExpenseMutation = use_mutation<unknown, Error, ExpenseForm>({
     tag: "retail",
@@ -230,6 +240,24 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     onError: (cause) => setLhuError(apiErrorMessage(cause)),
   });
 
+  const handoverMutation = use_mutation<unknown, Error, { form: HandoverForm; file: File }>({
+    tag: "retail",
+    method: "recordRetailLhuHandover",
+    invalidateKeys: invalidate,
+    mutationFn: async ({ form, file }) => uploadHrisFile(`/api/retail/jobs/${id}/serah-terima-lhu`, file, {
+      tanggal_serah_terima: form.tanggal_serah_terima,
+      nama_penerima: form.nama_penerima.trim(),
+    }),
+    onSuccess: async () => {
+      await detail.refetch();
+      setHandoverOpen(false);
+      setHandoverForm(blankHandover());
+      setHandoverFile(null);
+      setHandoverError("");
+    },
+    onError: (cause) => setHandoverError(apiErrorMessage(cause)),
+  });
+
   function issueInvoice() {
     window.location.assign(`/dashboard/invoice?createRetail=1&retailJobId=${encodeURIComponent(id)}`);
   }
@@ -296,11 +324,24 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     }
   }
 
+  async function submitHandover() {
+    if (!handoverForm.tanggal_serah_terima || !handoverForm.nama_penerima.trim() || !handoverFile) {
+      setHandoverError("Tanggal, nama penerima, dan bukti serah terima wajib diisi.");
+      return;
+    }
+    try {
+      setHandoverError("");
+      await handoverMutation.mutateAsync({ form: handoverForm, file: handoverFile });
+    } catch (cause) {
+      setHandoverError(apiErrorMessage(cause));
+    }
+  }
+
   if (detail.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memuat order retail...</div>;
   if (detail.isError || !job.id) return <div className="space-y-4 p-6"><Alert variant="destructive"><AlertTitle>Order retail tidak ditemukan</AlertTitle><AlertDescription>{detail.error ? apiErrorMessage(detail.error) : "Data order tidak tersedia."}</AlertDescription></Alert><Button variant="outline" render={<Link href="/dashboard/retail" />}><ArrowLeft size={16} /> Kembali ke Layanan Retail</Button></div>;
 
-  const progressIndex = currentFlowIndex(status);
-  const currentStatus = statusInfo(status);
+  const progressIndex = currentFlowIndex(status, Boolean(handoverDocument), isInvoicePaid);
+  const currentStatus = statusInfo(isInvoicePaid && ["INVOICE_DITERBITKAN", "LUNAS"].includes(status) ? "LUNAS" : status);
 
   return <section className="hris-page space-y-6">
     <header className="flex flex-wrap items-center justify-between gap-4 !p-6 sm:!p-7">
@@ -338,7 +379,9 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
         {canManage && ["PENGUJIAN", "LHU_TERBIT"].includes(status) && <Button onClick={() => { setLhuNumber(String(job.nomor_lhu ?? "")); setLhuDate(String(job.tanggal_lhu ?? today()).slice(0, 10)); setLhuFile(null); setLhuError(""); setLhuOpen(true); }}><FileCheck2 size={15} /> Input LHU · Siap Ditagih</Button>}
         {canBill && status === "SIAP_DITAGIH" && !invoice.id && <Button onClick={issueInvoice}><FileText size={15} /> Terbitkan Invoice</Button>}
         {canSettle && status === "INVOICE_DITERBITKAN" && <Button onClick={recordReceipt}><CircleDollarSign size={15} /> Catat Penerimaan</Button>}
-        {canManage && ["LUNAS", "SELESAI"].includes(status) && job.file_lhu && <a className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90" href={fileUrl(String(job.file_lhu))} target="_blank" rel="noreferrer"><Printer size={15} /> Cetak / Serah Terima LHU</a>}
+        {canManage && isInvoicePaid && job.file_lhu && <a className="inline-flex h-9 items-center gap-2 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted" href={fileUrl(String(job.file_lhu))} target="_blank" rel="noreferrer"><Printer size={15} /> Lihat / Cetak LHU</a>}
+        {canRecordHandover && isInvoicePaid && job.file_lhu && !handoverDocument && <Button onClick={() => { setHandoverForm(blankHandover()); setHandoverFile(null); setHandoverError(""); setHandoverOpen(true); }}><FileCheck2 size={15} /> Catat Serah Terima</Button>}
+        {handoverDocument && <StatusBadge status="ok">Serah terima tercatat</StatusBadge>}
       </div>
       <div className="mt-5 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 sm:flex-row sm:items-center">
         <Wallet className="size-4 shrink-0 text-amber-700" />
@@ -375,8 +418,32 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
       </dl>
       <div className="flex flex-wrap gap-4 border-t px-5 py-4 text-sm sm:px-6">
         {job.file_tanda_terima && <a className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline" href={fileUrl(String(job.file_tanda_terima))} target="_blank" rel="noreferrer"><Paperclip size={14} /> Tanda terima perconto</a>}
-        {job.file_lhu && ["LUNAS", "SELESAI"].includes(status) && <a className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline" href={fileUrl(String(job.file_lhu))} target="_blank" rel="noreferrer"><FileText size={14} /> Buka file LHU</a>}
-        {job.file_lhu && !["LUNAS", "SELESAI"].includes(status) && <span className="inline-flex items-center gap-1.5 text-muted-foreground"><FileText size={14} /> File LHU tersedia setelah tagihan lunas</span>}
+      </div>
+    </section>
+
+    <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+      <div className="border-b bg-muted/30 px-5 py-4 sm:px-6">
+        <h2 className="font-semibold">Dokumen LHU dan serah terima</h2>
+        <p className="mt-1 text-sm text-muted-foreground">LHU dapat dibuka setelah invoice lunas. Bukti dan catatan serah terima tersimpan di sini.</p>
+      </div>
+      <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+        <div className="min-w-0 rounded-xl border p-4">
+          <p className="text-sm font-semibold">Laporan Hasil Uji (LHU)</p>
+          <p className="mt-1 text-xs text-muted-foreground">{job.nomor_lhu || "Nomor LHU belum dicatat"}{job.tanggal_lhu ? ` · ${dateLabel(job.tanggal_lhu)}` : ""}</p>
+          {job.file_lhu && isInvoicePaid
+            ? <a className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline" href={fileUrl(String(job.file_lhu))} target="_blank" rel="noreferrer"><FileText size={15} /> Buka / unduh LHU</a>
+            : <p className="mt-3 text-sm text-muted-foreground">{job.file_lhu ? "LHU tersedia setelah invoice lunas." : "File LHU belum diunggah."}</p>}
+        </div>
+        <div className="min-w-0 rounded-xl border p-4">
+          <p className="text-sm font-semibold">Bukti serah terima</p>
+          {handoverDocument
+            ? <>
+                <p className="mt-1 text-xs text-muted-foreground">Diterima oleh {handoverDocument.nama_penerima || "—"} · {dateLabel(handoverDocument.tanggal_serah_terima)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Dicatat oleh {handoverDocument.pengunggah?.nama || "—"} · {dateLabel(handoverDocument.created_at)}</p>
+                <a className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline" href={fileUrl(String(handoverDocument.path_file))} target="_blank" rel="noreferrer"><Paperclip size={15} /> {handoverDocument.nama_file || "Buka bukti serah terima"}</a>
+              </>
+            : <p className="mt-1 text-sm text-muted-foreground">Belum ada bukti serah terima yang diunggah.</p>}
+        </div>
       </div>
     </section>
 
@@ -500,6 +567,27 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
         </div>
       </div>
       {lhuError && <Alert variant="destructive"><AlertDescription>{lhuError}</AlertDescription></Alert>}
+    </Modal>
+
+    <Modal
+      open={handoverOpen}
+      onClose={() => setHandoverOpen(false)}
+      title="Catat Serah Terima LHU"
+      description={`${job.nomor_job} · LHU ${job.nomor_lhu ?? "—"}`}
+      size="md"
+      bodyClassName="space-y-4"
+      footer={<><Button variant="outline" onClick={() => setHandoverOpen(false)}>Batal</Button><Button disabled={handoverMutation.isPending} onClick={submitHandover}>{handoverMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <FileCheck2 size={15} />} Simpan Serah Terima</Button></>}
+    >
+      <p className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm text-emerald-900">Invoice sudah lunas. Catat penerima dan unggah tanda terima atau berita acara untuk menyelesaikan order.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm">Tanggal serah terima *<Input type="date" value={handoverForm.tanggal_serah_terima} onChange={(event) => setHandoverForm((current) => ({ ...current, tanggal_serah_terima: event.target.value }))} /></label>
+        <label className="grid gap-1 text-sm">Nama penerima *<Input maxLength={200} value={handoverForm.nama_penerima} onChange={(event) => setHandoverForm((current) => ({ ...current, nama_penerima: event.target.value }))} placeholder="Nama penerima LHU" /></label>
+        <div className="sm:col-span-2">
+          <DocumentUploadField label="Bukti serah terima *" accept=".pdf,.jpg,.jpeg,.png" value={handoverFile} onChange={setHandoverFile} disabled={handoverMutation.isPending} className="p-3 sm:p-3" />
+          <p className="mt-1 text-xs text-muted-foreground">Unggah tanda terima atau berita acara (PDF, JPG, atau PNG; maks. 10 MB).</p>
+        </div>
+      </div>
+      {handoverError && <Alert variant="destructive"><AlertDescription>{handoverError}</AlertDescription></Alert>}
     </Modal>
   </section>;
 }
