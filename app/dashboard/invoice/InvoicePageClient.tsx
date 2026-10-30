@@ -322,7 +322,7 @@ export default function InvoicePageClient() {
         open={creating}
         onClose={() => setCreating(false)}
         title={invoiceSource === "retail" ? "Buat Invoice Layanan Retail" : "Buat Invoice Proyek"}
-        description={invoiceSource === "retail" ? "Tagihan retail diterbitkan setelah unit pelaksana menyatakan job siap ditagih. Pembayaran penuh masuk ke OPS_KANTOR." : "Invoice langsung diterbitkan sebagai piutang. Status lunas dicatat Bendahara setelah pembayaran terkonfirmasi di rekening."}
+        description={invoiceSource === "retail" ? "Tagihan retail diterbitkan setelah LHU tercatat. Porsi penerimaan untuk OPS_KANTOR mengikuti persentase yang dikonfigurasi." : "Invoice langsung diterbitkan sebagai piutang. Status lunas dicatat Bendahara setelah pembayaran terkonfirmasi di rekening."}
         size="md"
         bodyClassName="space-y-4"
         footer={
