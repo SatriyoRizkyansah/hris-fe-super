@@ -17,15 +17,15 @@ import { apiData, setBrowserToken, useCurrentUser } from "@/lib/api/hooks";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, uploadHrisFile } from "@/lib/hris/api";
+import { apiErrorMessage, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
 import { formatRupiah } from "@/lib/hris/format";
 import type { BayarInvoiceDto, CreateInvoiceDto, CreateMutasiBankDto } from "@/lib/api/generated/api-generated";
 
 type Row = Record<string, any>;
-type InvoiceForm = { termin_id: string; nomor_invoice: string; tanggal_jatuh_tempo: string };
+type InvoiceForm = { termin_id: string; retail_job_id: string; nomor_invoice: string; tanggal_jatuh_tempo: string };
 type ReceiptForm = { rekening_id: string; tanggal_transaksi: string; nominal: string; referensi_bank: string; nama_pengirim: string; keterangan: string };
 const today = () => new Date().toISOString().slice(0, 10);
-const blankInvoice = (): InvoiceForm => ({ termin_id: "", nomor_invoice: "", tanggal_jatuh_tempo: "" });
+const blankInvoice = (): InvoiceForm => ({ termin_id: "", retail_job_id: "", nomor_invoice: "", tanggal_jatuh_tempo: "" });
 const blankReceipt = (): ReceiptForm => ({ rekening_id: "", tanggal_transaksi: today(), nominal: "", referensi_bank: "", nama_pengirim: "", keterangan: "" });
 const statusLabels: Record<string, string> = {
   DRAFT: "Draft",
@@ -60,7 +60,7 @@ const sourceLabel = (row: Row) => {
   const project = nested(termin ?? {}, "proyek");
   const retail = nested(row, "retail_job");
   if (project) return `${String(project.kode_proyek ?? "")} · ${String(project.nama_proyek ?? "Proyek")} · Termin ${String(termin?.nomor_termin ?? "")}`;
-  if (retail) return `${String(retail.nomor_job ?? "")} · ${String(retail.nama_pelanggan ?? "Retail")}`;
+  if (retail) return `${String(retail.nomor_job ?? "")} · ${String(retail.nama_pelanggan ?? "Retail")} · LHU ${String(retail.nomor_lhu ?? "—")}`;
   return "—";
 };
 
@@ -68,6 +68,7 @@ export default function InvoicePageClient() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("__all");
   const [creating, setCreating] = useState(false);
+  const [invoiceSource, setInvoiceSource] = useState<"project" | "retail">("project");
   const [settling, setSettling] = useState<Row | null>(null);
   const [detailInvoice, setDetailInvoice] = useState<Row | null>(null);
   const [invoiceForm, setInvoiceForm] = useState<InvoiceForm>(blankInvoice);
@@ -81,8 +82,10 @@ export default function InvoicePageClient() {
   useEffect(() => {
     if (!canCreate) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("createInvoice") !== "1") return;
-    setInvoiceForm({ ...blankInvoice(), termin_id: params.get("terminId") ?? "" });
+    const retail = params.get("createRetail") === "1";
+    if (params.get("createInvoice") !== "1" && !retail) return;
+    setInvoiceSource(retail ? "retail" : "project");
+    setInvoiceForm({ ...blankInvoice(), termin_id: params.get("terminId") ?? "", retail_job_id: params.get("retailJobId") ?? "" });
     setCreating(true);
     setError("");
     window.history.replaceState(window.history.state, "", window.location.pathname);
@@ -97,6 +100,23 @@ export default function InvoicePageClient() {
     },
   });
   const rows = useMemo(() => listRows(listQuery.data), [listQuery.data]);
+  useEffect(() => {
+    if (!canSettle || listQuery.isLoading || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const invoiceId = url.searchParams.get("settleInvoiceId");
+    if (!invoiceId) return;
+    const invoice = rows.find((row) => String(row.id) === invoiceId);
+    if (invoice && ["DITERBITKAN", "SEBAGIAN_DIBAYAR"].includes(String(invoice.status))) {
+      setSettling(invoice);
+      setReceiptForm({ ...blankReceipt(), nominal: String(Math.max(0, Number(invoice.nominal ?? 0) - Number(invoice.nominal_dibayar ?? 0))) });
+      setReceiptProof(null);
+      setError("");
+    } else {
+      setError(invoice ? "Invoice ini tidak menunggu pembayaran." : "Invoice tidak ditemukan pada daftar invoice.");
+    }
+    url.searchParams.delete("settleInvoiceId");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [canSettle, listQuery.isLoading, rows]);
   const terminQuery = use_query({
     tag: "masterProyek",
     method: "proyekControllerGetTerminQueue",
@@ -112,6 +132,14 @@ export default function InvoicePageClient() {
     if (item.proyek?.status_proyek !== "DISETUJUI_PIMPINAN" || item.status !== "MENUNGGU_INVOICE" || item.invoice) return false;
     return !(item.proyek?.termin_list ?? []).some((term: Row) => Number(term.nomor_termin) < Number(item.nomor_termin) && term.status !== "CAIR");
   });
+  const retailJobsQuery = use_query({
+    tag: "retail",
+    method: "retailJobsReadyForInvoice",
+    params: {},
+    enabled: creating && invoiceSource === "retail",
+    queryFn: async () => requestHrisApi("/api/retail/jobs?status=SIAP_DITAGIH&limit=100&page=1"),
+  });
+  const retailJobRows = listRows(retailJobsQuery.data);
   const accountsQuery = use_query({
     tag: "masterRekeningBank",
     method: "masterRekeningControllerFindAll",
@@ -128,7 +156,7 @@ export default function InvoicePageClient() {
         const item = payload(accountsQuery.data);
         return Array.isArray(item) ? item : [];
       })();
-  const invalidate = [apiQueryKeys.resource("keuanganInvoiceDanSettlement")];
+  const invalidate = [apiQueryKeys.resource("keuanganInvoiceDanSettlement"), apiQueryKeys.resource("retail")];
   const createMutation = use_mutation<unknown, Error, CreateInvoiceDto>({
     tag: "keuanganInvoiceDanSettlement",
     method: "invoiceControllerCreateInvoice",
@@ -169,13 +197,16 @@ export default function InvoicePageClient() {
     },
   });
   async function createInvoice() {
-    if (!invoiceForm.termin_id || !invoiceForm.nomor_invoice.trim()) {
-      setError("Termin dan nomor invoice wajib diisi.");
+    const sourceId = invoiceSource === "retail" ? invoiceForm.retail_job_id : invoiceForm.termin_id;
+    if (!sourceId || !invoiceForm.nomor_invoice.trim()) {
+      setError(`${invoiceSource === "retail" ? "Job retail" : "Termin"} dan nomor invoice wajib diisi.`);
       return;
     }
     try {
       setError("");
-      await createMutation.mutateAsync({ jenis: "PROYEK", termin_id: invoiceForm.termin_id, nomor_invoice: invoiceForm.nomor_invoice.trim(), tanggal_terbit: today(), tanggal_jatuh_tempo: invoiceForm.tanggal_jatuh_tempo || undefined });
+      await createMutation.mutateAsync(invoiceSource === "retail"
+        ? { jenis: "RETAIL", retail_job_id: invoiceForm.retail_job_id, nomor_invoice: invoiceForm.nomor_invoice.trim(), tanggal_terbit: today(), tanggal_jatuh_tempo: invoiceForm.tanggal_jatuh_tempo || undefined }
+        : { jenis: "PROYEK", termin_id: invoiceForm.termin_id, nomor_invoice: invoiceForm.nomor_invoice.trim(), tanggal_terbit: today(), tanggal_jatuh_tempo: invoiceForm.tanggal_jatuh_tempo || undefined });
     } catch (cause) {
       setError(apiErrorMessage(cause, "Invoice gagal dibuat."));
     }
@@ -226,6 +257,7 @@ export default function InvoicePageClient() {
         {canCreate && (
           <Button
             onClick={() => {
+              setInvoiceSource("project");
               setCreating(true);
               setInvoiceForm(blankInvoice());
               setError("");
@@ -289,8 +321,8 @@ export default function InvoicePageClient() {
       <Modal
         open={creating}
         onClose={() => setCreating(false)}
-        title="Buat Invoice Proyek"
-        description="Invoice langsung diterbitkan sebagai piutang. Status lunas dicatat Bendahara setelah pembayaran terkonfirmasi di rekening."
+        title={invoiceSource === "retail" ? "Buat Invoice Layanan Retail" : "Buat Invoice Proyek"}
+        description={invoiceSource === "retail" ? "Tagihan retail diterbitkan setelah unit pelaksana menyatakan job siap ditagih. Pembayaran penuh masuk ke OPS_KANTOR." : "Invoice langsung diterbitkan sebagai piutang. Status lunas dicatat Bendahara setelah pembayaran terkonfirmasi di rekening."}
         size="md"
         bodyClassName="space-y-4"
         footer={
@@ -298,22 +330,31 @@ export default function InvoicePageClient() {
             <Button variant="outline" onClick={() => setCreating(false)}>
               Batal
             </Button>
-            <Button disabled={createMutation.isPending || terminQuery.isLoading} onClick={createInvoice}>
+            <Button disabled={createMutation.isPending || (invoiceSource === "retail" ? retailJobsQuery.isLoading : terminQuery.isLoading)} onClick={createInvoice}>
               {createMutation.isPending && <LoaderCircle className="animate-spin" size={16} />} Terbitkan Invoice
             </Button>
           </>
         }
       >
         <label className="grid gap-1 text-sm">
-          Termin proyek *
-          <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={invoiceForm.termin_id} onChange={(event) => setInvoiceForm((current) => ({ ...current, termin_id: event.target.value }))}>
-            <option value="">Pilih termin</option>
-            {terminRows.map((item) => (
-              <option key={String(item.id)} value={String(item.id)}>
-                {String(item.proyek?.kode_proyek ?? "Proyek")} · Termin {String(item.nomor_termin)} · {formatRupiah(item.nilai_termin)}
-              </option>
-            ))}
-          </select>
+          {invoiceSource === "retail" ? (
+            <>
+              Job retail siap ditagih *
+              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={invoiceForm.retail_job_id} onChange={(event) => setInvoiceForm((current) => ({ ...current, retail_job_id: event.target.value }))}>
+                <option value="">Pilih job retail</option>
+                {retailJobRows.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.nomor_job)} · {String(item.nama_pelanggan)} · LHU {String(item.nomor_lhu ?? "—")} · {formatRupiah(item.nilai_layanan)}</option>)}
+              </select>
+              {retailJobsQuery.isError && <p className="text-xs text-destructive">{apiErrorMessage(retailJobsQuery.error, "Gagal memuat job retail siap ditagih.")}</p>}
+            </>
+          ) : (
+            <>
+              Termin proyek *
+              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={invoiceForm.termin_id} onChange={(event) => setInvoiceForm((current) => ({ ...current, termin_id: event.target.value }))}>
+                <option value="">Pilih termin</option>
+                {terminRows.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.proyek?.kode_proyek ?? "Proyek")} · Termin {String(item.nomor_termin)} · {formatRupiah(item.nilai_termin)}</option>)}
+              </select>
+            </>
+          )}
         </label>
         <label className="grid gap-1 text-sm">
           Nomor invoice *<Input maxLength={100} value={invoiceForm.nomor_invoice} onChange={(event) => setInvoiceForm((current) => ({ ...current, nomor_invoice: event.target.value }))} />
@@ -347,6 +388,8 @@ export default function InvoicePageClient() {
           const amount = Number(detailInvoice.nominal ?? 0);
           const remaining = Math.max(0, amount - paid);
           const project = nested(nested(detailInvoice, "termin") ?? {}, "proyek");
+          const retailJob = nested(detailInvoice, "retail_job");
+          const retailLines = Array.isArray(retailJob?.rincian_layanan) ? retailJob.rincian_layanan as Row[] : [];
           const payments = Array.isArray(detailInvoice.pembayaran) ? detailInvoice.pembayaran as Row[] : [];
           const invoiceStatus = String(detailInvoice.status ?? "");
           const invoiceTone = invoiceStatus === "LUNAS" ? "ok" : invoiceStatus === "DITOLAK_KEUANGAN" || invoiceStatus === "DIBATALKAN" ? "danger" : invoiceStatus === "SEBAGIAN_DIBAYAR" ? "warn" : "neutral";
@@ -371,6 +414,34 @@ export default function InvoicePageClient() {
                   ))}
                 </dl>
               </ModalSection>
+              {retailJob && (
+                <ModalSection title="Order retail dan rincian layanan" description="Detail klien, laporan hasil uji, dan nilai tagihan layanan retail.">
+                  <dl className="mb-3 grid gap-x-8 sm:grid-cols-2">
+                    {[
+                      ["No. job", retailJob.nomor_job ?? "—"],
+                      ["Nama klien", retailJob.nama_pelanggan ?? "—"],
+                      ["Nomor LHU", retailJob.nomor_lhu ?? "—"],
+                      ["Tanggal order", date(retailJob.tanggal_permohonan)],
+                      ["Unit pelaksana", retailJob.unit_pelaksana?.nama_unit ?? "—"],
+                      ["Jenis layanan / sampel", retailJob.detail_perconto ?? "—"],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="border-b py-2.5">
+                        <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+                        <dd className="mt-1 break-words text-sm text-foreground">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {retailLines.length ? (
+                    <div className="overflow-x-auto rounded-md border bg-white">
+                      <table className="w-full min-w-[36rem] text-left text-xs">
+                        <thead className="bg-muted/50 text-muted-foreground"><tr><th className="p-2.5">Layanan uji</th><th className="p-2.5">Parameter / metode</th><th className="p-2.5 text-right">Jumlah</th><th className="p-2.5 text-right">Tarif</th><th className="p-2.5 text-right">Subtotal</th></tr></thead>
+                        <tbody>{retailLines.map((line, index) => <tr key={String(line.id ?? index)} className="border-t"><td className="p-2.5">{String(line.nama_layanan ?? "—")}<span className="block text-muted-foreground">{String(line.satuan ?? "sampel")}</span></td><td className="p-2.5">{String(line.parameter_uji ?? "—")}<span className="block text-muted-foreground">{String(line.metode_uji ?? "Metode belum dicatat")}</span></td><td className="p-2.5 text-right tabular-nums">{String(line.jumlah ?? 0)}</td><td className="p-2.5 text-right tabular-nums">{formatRupiah(line.tarif)}</td><td className="p-2.5 text-right font-medium tabular-nums">{formatRupiah(line.subtotal)}</td></tr>)}</tbody>
+                        <tfoot className="border-t bg-muted/20"><tr><td colSpan={4} className="p-2.5 font-semibold">Total nilai layanan</td><td className="p-2.5 text-right font-semibold tabular-nums">{formatRupiah(retailJob.nilai_layanan)}</td></tr></tfoot>
+                      </table>
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground">Rincian layanan belum tersedia untuk job retail lama.</p>}
+                </ModalSection>
+              )}
               <ModalSection title="Status pencairan" description="Pembayaran dapat masuk bertahap sampai jumlah diterima sama dengan nilai tagihan.">
                 <MoneyFlow items={[
                   { label: "Nilai tagihan", amount },

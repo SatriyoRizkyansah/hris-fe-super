@@ -69,3 +69,16 @@ export async function uploadHrisFile(path: string, file: File, fields: Record<st
   if (!response.ok) throw new HrisApiError(body?.message ?? "Unggah dokumen gagal.", response.status);
   return body;
 }
+
+export async function requestHrisApi<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = browserToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? ""}${path}`, { ...init, headers });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new HrisApiError(body?.message ?? "Permintaan gagal diproses.", response.status);
+  return body as T;
+}
