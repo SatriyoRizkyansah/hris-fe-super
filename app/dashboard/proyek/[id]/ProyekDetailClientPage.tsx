@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, ExternalLink, FileText, LoaderCircle, Upload } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ExternalLink, LoaderCircle, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentLinks } from "@/components/common/DocumentLinks";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
+import { ProjectFinalReportButton } from "@/components/proyek/ProjectFinalReportButton";
 import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
@@ -219,7 +220,10 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             {project.kode_proyek} · Tahun {project.tahun_fiscal} · Diajukan {formatDate(project.created_at)}
           </p>
         </div>
-        <StatusBadge status={projectStatusTone(status)}>{humanizeStatus(status)}</StatusBadge>
+        <div className="flex flex-wrap items-center gap-2">
+          <ProjectFinalReportButton project={project} />
+          <StatusBadge status={projectStatusTone(status)}>{humanizeStatus(status)}</StatusBadge>
+        </div>
       </header>
       {detail.error && (
         <Alert variant="destructive">

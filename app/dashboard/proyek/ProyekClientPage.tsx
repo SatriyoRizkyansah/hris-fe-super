@@ -13,6 +13,7 @@ import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { DataTable } from "@/components/table/DataTable";
+import { ProjectFinalReportButton } from "@/components/proyek/ProjectFinalReportButton";
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -488,7 +489,7 @@ export default function ProyekClientPage() {
               {
                 key: "aksi",
                 header: "Aksi",
-                className: "min-w-[11rem] whitespace-nowrap text-right",
+                className: "min-w-[14rem] whitespace-nowrap text-right",
                 render: (row: ProyekItemDto) => {
                   const canValidateUmum = isUmumValidator && row.status_proyek === "MENUNGGU_VALIDASI_UMUM";
                   const canValidatePimpinan = isPimpinanValidator && row.status_proyek === "MENUNGGU_VALIDASI_PIMPINAN";
@@ -508,6 +509,7 @@ export default function ProyekClientPage() {
                           <Check size={15} /> Validasi
                         </Button>
                       )}
+                      <ProjectFinalReportButton compact project={row} />
                       <Button variant="ghost" size="sm" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
                         <Eye size={15} /> Detail
                       </Button>
