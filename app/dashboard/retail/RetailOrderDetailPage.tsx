@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Modal, ModalSection } from "@/components/modal/Modal";
+import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -486,7 +487,17 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">Nomor LHU *<Input maxLength={100} value={lhuNumber} onChange={(event) => setLhuNumber(event.target.value)} /></label>
         <label className="grid gap-1 text-sm">Tanggal LHU *<Input type="date" value={lhuDate} onChange={(event) => setLhuDate(event.target.value)} /></label>
-        <label className="grid gap-1 text-sm sm:col-span-2">File LHU *<Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setLhuFile(event.target.files?.[0] ?? null)} /></label>
+        <div className="sm:col-span-2">
+          <DocumentUploadField
+            label="File LHU *"
+            accept=".pdf,.jpg,.jpeg,.png"
+            value={lhuFile}
+            onChange={setLhuFile}
+            disabled={readyInvoiceMutation.isPending}
+            className="p-3 sm:p-3"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">Unggah file LHU dalam format PDF, JPG, atau PNG (maks. 10 MB).</p>
+        </div>
       </div>
       {lhuError && <Alert variant="destructive"><AlertDescription>{lhuError}</AlertDescription></Alert>}
     </Modal>

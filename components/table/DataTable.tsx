@@ -37,6 +37,9 @@ type DataTableProps<T> = {
   defaultFilterValue?: string;
   filterLabel?: string;
   filters?: TableFilter<T>[];
+  filterLayout?: "standard" | "balanced-4-3";
+  groupBy?: (row: T) => string;
+  groupHeader?: (rows: T[]) => ReactNode;
   filterValues?: Record<string, string>;
   toolbarActions?: ReactNode;
   remoteSearch?: boolean;
@@ -65,6 +68,9 @@ export function DataTable<T>({
   defaultFilterValue = ALL_FILTER_VALUE,
   filterLabel = "Status",
   filters = [],
+  filterLayout = "standard",
+  groupBy,
+  groupHeader,
   filterValues: controlledFilterValues,
   toolbarActions,
   remoteSearch = false,
@@ -110,6 +116,15 @@ export function DataTable<T>({
   const pageCount = Math.max(1, pagination?.totalPages ?? Math.ceil(filteredRows.length / rowsPerPage));
   const safePage = pagination ? Math.max(0, pagination.page - 1) : Math.min(page, pageCount - 1);
   const pageRows = useMemo(() => (pagination ? filteredRows : filteredRows.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)), [filteredRows, pagination, safePage, rowsPerPage]);
+  const rowGroups = useMemo(() => {
+    if (!groupBy) return [{ key: "__all", rows: pageRows }];
+    const grouped = new Map<string, T[]>();
+    for (const row of pageRows) {
+      const key = groupBy(row);
+      grouped.set(key, [...(grouped.get(key) ?? []), row]);
+    }
+    return grouped.size ? Array.from(grouped, ([key, groupedRows]) => ({ key, rows: groupedRows })) : [{ key: "__empty", rows: [] as T[] }];
+  }, [groupBy, pageRows]);
   const totalRows = pagination?.total ?? filteredRows.length;
   const startItem = totalRows ? safePage * (pagination?.pageSize ?? rowsPerPage) + 1 : 0;
   const endItem = Math.min(safePage * (pagination?.pageSize ?? rowsPerPage) + pageRows.length, totalRows);
@@ -139,43 +154,49 @@ export function DataTable<T>({
             setPage(0);
           }}
           onReset={resetFilters}
+          layout={filterLayout}
         />
       ) : null}
-      <div className="overflow-hidden rounded-xl border border-border bg-background shadow-sm">
-        <div className="w-full overflow-x-auto">
-          <Table className="min-w-[45rem]">
-            <TableHeader>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableHead className={column.className} key={column.key} scope="col">
-                    {column.header}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageRows.length ? (
-                pageRows.map((row, index) => (
-                  <TableRow key={rowKey(row, safePage * rowsPerPage + index)}>
+      <div className={groupBy ? "space-y-4" : "overflow-hidden rounded-xl border border-border bg-background shadow-sm"}>
+        {rowGroups.map((group) => (
+          <div key={group.key} className={groupBy ? "overflow-hidden rounded-xl border border-border bg-background shadow-sm" : ""}>
+            {groupBy && group.rows.length > 0 ? groupHeader?.(group.rows) : null}
+            <div className="w-full overflow-x-auto">
+              <Table className="min-w-[45rem]">
+                <TableHeader>
+                  <TableRow>
                     {columns.map((column) => (
-                      <TableCell className={column.className} key={column.key}>
-                        {column.render(row, safePage * rowsPerPage + index)}
-                      </TableCell>
+                      <TableHead className={column.className} key={column.key} scope="col">
+                        {column.header}
+                      </TableHead>
                     ))}
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="p-4">
-                    <EmptyData label={activeSearch || hasActiveFilters ? "Tidak ada hasil yang cocok." : emptyMessage} className="min-h-44 border-0 shadow-none" />
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {group.rows.length ? (
+                    group.rows.map((row, index) => (
+                      <TableRow key={rowKey(row, safePage * rowsPerPage + index)}>
+                        {columns.map((column) => (
+                          <TableCell className={column.className} key={column.key}>
+                            {column.render(row, safePage * rowsPerPage + index)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={columns.length} className="p-4">
+                        <EmptyData label={activeSearch || hasActiveFilters ? "Tidak ada hasil yang cocok." : emptyMessage} className="min-h-44 border-0 shadow-none" />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        ))}
         {!hidePagination && (
-          <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div className={`flex flex-col gap-3 border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between ${groupBy ? "rounded-xl border" : "border-t"}`}>
             <div className="flex items-center gap-2">
               <span>Baris per halaman</span>
               <Select value={String(pagination?.pageSize ?? rowsPerPage)} onValueChange={(value) => value && (pagination ? pagination.onPageSizeChange(Number(value)) : setRowsPerPage(Number(value)))}>

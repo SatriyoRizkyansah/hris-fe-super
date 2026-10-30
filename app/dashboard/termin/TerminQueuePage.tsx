@@ -5,14 +5,13 @@ import { useMemo, useState } from "react";
 import { Eye, FilePlus2, LockKeyhole } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/modal/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { DataTable } from "@/components/table";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeRows, unwrapEnvelope } from "@/lib/hris/api";
+import { apiErrorMessage, envelopeRows, requestHrisApi, unwrapEnvelope } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
 
 type TerminRow = {
@@ -41,11 +40,24 @@ type TerminRow = {
     ro_list?: { id: string; kode_ro: string; nama_ro: string; nilai_rencana: number; total_plafon: number; unit_koordinator?: { nama_unit?: string }; mak?: { kode_mak?: string; nama_mak?: string }; transaksi_list?: { debit: number }[] }[];
   };
 };
+type RetailBillingRow = {
+  id: string;
+  nomor_job: string;
+  nama_pelanggan: string;
+  nomor_lhu?: string | null;
+  tanggal_lhu?: string | null;
+  tanggal_perconto_diterima?: string | null;
+  nilai_layanan?: number | string;
+  tahun_fiscal?: number;
+  unit_pelaksana_id?: string;
+  unit_pelaksana?: { nama_unit?: string } | null;
+};
+type RetailUnitRow = { id: string; kode_unit: string; nama_unit: string };
 type TerminQueueQuery = { query?: string; status?: string; tahun_fiscal?: number; page: number; limit: number };
-type QueueResponse = { data?: TerminRow[]; pagination?: { page?: number; limit?: number; total_datas?: number; total_pages?: number } };
 const ALL = "__all";
+const SOURCES = { PROJECT: "project", RETAIL: "retail" } as const;
 const statusLabels: Record<string, string> = {
-  MENUNGGU_INVOICE: "Menunggu invoice",
+  MENUNGGU_INVOICE: "Siap diterbitkan invoice",
   DITOLAK_KEUANGAN: "Invoice ditolak",
   MENUNGGU_PEMBAYARAN: "Menunggu pembayaran",
   SEBAGIAN_DIBAYAR: "Dibayar sebagian",
@@ -53,16 +65,40 @@ const statusLabels: Record<string, string> = {
 };
 const statusOptions = Object.keys(statusLabels);
 
+function listRows<T>(value: unknown): T[] {
+  let current: any = value;
+  for (let index = 0; index < 5 && current && typeof current === "object"; index += 1) {
+    if (Array.isArray(current)) return current as T[];
+    if (Array.isArray(current.list)) return current.list as T[];
+    current = current.data;
+  }
+  return [];
+}
+
+function responseEnvelope(value: unknown) {
+  let current: any = value;
+  for (let index = 0; index < 5 && current && typeof current === "object"; index += 1) {
+    if (Array.isArray(current.data) || current.pagination) return current;
+    current = current.data;
+  }
+  return {};
+}
+
 export default function TerminQueuePage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(ALL);
   const [year, setYear] = useState(ALL);
+  const [source, setSource] = useState<string>(SOURCES.PROJECT);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [retailPage, setRetailPage] = useState(1);
+  const [retailPageSize, setRetailPageSize] = useState(10);
+  const [retailUnit, setRetailUnit] = useState(ALL);
   const [detail, setDetail] = useState<TerminRow | null>(null);
   const request = use_query({
     tag: "masterProyek",
     method: "terminQueue",
-    params: { search, status, year, page },
+    params: { search, status, year, page, pageSize },
     queryFn: async () => {
       setBrowserToken();
       const endpoint = browserApi.masterProyek.proyekControllerGetTerminQueue as unknown as (params: { query: TerminQueueQuery; format: "json" }) => Promise<unknown>;
@@ -72,7 +108,7 @@ export default function TerminQueuePage() {
           status: status === ALL ? undefined : status,
           tahun_fiscal: year === ALL ? undefined : Number(year),
           page,
-          limit: 20,
+          limit: pageSize,
         },
         format: "json",
       });
@@ -81,194 +117,295 @@ export default function TerminQueuePage() {
   const rows = envelopeRows<TerminRow>(request.data);
   const pagination = unwrapEnvelope<unknown>(request.data).pagination;
   const total = Number(pagination?.total_datas ?? rows.length);
-  const totalPages = Number(pagination?.total_pages ?? Math.max(1, Math.ceil(total / 20)));
-  const responseSummary = (unwrapEnvelope<unknown>(request.data) as unknown as { summary?: Record<string, number> }).summary ?? {};
+  const totalPages = Number(pagination?.total_pages ?? Math.max(1, Math.ceil(total / pageSize)));
+  const projectRows = useMemo(() => [...rows].sort((left, right) => {
+    const projectOrder = (left.proyek?.nama_proyek ?? "").localeCompare(right.proyek?.nama_proyek ?? "", "id");
+    return projectOrder || left.nomor_termin - right.nomor_termin;
+  }), [rows]);
+  const unitsQuery = use_query({
+    tag: "retail",
+    method: "retailBillingUnits",
+    params: {},
+    queryFn: async () => requestHrisApi("/api/retail/units"),
+  });
+  const retailUnits = listRows<RetailUnitRow>(unitsQuery.data);
+  const retailUnitOptions = useMemo(() => retailUnits.map((unit) => ({
+    value: unit.id,
+    label: [unit.kode_unit, unit.nama_unit].filter(Boolean).join(" · "),
+  })), [retailUnits]);
+  const retailQuery = use_query({
+    tag: "retail",
+    method: "retailBillingQueue",
+    params: { search, year, page: retailPage, pageSize: retailPageSize, retailUnit },
+    queryFn: async () => {
+      const query = new URLSearchParams({ status: "SIAP_DITAGIH", page: String(retailPage), limit: String(retailPageSize) });
+      if (search.trim()) query.set("query", search.trim());
+      if (year !== ALL) query.set("tahun_fiscal", year);
+      if (retailUnit !== ALL) query.set("unit_pelaksana_id", retailUnit);
+      return requestHrisApi(`/api/retail/jobs?${query.toString()}`);
+    },
+  });
+  const retailRows = listRows<RetailBillingRow>(retailQuery.data);
+  const retailPagination = responseEnvelope(retailQuery.data).pagination;
+  const retailTotal = Number(retailPagination?.total_datas ?? retailRows.length);
+  const retailTotalPages = Number(retailPagination?.total_pages ?? Math.max(1, Math.ceil(retailTotal / retailPageSize)));
   const years = useMemo(() => Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i)), []);
-  const projectGroups = useMemo(() => {
-    const groups = new Map<string, TerminRow[]>();
-    for (const row of rows) {
-      const key = row.proyek?.id ?? `unknown-${row.id}`;
-      groups.set(key, [...(groups.get(key) ?? []), row]);
-    }
-    return Array.from(groups.entries()).map(([key, projectRows]) => ({ key, rows: projectRows.sort((a, b) => a.nomor_termin - b.nomor_termin), project: projectRows[0]?.proyek }));
-  }, [rows]);
   const priorUnpaid = (row: TerminRow) => row.proyek?.termin_list?.find((term) => term.nomor_termin < row.nomor_termin && term.status !== "CAIR");
   return (
     <section className="hris-page space-y-5">
       <header>
-        <h1 className="text-2xl font-bold">Antrean Termin</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Billing menerbitkan invoice dari jadwal termin. Bendahara mencocokkan dana masuk; termin cair setelah invoice lunas.</p>
+        <h1 className="text-2xl font-bold">Penagihan</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Kelola sumber tagihan proyek dan layanan retail. KEU_BILLING menerbitkan invoice dari termin proyek atau order retail yang sudah siap ditagih.</p>
       </header>
-      {request.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Gagal memuat antrean termin</AlertTitle>
-          <AlertDescription>{apiErrorMessage(request.error)}</AlertDescription>
-        </Alert>
-      )}
-      <div className="termin-summary grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardContent className="termin-summary-content">
-            <p className="text-sm text-muted-foreground">Total antrean</p>
-            <p className="mt-1 text-2xl font-bold">{request.isLoading ? "—" : Object.values(responseSummary).reduce((sum, count) => sum + Number(count || 0), 0)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="termin-summary-content">
-            <p className="text-sm text-muted-foreground">Menunggu invoice</p>
-            <p className="mt-1 text-2xl font-bold">{request.isLoading ? "—" : Number(responseSummary.MENUNGGU_INVOICE ?? 0)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="termin-summary-content">
-            <p className="text-sm text-muted-foreground">Sudah cair</p>
-            <p className="mt-1 text-2xl font-bold">{request.isLoading ? "—" : Number(responseSummary.CAIR ?? 0)}</p>
-          </CardContent>
-        </Card>
-      </div>
       <section className="overflow-hidden rounded-xl border border-border bg-background shadow-sm">
         <div className="space-y-5 p-4 sm:p-5">
-          <div className="space-y-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <label className="relative block w-full sm:max-w-md">
-                <Input
-                  type="search"
-                  value={search}
-                  onChange={(event) => {
-                    setSearch(event.target.value);
-                    setPage(1);
-                  }}
-                  placeholder="Cari kode atau nama proyek…"
-                  aria-label="Cari proyek"
-                  className="h-9 rounded-xl"
-                />
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <select
-                  aria-label="Filter status"
-                  value={status}
-                  onChange={(event) => {
-                    setStatus(event.target.value);
-                    setPage(1);
-                  }}
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-                >
-                  <option value={ALL}>Semua status</option>
-                  {statusOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {statusLabels[value]}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label="Filter tahun fiskal"
-                  value={year}
-                  onChange={(event) => {
-                    setYear(event.target.value);
-                    setPage(1);
-                  }}
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-                >
-                  <option value={ALL}>Semua tahun</option>
-                  {years.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+          <div role="tablist" aria-label="Sumber penagihan" className="inline-flex rounded-lg border bg-muted/40 p-1">
+            <button
+              id="tab-termin-proyek"
+              type="button"
+              role="tab"
+              aria-selected={source === SOURCES.PROJECT}
+              aria-controls="panel-termin-proyek"
+              onClick={() => setSource(SOURCES.PROJECT)}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${source === SOURCES.PROJECT ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Termin Proyek
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{request.isFetching ? "…" : total}</span>
+            </button>
+            <button
+              id="tab-tagihan-retail"
+              type="button"
+              role="tab"
+              aria-selected={source === SOURCES.RETAIL}
+              aria-controls="panel-tagihan-retail"
+              onClick={() => setSource(SOURCES.RETAIL)}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${source === SOURCES.RETAIL ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Tagihan Retail
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{retailQuery.isFetching ? "…" : retailTotal}</span>
+            </button>
           </div>
-          {request.isLoading ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">Memuat antrean termin…</p>
-          ) : projectGroups.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">Tidak ada termin pada filter ini.</p>
-          ) : (
-            <div className="space-y-4">
-              {projectGroups.map(({ key, rows: projectRows, project }) => {
-                const cair = projectRows.filter((row) => row.status === "CAIR").length;
-                return (
-                  <section key={key} className="overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+
+          {source === SOURCES.PROJECT ? (
+            <div id="panel-termin-proyek" role="tabpanel" aria-labelledby="tab-termin-proyek">
+              {request.error && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertTitle>Gagal memuat termin proyek</AlertTitle>
+                  <AlertDescription>{apiErrorMessage(request.error)}</AlertDescription>
+                </Alert>
+              )}
+              <DataTable<TerminRow>
+                rows={projectRows}
+                rowKey={(row) => row.id}
+                groupBy={(row) => row.proyek?.id ?? `unknown-${row.id}`}
+                groupHeader={(groupRows) => {
+                  const project = groupRows[0]?.proyek;
+                  const allTerms = project?.termin_list ?? [];
+                  const paidTerms = allTerms.length
+                    ? allTerms.filter((term) => term.status === "CAIR").length
+                    : groupRows.filter((term) => term.status === "CAIR").length;
+                  const termCount = allTerms.length || groupRows.length;
+                  return (
                     <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
                       <div>
                         <h2 className="font-semibold">{project?.nama_proyek ?? "Proyek tidak diketahui"}</h2>
-                        <p className="text-xs text-muted-foreground">
-                          {project?.kode_proyek ?? "—"} · TA {project?.tahun_fiscal ?? "—"} · {projectRows.length} termin
-                        </p>
+                        <p className="text-xs text-muted-foreground">{project?.kode_proyek ?? "—"} · TA {project?.tahun_fiscal ?? "—"} · {termCount} termin</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={projectStatusTone(project?.status_proyek)}>{humanizeStatus(project?.status_proyek)}</StatusBadge>
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                          {cair}/{projectRows.length} cair
-                        </span>
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{paidTerms}/{termCount} cair</span>
                       </div>
                     </header>
-                    <div>
-                      <div className="hidden grid-cols-[minmax(7rem,0.8fr)_minmax(9rem,1.1fr)_minmax(8rem,0.9fr)_minmax(12rem,1.3fr)_auto] items-center gap-4 bg-muted/20 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid">
-                        <span>Termin</span>
-                        <span>Nilai tagihan</span>
-                        <span>Terdaftar</span>
-                        <span>Status proses</span>
-                        <span className="text-right">Aksi</span>
+                  );
+                }}
+                remoteSearch
+                searchValue={search}
+                searchPlaceholder="Cari kode atau nama proyek…"
+                onSearchChange={(value) => {
+                  setSearch(value);
+                  setPage(1);
+                  setRetailPage(1);
+                }}
+                rowsPerPageOptions={[10, 20, 50]}
+                filters={[
+                  { field: "status", label: "Status tagihan", options: statusOptions.map((value) => ({ value, label: statusLabels[value] })) },
+                  { field: "tahun_fiscal", label: "Tahun fiskal", options: years.map((value) => ({ value, label: value })) },
+                ]}
+                filterValues={{ status, tahun_fiscal: year }}
+                onFilterChange={(field, value) => {
+                  if (field === "status") setStatus(value);
+                  if (field === "tahun_fiscal") {
+                    setYear(value);
+                    setRetailPage(1);
+                  }
+                  setPage(1);
+                }}
+                pagination={{
+                  page,
+                  pageSize,
+                  total,
+                  totalPages,
+                  onPageChange: setPage,
+                  onPageSizeChange: (value) => {
+                    setPageSize(value);
+                    setPage(1);
+                  },
+                }}
+                emptyMessage={request.isLoading ? "Memuat termin proyek…" : "Tidak ada termin proyek pada filter ini."}
+                columns={[
+                  {
+                    key: "termin",
+                    header: "Termin / Persentase",
+                    className: "min-w-[11rem] whitespace-nowrap",
+                    render: (row) => (
+                      <div>
+                        <p className="font-medium">Termin {row.nomor_termin}</p>
+                        <p className="text-xs text-muted-foreground">{Number(row.persentase ?? 0)}% dari kontrak</p>
                       </div>
-                      {projectRows.map((row) => {
-                        const blocked = priorUnpaid(row);
-                        const canProcess = project?.status_proyek === "DISETUJUI_PIMPINAN" && row.status === "MENUNGGU_INVOICE" && !row.invoice && !blocked;
-                        return (
-                          <div key={row.id} className="grid gap-3 border-t px-4 py-4 hover:bg-muted/20 lg:grid-cols-[minmax(7rem,0.8fr)_minmax(9rem,1.1fr)_minmax(8rem,0.9fr)_minmax(12rem,1.3fr)_auto] lg:items-center lg:gap-4">
-                            <div>
-                              <p className="font-semibold">Termin {row.nomor_termin}</p>
-                              <p className="text-xs text-muted-foreground">{Number(row.persentase ?? 0)}% dari kontrak</p>
-                            </div>
-                            <p className="font-semibold tabular-nums">{formatRupiah(row.nilai_termin ?? row.nilai ?? row.nominal ?? 0)}</p>
-                            <p className="text-sm text-muted-foreground">{formatDate(row.created_at)}</p>
-                            <div>
-                              <StatusBadge status={projectStatusTone(row.status)}>
-                                <span className="whitespace-normal">{statusLabels[row.status] ?? humanizeStatus(row.status)}</span>
-                              </StatusBadge>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                              <Button size="sm" variant="outline" onClick={() => setDetail(row)}>
-                                <Eye size={14} /> Rincian
-                              </Button>
-                              {canProcess && (
-                                <Button
-                                  size="sm"
-                                  render={<Link href={`/dashboard/invoice?createInvoice=1&terminId=${encodeURIComponent(row.id)}`} />}
-                                >
-                                  <FilePlus2 size={14} /> Proses Invoice
-                                </Button>
-                              )}
-                              {blocked && row.status === "MENUNGGU_INVOICE" && !row.invoice && (
-                                <span className="text-xs text-muted-foreground">Menunggu Termin {blocked.nomor_termin} cair</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })}
+                    ),
+                  },
+                  { key: "nilai", header: "Nilai tagihan", className: "min-w-[10rem] whitespace-nowrap tabular-nums", render: (row) => formatRupiah(row.nilai_termin ?? row.nilai ?? row.nominal ?? 0) },
+                  { key: "tanggal", header: "Terdaftar", className: "min-w-[8rem] whitespace-nowrap", render: (row) => formatDate(row.created_at) },
+                  {
+                    key: "status",
+                    header: "Status",
+                    className: "min-w-[10rem]",
+                    render: (row) => <StatusBadge status={projectStatusTone(row.status)}>{statusLabels[row.status] ?? humanizeStatus(row.status)}</StatusBadge>,
+                  },
+                  {
+                    key: "aksi",
+                    header: "Aksi",
+                    className: "min-w-[15rem] whitespace-nowrap text-right",
+                    render: (row) => {
+                      const blocked = priorUnpaid(row);
+                      const canProcess = row.proyek?.status_proyek === "DISETUJUI_PIMPINAN" && row.status === "MENUNGGU_INVOICE" && !row.invoice && !blocked;
+                      return (
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setDetail(row)}>
+                            <Eye size={14} /> Rincian
+                          </Button>
+                          {canProcess && (
+                            <Button size="sm" render={<Link href={`/dashboard/invoice?createInvoice=1&terminId=${encodeURIComponent(row.id)}`} />}>
+                              <FilePlus2 size={14} /> Terbitkan Invoice
+                            </Button>
+                          )}
+                          {blocked && row.status === "MENUNGGU_INVOICE" && !row.invoice && (
+                            <span className="max-w-28 whitespace-normal text-left text-xs text-muted-foreground">Menunggu Termin {blocked.nomor_termin} cair</span>
+                          )}
+                        </div>
+                      );
+                    },
+                  },
+                ]}
+              />
+            </div>
+          ) : (
+            <div id="panel-tagihan-retail" role="tabpanel" aria-labelledby="tab-tagihan-retail">
+              {retailQuery.error && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertTitle>Gagal memuat tagihan retail</AlertTitle>
+                  <AlertDescription>{apiErrorMessage(retailQuery.error)}</AlertDescription>
+                </Alert>
+              )}
+              {unitsQuery.error && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertTitle>Gagal memuat unit pelaksana</AlertTitle>
+                  <AlertDescription>{apiErrorMessage(unitsQuery.error)}</AlertDescription>
+                </Alert>
+              )}
+              <p className="mb-3 text-sm text-muted-foreground">Order retail tampil setelah LHU dicatat dan unit mengonfirmasi status siap ditagih.</p>
+              <DataTable<RetailBillingRow>
+                title="Tagihan layanan retail"
+                rows={retailRows}
+                rowKey={(row) => row.id}
+                remoteSearch
+                searchValue={search}
+                searchPlaceholder="Cari nomor job, klien, atau LHU…"
+                onSearchChange={(value) => {
+                  setSearch(value);
+                  setRetailPage(1);
+                  setPage(1);
+                }}
+                rowsPerPageOptions={[10, 20, 50]}
+                filters={[
+                  { field: "tahun_fiscal", label: "Tahun fiskal", options: years.map((value) => ({ value, label: value })) },
+                  { field: "unit_pelaksana_id", label: "Unit pelaksana", options: retailUnitOptions },
+                ]}
+                filterValues={{ tahun_fiscal: year, unit_pelaksana_id: retailUnit }}
+                onFilterChange={(field, value) => {
+                  if (field === "tahun_fiscal") {
+                    setYear(value);
+                    setPage(1);
+                  }
+                  if (field === "unit_pelaksana_id") setRetailUnit(value);
+                  setRetailPage(1);
+                }}
+                pagination={{
+                  page: retailPage,
+                  pageSize: retailPageSize,
+                  total: retailTotal,
+                  totalPages: retailTotalPages,
+                  onPageChange: setRetailPage,
+                  onPageSizeChange: (value) => {
+                    setRetailPageSize(value);
+                    setRetailPage(1);
+                  },
+                }}
+                emptyMessage={retailQuery.isLoading ? "Memuat order retail…" : "Tidak ada order retail yang siap ditagih."}
+                columns={[
+                  {
+                    key: "order",
+                    header: "Order / Klien",
+                    className: "min-w-[14rem]",
+                    render: (job) => (
+                      <div>
+                        <p className="font-medium">{job.nomor_job}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{job.nama_pelanggan}</p>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "lhu",
+                    header: "LHU / Unit",
+                    className: "min-w-[14rem]",
+                    render: (job) => (
+                      <div>
+                        <p>LHU {job.nomor_lhu || "—"}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{job.unit_pelaksana?.nama_unit ?? "Unit belum tersedia"}</p>
+                      </div>
+                    ),
+                  },
+                  { key: "nominal", header: "Nilai tagihan", className: "min-w-[10rem] whitespace-nowrap tabular-nums", render: (job) => formatRupiah(job.nilai_layanan ?? 0) },
+                  {
+                    key: "siap_ditagih",
+                    header: "Siap ditagih",
+                    className: "min-w-[10rem]",
+                    render: (job) => (
+                      <div>
+                        <StatusBadge status="warn">Siap ditagih</StatusBadge>
+                        <p className="mt-1 text-xs text-muted-foreground">{formatDate(job.tanggal_lhu ?? job.tanggal_perconto_diterima)}</p>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "aksi",
+                    header: "Aksi",
+                    className: "min-w-[15rem] whitespace-nowrap text-right",
+                    render: (job) => (
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" render={<Link href={`/dashboard/retail/${encodeURIComponent(job.id)}`} />}>
+                          <Eye size={14} /> Rincian
+                        </Button>
+                        <Button size="sm" render={<Link href={`/dashboard/invoice?createRetail=1&retailJobId=${encodeURIComponent(job.id)}`} />}>
+                          <FilePlus2 size={14} /> Terbitkan Invoice
+                        </Button>
+                      </div>
+                    ),
+                  },
+                ]}
+              />
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-sm text-muted-foreground">
-            <span>
-              {total} termin · {projectGroups.length} proyek
-            </span>
-            <div className="flex items-center gap-3">
-              <span>
-                Halaman {page} / {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                  Sebelumnya
-                </Button>
-                <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                  Berikutnya
-                </Button>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
       <Modal open={Boolean(detail)} onClose={() => setDetail(null)} title="Rincian termin" size="lg">

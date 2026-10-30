@@ -9,7 +9,8 @@ export type TableFilter = { field: string; label: string; options: FilterOption[
 
 const ALL_FILTER_VALUE = "__all";
 
-export function DataTableFilters({ filters, values, onChange, onReset }: { filters: TableFilter[]; values: Record<string, string>; onChange: (field: string, value: string) => void; onReset: () => void }) {
+export function DataTableFilters({ filters, values, onChange, onReset, layout = "standard" }: { filters: TableFilter[]; values: Record<string, string>; onChange: (field: string, value: string) => void; onReset: () => void; layout?: "standard" | "balanced-4-3" }) {
+  const balancedFourThree = layout === "balanced-4-3" && filters.length === 7;
   const activeCount = filters.length;
   const optionsWithAll = (options: FilterOption[]) => {
     const allOption = options.find((option) => option.value === ALL_FILTER_VALUE);
@@ -28,14 +29,16 @@ export function DataTableFilters({ filters, values, onChange, onReset }: { filte
           <RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset Filters
         </Button>
       </div>
-      <div className={`grid min-w-0 gap-3 [&>*]:min-w-0 ${filters.length > 1 ? "sm:grid-cols-2" : ""}`}>
+      <div className={`grid min-w-0 gap-3 [&>*]:min-w-0 ${balancedFourThree ? "sm:grid-cols-2 lg:grid-cols-12" : filters.length > 1 ? "sm:grid-cols-2" : ""}`}>
         {filters.map((filter, index) => {
           const options = optionsWithAll(filter.options);
           const selectedValue = values[filter.field] ?? ALL_FILTER_VALUE;
           const isOnlyFilterOnLastRow = filters.length > 1 && filters.length % 2 === 1 && index === filters.length - 1;
+          const balancedSpanClass = balancedFourThree ? `${index < 4 ? "lg:col-span-3" : "lg:col-span-4"} ${index === 6 ? "sm:col-span-2" : ""}` : "";
+          const lastRowClass = balancedFourThree ? balancedSpanClass : isOnlyFilterOnLastRow ? "sm:col-span-2" : "";
 
           return (
-            <div key={filter.field} className={`min-w-0 space-y-1.5 ${isOnlyFilterOnLastRow ? "sm:col-span-2" : ""}`}>
+            <div key={filter.field} className={`min-w-0 space-y-1.5 ${lastRowClass}`}>
               <p className="px-1 text-xs font-semibold text-foreground">{filter.label}</p>
               <FilterCombobox options={options} value={selectedValue} onValueChange={(value) => onChange(filter.field, value)} label={filter.label} />
             </div>

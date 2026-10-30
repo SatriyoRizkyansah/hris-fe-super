@@ -118,6 +118,10 @@ function serviceStatus(job: Row) {
 
 export default function RetailClientPage() {
   const [search, setSearch] = useState("");
+  const [serviceFilter, setServiceFilter] = useState("__all");
+  const [billingFilter, setBillingFilter] = useState("__all");
+  const [unitFilter, setUnitFilter] = useState("__all");
+  const [fiscalYearFilter, setFiscalYearFilter] = useState("__all");
   const [orderOpen, setOrderOpen] = useState(false);
   const [orderForm, setOrderForm] = useState<OrderForm>(blankOrder);
   const [error, setError] = useState("");
@@ -142,10 +146,41 @@ export default function RetailClientPage() {
   const jobsQuery = use_query({
     tag: "retail",
     method: "retailJobs",
-    params: { search },
-    queryFn: async ({ search: query }) => requestHrisApi(`/api/retail/jobs?limit=100&page=1${query ? `&query=${encodeURIComponent(query)}` : ""}`),
+    params: { search, serviceFilter, billingFilter, unitFilter, fiscalYearFilter },
+    queryFn: async ({ search: query, serviceFilter: serviceStatus, billingFilter: invoiceStatus, unitFilter: unitId, fiscalYearFilter: year }) => {
+      const params = new URLSearchParams({ limit: "100", page: "1" });
+      if (query) params.set("query", query);
+      if (serviceStatus !== "__all") params.set("status", serviceStatus);
+      if (invoiceStatus !== "__all") params.set("status_invoice", invoiceStatus);
+      if (unitId !== "__all") params.set("unit_pelaksana_id", unitId);
+      if (year !== "__all") params.set("tahun_fiscal", year);
+      return requestHrisApi(`/api/retail/jobs?${params.toString()}`);
+    },
   });
   const jobs = useMemo(() => listRows(jobsQuery.data), [jobsQuery.data]);
+  const serviceFilterOptions = [
+    { value: "PERMOHONAN_DITERIMA", label: "Permohonan diterima" },
+    { value: "PERCONTO_DITERIMA", label: "Perconto diterima" },
+    { value: "PENGUJIAN", label: "Dalam pengujian" },
+    { value: "LHU_TERBIT", label: "LHU terbit" },
+    { value: "SIAP_DITAGIH", label: "Siap ditagih" },
+    { value: "INVOICE_DITERBITKAN", label: "Invoice diterbitkan" },
+    { value: "LUNAS", label: "Lunas" },
+    { value: "SELESAI", label: "Selesai" },
+    { value: "DIBATALKAN", label: "Dibatalkan" },
+  ];
+  const billingFilterOptions = [
+    { value: "DRAFT", label: "Belum ditagihkan" },
+    { value: "DITERBITKAN", label: "Ditagihkan / dibayar sebagian" },
+    { value: "LUNAS", label: "Lunas" },
+    { value: "DIBATALKAN", label: "Invoice dibatalkan" },
+  ];
+  const fiscalYearOptions = useMemo(() => {
+    const years = new Set(jobs.map((job) => Number(job.tahun_fiscal)).filter((year) => year > 0));
+    years.add(new Date().getFullYear());
+    if (fiscalYearFilter !== "__all") years.add(Number(fiscalYearFilter));
+    return [...years].sort((a, b) => b - a).map((year) => ({ value: String(year), label: `TA ${year}` }));
+  }, [jobs, fiscalYearFilter]);
 
   const summaryQuery = use_query({
     tag: "retail",
@@ -290,6 +325,19 @@ export default function RetailClientPage() {
           searchValue={search}
           searchPlaceholder="Cari nomor job, LHU, atau nama klien..."
           onSearchChange={setSearch}
+          filters={[
+            { field: "status", label: "Progres layanan", options: serviceFilterOptions },
+            { field: "status_invoice", label: "Status tagihan", options: billingFilterOptions },
+            { field: "unit_pelaksana_id", label: "Unit pelaksana", options: unitOptions },
+            { field: "tahun_fiscal", label: "Tahun fiskal", options: fiscalYearOptions },
+          ]}
+          filterValues={{ status: serviceFilter, status_invoice: billingFilter, unit_pelaksana_id: unitFilter, tahun_fiscal: fiscalYearFilter }}
+          onFilterChange={(field, value) => {
+            if (field === "status") setServiceFilter(value);
+            if (field === "status_invoice") setBillingFilter(value);
+            if (field === "unit_pelaksana_id") setUnitFilter(value);
+            if (field === "tahun_fiscal") setFiscalYearFilter(value);
+          }}
           emptyMessage={jobsQuery.isLoading ? "Memuat order retail..." : "Belum ada order layanan retail."}
           columns={orderColumns}
         />

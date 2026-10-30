@@ -42,7 +42,7 @@ export default function DanaOperasionalClientPage() {
           ...item,
           plafond: filtered.reduce((sum, row) => sum + Number(row.total_plafon || 0), 0),
           spent: filtered.reduce((sum, row) => sum + Number(row.total_terpakai || 0), 0),
-          balance: filtered.reduce((sum, row) => sum + Number(row.sisa_saldo ?? row.total_plafon ?? 0), 0),
+          balance: filtered.reduce((sum, row) => sum + Number(row.sisa_saldo ?? 0), 0),
           count: filtered.length,
         };
       }),
@@ -72,17 +72,17 @@ export default function DanaOperasionalClientPage() {
                 <p className="text-[10px] font-bold uppercase leading-tight tracking-wide text-muted-foreground">{item.label}</p>
                 <span className="shrink-0 rounded-full border bg-background/80 px-1.5 py-0.5 text-[10px] font-bold">{item.share}</span>
               </div>
-              <p className="mt-2 break-words text-base font-bold leading-tight">{query.isLoading ? "Memuat…" : formatRupiah(item.plafond)}</p>
-              <p className="mt-1 text-[10px] text-muted-foreground">Plafond · {item.count} wallet</p>
+              <p className="mt-2 break-words text-base font-bold leading-tight">{query.isLoading ? "Memuat…" : formatRupiah(item.balance)}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">Sisa saldo · {item.count} wallet</p>
               <div className="mt-2 flex items-center justify-between border-t border-current/10 pt-2 text-[10px]">
                 <span className="inline-flex items-center gap-1 text-muted-foreground">
-                  <Wallet size={13} /> Terpakai
+                  <Wallet size={13} /> Plafond
                 </span>
-                <strong>{formatRupiah(item.spent)}</strong>
+                <strong>{formatRupiah(item.plafond)}</strong>
               </div>
               <div className="mt-1 flex justify-between gap-1 text-[10px] text-muted-foreground">
-                <span>Sisa saldo</span>
-                <strong className="text-right text-foreground">{formatRupiah(item.balance)}</strong>
+                <span>Terpakai</span>
+                <strong className="text-right text-foreground">{formatRupiah(item.spent)}</strong>
               </div>
             </CardContent>
           </Card>
