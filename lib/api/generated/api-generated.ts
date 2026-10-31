@@ -231,6 +231,8 @@ export interface ProyekItemDto {
   pj_1?: object | null;
   pj_2?: object | null;
   nama_client?: object | null;
+  no_kontrak?: string | null;
+  unit_terlibat?: { id: string; kode_unit: string; nama_unit: string; peran: string }[];
   file_sk?: object | null;
   file_rab?: object | null;
   file_notulen?: object | null;
@@ -277,6 +279,7 @@ export interface RoInputDto {
   no_kontrak?: string;
   /** @example "JOB/2026/001" */
   nomor_job?: string;
+  unit_kolaborasi_ids?: string[];
   /** @example "Budi Santoso" */
   pj?: string;
   /** @example "SK-RO-001" */
@@ -295,6 +298,13 @@ export interface TerminInputDto {
    * @example 50
    */
   persentase: number;
+}
+
+export interface JobProyekInputDto {
+  /** Nomor Job bersama untuk satu atau beberapa RO */
+  nomor_job: string;
+  /** Alokasi RO milik Job ini */
+  ro_list: RoInputDto[];
 }
 
 export interface CreateProyekDto {
@@ -322,6 +332,12 @@ export interface CreateProyekDto {
   pj_2?: string;
   /** @example "PT Contoh Migas Indonesia" */
   nama_client?: string;
+  /** Nomor kontrak bersama untuk seluruh RO proyek */
+  no_kontrak?: string;
+  /** Unit pengusul proyek */
+  unit_pengusul_id?: string;
+  /** Unit koordinator yang berkolaborasi dalam proyek */
+  unit_kolaborasi_ids?: string[];
   /**
    * Nilai kontrak total
    * @example 1000000000
@@ -339,6 +355,8 @@ export interface CreateProyekDto {
   total_margin?: number;
   /** Daftar RO awal — total plafon harus = total_direct_cost */
   ro_list?: RoInputDto[];
+  /** Job proyek sebagai parent untuk satu atau beberapa alokasi RO */
+  job_list?: JobProyekInputDto[];
   /** Rencana termin; total persentase harus 100% */
   termin_list: TerminInputDto[];
 }
@@ -351,6 +369,7 @@ export interface UpdateProyekDto {
   pj_1?: string;
   pj_2?: string;
   nama_client?: string;
+  no_kontrak?: string;
   /** @example 1000000000 */
   nilai_kontrak?: number;
   /** @example 750000000 */
@@ -381,6 +400,7 @@ export interface RoItemDto {
   nama_proyek?: object | null;
   id_unit_koordinator?: object | null;
   nama_unit_koordinator?: object | null;
+  can_access_detail?: boolean;
   id_mak?: object | null;
   mak_id?: object | null;
   kode_mak?: object | null;
@@ -392,6 +412,10 @@ export interface RoItemDto {
   ro_asal_id?: object | null;
   no_kontrak?: object | null;
   nomor_job?: object | null;
+  job_proyek_id?: string | null;
+  job_proyek?: { id: string; nomor_job: string } | null;
+  jumlah_ro_split_nomor_job?: number;
+  unit_kolaborasi?: { id: string; kode_unit: string; nama_unit: string }[];
   pj?: object | null;
   file_rab?: object | null;
   file_sk?: object | null;
@@ -427,6 +451,7 @@ export interface CreateRoDto {
   no_kontrak?: string;
   /** @example "JOB/2026/001" */
   nomor_job?: string;
+  unit_kolaborasi_ids?: string[];
   /** @example "Budi Santoso" */
   pj?: string;
   /** @example "SK-RO-001" */
@@ -448,6 +473,7 @@ export interface UpdateRoDto {
   total_plafon?: number;
   no_kontrak?: string;
   nomor_job?: string;
+  unit_kolaborasi_ids?: string[];
   pj?: string;
   no_sk?: string;
   mulai_sk?: string;

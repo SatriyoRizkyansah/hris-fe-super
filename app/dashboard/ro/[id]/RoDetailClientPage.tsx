@@ -8,6 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/modal/Modal";
 import { Input } from "@/components/ui/input";
+import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { MoneyFlow } from "@/components/common/MoneyFlow";
@@ -17,16 +18,16 @@ import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeData, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
+import { apiErrorMessage, envelopeData, envelopeRows, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { RoItemDto, UpdateRoDto } from "@/lib/api/generated/api-generated";
 
 type AnyRow = Record<string, unknown>;
-type EditForm = { nama_ro: string; total_plafon: string; no_kontrak: string; nomor_job: string; pj: string; no_sk: string; mulai_sk: string; berakhir_sk: string; status_ro: "AKTIF" | "NONAKTIF" | "SELESAI" };
+type EditForm = { nama_ro: string; total_plafon: string; no_kontrak: string; nomor_job: string; unit_kolaborasi_ids: string[]; pj: string; no_sk: string; mulai_sk: string; berakhir_sk: string; status_ro: "AKTIF" | "NONAKTIF" | "SELESAI" };
 type TransactionForm = { nama_kegiatan: string; no_kuitansi: string; tanggal: string; debit: string; kredit: string; keterangan: string };
 type TransactionDirection = "debit" | "kredit";
-const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: "", nomor_job: "", pj: "", no_sk: "", mulai_sk: "", berakhir_sk: "", status_ro: "AKTIF" });
+const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: "", nomor_job: "", unit_kolaborasi_ids: [], pj: "", no_sk: "", mulai_sk: "", berakhir_sk: "", status_ro: "AKTIF" });
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
 function missing(row: RoItemDto) {
   return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", (row.id_proyek ? !row.nomor_job && !row.no_sk : !row.no_sk) && (row.id_proyek ? "Nomor Job" : "No SK"), !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean);
@@ -38,6 +39,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   const [tab, setTab] = useState<"ledger" | "alokasi">("ledger");
   const [editOpen, setEditOpen] = useState(false);
   const [edit, setEdit] = useState<EditForm>(emptyEdit);
+  const [collaboratorCandidate, setCollaboratorCandidate] = useState("");
   const [rabFile, setRabFile] = useState<File | null>(null);
   const [skFile, setSkFile] = useState<File | null>(null);
   const [uploadKind, setUploadKind] = useState<"rab" | "sk" | null>(null);
@@ -68,7 +70,19 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       return browserApi.masterRo.roControllerGetLedger(id);
     },
   });
+  const unitLookup = use_query({
+    tag: "masterUnitKerja",
+    method: "coordinator-options",
+    params: {},
+    queryFn: async () => {
+      setBrowserToken();
+      return browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 });
+    },
+  });
   const ro = envelopeData<RoItemDto>(detail.data);
+  const collaborationUnitOptions = envelopeRows<AnyRow>(unitLookup.data)
+    .filter((unit) => (!unit.status_aktif || unit.status_aktif === "AKTIF") && String(unit.id) !== String(ro?.id_unit_koordinator ?? "") && !edit.unit_kolaborasi_ids.includes(String(unit.id)))
+    .map((unit) => ({ value: String(unit.id), label: `${String(unit.kode_unit ?? "")} — ${String(unit.nama_unit ?? "")}` }));
   const ledgerBody = envelopeData<AnyRow>(ledger.data) ?? {};
   const ledgerRows = Array.isArray(ledgerBody.list) ? (ledgerBody.list as AnyRow[]) : [];
   const allocations = Array.isArray((ro as unknown as AnyRow)?.alokasi_list) ? ((ro as unknown as AnyRow).alokasi_list as AnyRow[]) : [];
@@ -140,6 +154,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       total_plafon: String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro.total_plafon ?? ""),
       no_kontrak: String(ro.no_kontrak ?? ""),
       nomor_job: String(ro.nomor_job ?? ""),
+      unit_kolaborasi_ids: (ro.unit_kolaborasi ?? []).map((unit) => unit.id),
       pj: String(ro.pj ?? ""),
       no_sk: String(ro.no_sk ?? ""),
       mulai_sk: String(ro.mulai_sk ?? "").slice(0, 10),
@@ -165,6 +180,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         ...metadata,
         no_kontrak: edit.no_kontrak || undefined,
         nomor_job: edit.nomor_job || undefined,
+        unit_kolaborasi_ids: edit.unit_kolaborasi_ids,
         pj: edit.pj || undefined,
         no_sk: edit.no_sk || undefined,
         mulai_sk: edit.mulai_sk || undefined,
@@ -327,7 +343,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           <p className="text-xs text-muted-foreground">{Math.max(0, percent).toFixed(1)}% pagu telah digunakan atau dikomitmenkan.</p>
         </div>
       </section>
-      <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-2 xl:grid-cols-5">
         <p>
           <span className="block text-xs text-muted-foreground">Unit Koordinator</span>
           {String(ro.nama_unit_koordinator ?? "—")}
@@ -339,6 +355,11 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         <p>
           <span className="block text-xs text-muted-foreground">Nomor Job</span>
           {String(ro.nomor_job ?? "—")}
+          {Number(ro.jumlah_ro_split_nomor_job ?? 0) > 1 ? <span className="mt-1 block text-xs text-violet-700">RO split · {ro.jumlah_ro_split_nomor_job} bagian dengan nomor Job yang sama</span> : null}
+        </p>
+        <p>
+          <span className="block text-xs text-muted-foreground">Unit kolaborasi RO</span>
+          {ro.unit_kolaborasi?.length ? ro.unit_kolaborasi.map((unit) => unit.nama_unit).join(", ") : "Tidak ada"}
         </p>
         <p>
           <span className="block text-xs text-muted-foreground">SK</span>
@@ -470,6 +491,24 @@ export default function RoDetailClientPage({ id }: { id: string }) {
             Nomor Job
             <Input value={edit.nomor_job} onChange={(event) => setEdit((state) => ({ ...state, nomor_job: event.target.value }))} />
           </label>
+          <div className="grid gap-1.5 text-sm">
+            <span className="font-medium">Unit kolaborasi RO</span>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <FilterCombobox options={collaborationUnitOptions} value={collaboratorCandidate} onValueChange={setCollaboratorCandidate} label="Pilih unit kolaborasi" />
+              </div>
+              <Button type="button" variant="outline" disabled={!collaboratorCandidate} onClick={() => {
+                if (collaboratorCandidate) setEdit((state) => ({ ...state, unit_kolaborasi_ids: [...new Set([...state.unit_kolaborasi_ids, collaboratorCandidate])] }));
+                setCollaboratorCandidate("");
+              }}><Plus size={14} /> Tambah</Button>
+            </div>
+            {edit.unit_kolaborasi_ids.length ? <div className="flex flex-wrap gap-1.5">{edit.unit_kolaborasi_ids.map((unitId) => {
+              const unitName = envelopeRows<AnyRow>(unitLookup.data).find((unit) => String(unit.id) === unitId)?.nama_unit;
+              return <span key={unitId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{String(unitName ?? "Unit")}
+                <button type="button" aria-label="Hapus unit kolaborasi" className="rounded-full px-1 hover:bg-background" onClick={() => setEdit((state) => ({ ...state, unit_kolaborasi_ids: state.unit_kolaborasi_ids.filter((id) => id !== unitId) }))}>×</button>
+              </span>;
+            })}</div> : <span className="text-xs text-muted-foreground">Opsional. RO split menggunakan nomor Job yang sama.</span>}
+          </div>
           <label className="grid gap-1 text-sm">
             PJ
             <Input value={edit.pj} onChange={(event) => setEdit((state) => ({ ...state, pj: event.target.value }))} />

@@ -105,6 +105,18 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   });
   const project = envelopeData<ProyekItemDto>(detail.data);
   const roRows = envelopeRows<Row>(ros.data);
+  const hasRestrictedRos = roRows.some((row) => row.can_access_detail === false);
+  const roGroups = useMemo(() => {
+    const groups = new Map<string, { id: string; name: string; rows: Row[] }>();
+    for (const row of roRows) {
+      const id = String(row.id_unit_koordinator ?? row.nama_unit_koordinator ?? "unit-tidak-diketahui");
+      const name = String(row.nama_unit_koordinator ?? "Unit belum tersedia");
+      const group = groups.get(id) ?? { id, name, rows: [] };
+      group.rows.push(row);
+      groups.set(id, group);
+    }
+    return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name, "id"));
+  }, [roRows]);
   const termRows = envelopeRows<Row>(terms.data);
   const distributionRows = envelopeRows<Row>(distribution.data);
   const settingsData = envelopeData<Row>(settings.data);
@@ -219,6 +231,18 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           <p className="text-sm text-muted-foreground">
             {project.kode_proyek} · Tahun {project.tahun_fiscal} · Diajukan {formatDate(project.created_at)}
           </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor kontrak · {text(project.no_kontrak)}</span>
+          </div>
+          {project.unit_terlibat?.length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {project.unit_terlibat.map((unit) => (
+                <span key={unit.id} className={`rounded-full px-2.5 py-1 text-xs ${unit.peran === "PENGUSUL" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                  {unit.nama_unit}{unit.peran === "PENGUSUL" ? " · Pengusul" : " · Kolaborator"}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ProjectFinalReportButton project={project} />
@@ -306,13 +330,13 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           <Card label="Nilai Kontrak" value={formatRupiah(contract)} />
           <Card label="Direct Cost" value={formatRupiah(directCost)} hint={`${roRows.length} RO · alokasi rencana ${formatRupiah(roPlan)}`} />
           <Card label="Total Margin" value={formatRupiah(margin)} hint={`Distribusi ${formatRupiah(marginDistributed)}`} />
-          <Card label="Posisi kas seluruh RO" value={formatRupiah(roCashPosition)} hint={`Kas masuk ${formatRupiah(roCashReceived)} · realisasi ${formatRupiah(roUsed)}`} />
+          <Card label={hasRestrictedRos ? "Posisi kas RO unit Anda" : "Posisi kas seluruh RO"} value={formatRupiah(roCashPosition)} hint={`Kas masuk ${formatRupiah(roCashReceived)} · realisasi ${formatRupiah(roUsed)}`} />
         </div>
         <div className="mt-5 grid gap-4 border-t pt-5 xl:grid-cols-2">
           <div className="space-y-2">
             <div>
-              <p className="text-sm font-semibold">Hak belanja seluruh RO</p>
-              <p className="text-xs text-muted-foreground">Pagu yang disetujui dikurangi realisasi dan komitmen aktif.</p>
+              <p className="text-sm font-semibold">{hasRestrictedRos ? "Hak belanja RO unit Anda" : "Hak belanja seluruh RO"}</p>
+              <p className="text-xs text-muted-foreground">{hasRestrictedRos ? "Ringkasan ini hanya mencakup RO yang dapat diakses unit Anda." : "Pagu yang disetujui dikurangi realisasi dan komitmen aktif."}</p>
             </div>
             <MoneyFlow items={[
               { label: "Pagu disetujui", amount: approvedRoBudget },
@@ -323,8 +347,8 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           </div>
           <div className="space-y-2">
             <div>
-              <p className="text-sm font-semibold">Arus kas seluruh RO</p>
-              <p className="text-xs text-muted-foreground">Penerimaan dari invoice dikurangi realisasi belanja.</p>
+              <p className="text-sm font-semibold">{hasRestrictedRos ? "Arus kas RO unit Anda" : "Arus kas seluruh RO"}</p>
+              <p className="text-xs text-muted-foreground">{hasRestrictedRos ? "Ringkasan ini hanya mencakup RO yang dapat diakses unit Anda." : "Penerimaan dari invoice dikurangi realisasi belanja."}</p>
             </div>
             <MoneyFlow items={[
               { label: "Penerimaan kas", amount: roCashReceived, tone: "text-sky-700" },
@@ -336,7 +360,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         <div className="mt-5 grid gap-5 border-t pt-4 md:grid-cols-2">
           <div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Pemakaian pagu RO</span>
+              <span className="text-muted-foreground">{hasRestrictedRos ? "Pemakaian pagu RO unit Anda" : "Pemakaian pagu RO"}</span>
               <strong>{usedPercent.toFixed(1)}%</strong>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
@@ -419,12 +443,19 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           <p className="mt-1 text-sm text-muted-foreground">Plafon, unit koordinator, realisasi, kelengkapan administrasi, dan alokasi per RO.</p>
         </div>
         <div className="grid gap-3 p-5">
-          {roRows.length ? (
-            roRows.map((row) => {
+          {roGroups.length ? (
+            roGroups.map((group) => (
+              <div key={group.id} className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                  <h3 className="text-sm font-semibold">{group.name}</h3>
+                  <span className="text-xs text-muted-foreground">{group.rows.length} RO · rencana {formatRupiah(group.rows.reduce((sum, row) => sum + (Number(row.nilai_rencana) || Number(row.total_plafon) || 0), 0))}</span>
+                </div>
+                {group.rows.map((row) => {
               const roId = String(row.id);
               const detailRow = roDetails[roId];
+              const canViewFinance = row.can_access_detail !== false;
               const planned = Number(row.nilai_rencana) || Number(row.total_plafon) || 0;
-              const roFinance = { ...financeOf(row), ...financeOf(detailRow ?? {}) };
+              const roFinance = canViewFinance ? { ...financeOf(row), ...financeOf(detailRow ?? {}) } : {};
               const approved = Number(roFinance.pagu_disetujui) || 0;
               const realized = Number(roFinance.realisasi ?? row.total_terpakai) || 0;
               const commitments = Number(roFinance.komitmen_aktif) || 0;
@@ -432,41 +463,57 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               const cashReceived = Number(roFinance.penerimaan_kas ?? row.trx_debit) || 0;
               const cashPosition = Number(roFinance.posisi_kas) || 0;
               const usage = approved > 0 ? Math.min(100, ((realized + commitments) / approved) * 100) : 0;
-              const missing = [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", !row.nomor_job && !row.no_sk && "Nomor Job", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean) as string[];
+              const jobNumber = String(row.nomor_job ?? "").trim();
+              const splitParts = jobNumber ? roRows.filter((item) => String(item.nomor_job ?? "").trim() === jobNumber).length : 0;
+              const collaborationUnits = Array.isArray(row.unit_kolaborasi) ? (row.unit_kolaborasi as Row[]).map((unit) => String(unit.nama_unit ?? "")).filter(Boolean) : [];
+              const missing = [!(row.no_kontrak ?? project.no_kontrak) && "No Kontrak", !row.pj && "PJ", !row.nomor_job && !row.no_sk && "Nomor Job", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean) as string[];
               const allocations = Array.isArray(detailRow?.alokasi_list) ? (detailRow.alokasi_list as Row[]) : [];
               const ledger = Array.isArray(detailRow?.transaksi_list) ? (detailRow.transaksi_list as Row[]) : [];
               return (
                 <article key={roId} className="overflow-hidden rounded-xl border border-border">
                   <button
                     type="button"
-                    aria-expanded={Boolean(expandedRos[roId])}
-                    onClick={() => void toggleRo(roId)}
-                    className="flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
+                    aria-expanded={canViewFinance && Boolean(expandedRos[roId])}
+                    aria-disabled={!canViewFinance}
+                    disabled={!canViewFinance}
+                    onClick={() => { if (canViewFinance) void toggleRo(roId); }}
+                    className="flex w-full flex-col gap-3 p-4 text-left transition-colors enabled:hover:bg-muted/30 disabled:cursor-default sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span className="min-w-0">
                       <span className="block font-semibold">{text(row.nama_ro, "RO")}</span>
                       <span className="mt-1 block text-xs text-muted-foreground">
                         {text(row.nama_unit_koordinator)} · Tahun fiskal {text(row.tahun_fiscal)}
                       </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">Nomor Job: {text(row.nomor_job)}</span>
+                      {splitParts > 1 ? <span className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">RO split · {splitParts} bagian</span> : null}
+                      {collaborationUnits.length ? <span className="mt-1 block text-xs text-violet-700">Kolaborasi dengan: {collaborationUnits.join(", ")}</span> : null}
                     </span>
                     <span className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={roStatusTone(String(row.status_ro ?? ""))}>{text(row.status_ro)}</StatusBadge>
                       <span className="rounded-lg bg-muted px-2.5 py-1 text-xs">Pagu {formatRupiah(approved || planned)}</span>
-                      <span className={`rounded-lg px-2.5 py-1 text-xs ${remainingRight < 0 ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"}`}>Sisa hak {formatRupiah(remainingRight)}</span>
-                      <span className={`rounded-lg px-2.5 py-1 text-xs ${cashPosition < 0 ? "bg-rose-100 text-rose-800" : "bg-muted text-foreground"}`}>Posisi kas {formatRupiah(cashPosition)}</span>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${usage >= 90 ? "bg-rose-100 text-rose-800" : usage >= 70 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
-                        {usage.toFixed(0)}% terpakai
-                      </span>
-                      <ChevronDown className={`size-4 transition-transform ${expandedRos[roId] ? "rotate-180" : ""}`} />
+                      {canViewFinance ? (
+                        <>
+                          <span className={`rounded-lg px-2.5 py-1 text-xs ${remainingRight < 0 ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"}`}>Sisa hak {formatRupiah(remainingRight)}</span>
+                          <span className={`rounded-lg px-2.5 py-1 text-xs ${cashPosition < 0 ? "bg-rose-100 text-rose-800" : "bg-muted text-foreground"}`}>Posisi kas {formatRupiah(cashPosition)}</span>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${usage >= 90 ? "bg-rose-100 text-rose-800" : usage >= 70 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                            {usage.toFixed(0)}% terpakai
+                          </span>
+                          <ChevronDown className={`size-4 transition-transform ${expandedRos[roId] ? "rotate-180" : ""}`} />
+                        </>
+                      ) : (
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">Rincian keuangan mengikuti akses unit</span>
+                      )}
                     </span>
                   </button>
                   {expandedRos[roId] && (
                     <div className="space-y-4 border-t bg-muted/10 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm">{missing.length ? <span className="text-amber-700">Data belum lengkap: {missing.join(", ")}</span> : <span className="text-emerald-700">Data administrasi lengkap</span>}</p>
-                        <Link href={`/dashboard/ro/${roId}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-                          Buka detail RO <ExternalLink size={14} />
-                        </Link>
+                        {canViewFinance ? (
+                          <Link href={`/dashboard/ro/${roId}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                            Buka detail RO <ExternalLink size={14} />
+                          </Link>
+                        ) : <span className="text-xs text-muted-foreground">Detail ledger hanya tersedia untuk unit pemilik RO.</span>}
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-muted">
                         <div className={`h-full ${usage >= 90 ? "bg-rose-500" : usage >= 70 ? "bg-amber-500" : "bg-primary"}`} style={{ width: `${usage}%` }} />
@@ -503,8 +550,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                             <p><span className="text-muted-foreground">Periode SK:</span> {formatDate(String(row.mulai_sk ?? ""))} – {formatDate(String(row.berakhir_sk ?? ""))}</p>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            No. kontrak: {text(row.no_kontrak)} · {row.nomor_job ? `No. Job: ${text(row.nomor_job)}` : `No. SK: ${text(row.no_sk)}`}
+                            No. kontrak proyek: {text(row.no_kontrak ?? project.no_kontrak)} · No. Job RO: {text(row.nomor_job)} · No. SK: {text(row.no_sk)}
                           </p>
+                          {collaborationUnits.length ? <p className="text-xs text-violet-700">Unit kolaborasi RO: {collaborationUnits.join(", ")}</p> : <p className="text-xs text-muted-foreground">RO ini tidak mencatat unit kolaborasi.</p>}
                           <div className="grid gap-4 xl:grid-cols-2">
                             {[
                               ["Alokasi pegawai", allocations, "Belum ada alokasi pegawai."],
@@ -580,7 +628,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                   )}
                 </article>
               );
-            })
+                })}
+              </div>
+            ))
           ) : (
             <p className="text-sm text-muted-foreground">Belum ada RO terkait.</p>
           )}

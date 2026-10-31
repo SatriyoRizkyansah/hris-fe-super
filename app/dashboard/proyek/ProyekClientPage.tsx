@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, Eye, LoaderCircle, Plus, Trash2, FilePenLine } from "lucide-react";
+import { Check, Eye, LoaderCircle, Plus, Trash2, FilePenLine, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,19 +31,22 @@ type ProjectForm = {
   estimasi_selesai_proyek: string;
   sumber_pendanaan: string;
   nama_client: string;
+  no_kontrak: string;
   pj_1: string;
   pj_2: string;
   nilai_kontrak: string;
   total_direct_cost: string;
   total_margin: string;
 };
-type RoDraft = RoInputDto & { key: string; plafonText: string; detailMode: "detail" | "later"; no_kontrak: string; pj: string; nomor_job: string; mulai_sk: string; berakhir_sk: string };
+type RoDraft = Omit<RoInputDto, "nomor_job"> & { key: string; plafonText: string; detailMode: "detail" | "later"; no_kontrak: string; pj: string; mulai_sk: string; berakhir_sk: string };
+type JobDraft = { key: string; nomor_job: string; ros: RoDraft[] };
 type TerminDraft = TerminInputDto & { key: string; persentaseText: string };
 type LookupRow = { id: string; [key: string]: unknown };
-type UnitOption = LookupRow & { kode_unit?: string; nama_unit?: string };
+type UnitOption = LookupRow & { kode_unit?: string; nama_unit?: string; status_aktif?: string };
 type AccountOption = LookupRow & { nama_rekening?: string; nama_bank?: string; nomor_rekening?: string; status_aktif?: string };
 type MakOption = LookupRow & { kode_mak?: string; nama_mak?: string; tipe_akun?: string; status_aktif?: string };
-type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; ros: RoDraft[]; terms: TerminDraft[] };
+type LegacyRoDraft = RoDraft & { nomor_job?: string };
+type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; jobs?: JobDraft[]; ros?: LegacyRoDraft[]; terms: TerminDraft[]; unitPengusulId?: string; unitKolaborasiIds?: string[] };
 const DRAFTS_STORAGE_KEY = "lemigas:proyek:drafts:v1";
 const currentYear = new Date().getFullYear();
 const blankForm = (): ProjectForm => ({
@@ -54,28 +57,52 @@ const blankForm = (): ProjectForm => ({
   estimasi_selesai_proyek: "",
   sumber_pendanaan: "",
   nama_client: "",
+  no_kontrak: "",
   pj_1: "",
   pj_2: "",
   nilai_kontrak: "",
   total_direct_cost: "",
   total_margin: "",
 });
-const blankRo = (): RoDraft => ({
+const blankRo = (unitId = ""): RoDraft => ({
   key: crypto.randomUUID(),
   nama_ro: "",
   mak_id: "",
-  id_unit_koordinator: "",
+  id_unit_koordinator: unitId,
   rekening_id: "",
   plafon: 0,
   plafonText: "",
   detailMode: "later",
   no_kontrak: "",
   pj: "",
-  nomor_job: "",
+  unit_kolaborasi_ids: [],
   mulai_sk: "",
   berakhir_sk: "",
 });
+const blankJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nomor_job: "", ros: [blankRo(unitId)] });
 const blankTermin = (persentase = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(persentase) || 0, persentaseText: persentase });
+
+function restoreJobDrafts(draft: ProjectLocalDraft, defaultUnitId: string): JobDraft[] {
+  if (draft.jobs?.length) {
+    return draft.jobs.map((job) => ({
+      ...job,
+      key: job.key || crypto.randomUUID(),
+      ros: job.ros.map((row) => ({ ...blankRo(defaultUnitId), ...row, key: row.key || crypto.randomUUID() })),
+    }));
+  }
+
+  const grouped = new Map<string, JobDraft>();
+  (draft.ros ?? []).forEach((legacyRow, index) => {
+    const nomorJob = legacyRow.nomor_job?.trim() ?? "";
+    const groupKey = nomorJob || `__legacy_blank_${index}`;
+    const { nomor_job: _legacyNumber, ...roFields } = legacyRow;
+    const existing = grouped.get(groupKey);
+    const row = { ...blankRo(defaultUnitId), ...roFields, key: legacyRow.key || crypto.randomUUID() };
+    if (existing) existing.ros.push(row);
+    else grouped.set(groupKey, { key: crypto.randomUUID(), nomor_job: nomorJob, ros: [row] });
+  });
+  return grouped.size ? [...grouped.values()] : [blankJob(defaultUnitId)];
+}
 
 function MoneyField({ label, value, onChange, required = false }: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {
   return (
@@ -123,7 +150,10 @@ export default function ProyekClientPage() {
   const [pageSize, setPageSize] = useState(10);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ProjectForm>(blankForm);
-  const [ros, setRos] = useState<RoDraft[]>([blankRo()]);
+  const [jobs, setJobs] = useState<JobDraft[]>([blankJob()]);
+  const [unitPengusulId, setUnitPengusulId] = useState("");
+  const [unitKolaborasiIds, setUnitKolaborasiIds] = useState<string[]>([]);
+  const [roCollaboratorCandidates, setRoCollaboratorCandidates] = useState<Record<string, string>>({});
   const [terms, setTerms] = useState<TerminDraft[]>([blankTermin("100")]);
   const [sk, setSk] = useState<File | null>(null);
   const [rab, setRab] = useState<File | null>(null);
@@ -136,7 +166,9 @@ export default function ProyekClientPage() {
   const [validationError, setValidationError] = useState("");
 
   useEffect(() => {
-    setIdentity(browserIdentity());
+    const activeIdentity = browserIdentity();
+    setIdentity(activeIdentity);
+    setUnitPengusulId(activeIdentity.unitKerjaId);
     try {
       const saved = localStorage.getItem(DRAFTS_STORAGE_KEY);
       const parsed: unknown = saved ? JSON.parse(saved) : [];
@@ -191,7 +223,7 @@ export default function ProyekClientPage() {
       return apiData(browserApi.masterRekeningBank.masterRekeningControllerFindAll({ format: "json" }));
     },
   });
-  const unitOptions = responseRows<UnitOption>(units.data);
+  const unitOptions = responseRows<UnitOption>(units.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const makOptions = responseRows<MakOption>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const rekeningOptions = responseRows<AccountOption>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const currentUnit = unitOptions.find((unit) => unit.id === identity.unitKerjaId);
@@ -199,6 +231,9 @@ export default function ProyekClientPage() {
   const isPimpinanValidator = identity.role === "superadmin" || identity.role === "pimpinan";
   const makComboboxOptions = makOptions.map((option) => ({ value: option.id, label: [option.kode_mak, option.nama_mak, option.tipe_akun ? `(${option.tipe_akun})` : ""].filter(Boolean).join(" — ") }));
   const unitComboboxOptions = unitOptions.map((option) => ({ value: option.id, label: [option.kode_unit, option.nama_unit].filter(Boolean).join(" — ") }));
+  const projectUnitIds = [...new Set([unitPengusulId, ...unitKolaborasiIds].filter(Boolean))];
+  const roUnitComboboxOptions = unitComboboxOptions.filter((option) => projectUnitIds.includes(option.value));
+  const availableCollaboratorOptions = unitComboboxOptions.filter((option) => option.value !== unitPengusulId && !unitKolaborasiIds.includes(option.value));
   const rekeningComboboxOptions = rekeningOptions.map((option) => ({ value: option.id, label: [option.nama_bank, option.nama_rekening, option.nomor_rekening ? `(${option.nomor_rekening})` : ""].filter(Boolean).join(" — ") }));
 
   const validation = use_mutation({
@@ -224,8 +259,22 @@ export default function ProyekClientPage() {
 
   const numeric = (key: "nilai_kontrak" | "total_direct_cost" | "total_margin") => Number(form[key]) || 0;
   const contractOk = numeric("nilai_kontrak") === numeric("total_direct_cost") + numeric("total_margin");
-  const roTotal = ros.reduce((total, row) => total + (Number(row.plafonText) || 0), 0);
+  const roRows = jobs.flatMap((job) => job.ros);
+  const roTotal = roRows.reduce((total, row) => total + (Number(row.plafonText) || 0), 0);
   const termsTotal = terms.reduce((total, term) => total + (Number(term.persentaseText) || 0), 0);
+  const collaborationAssigned = projectUnitIds.every((unitId) =>
+    roRows.some((row) => row.id_unit_koordinator === unitId || row.unit_kolaborasi_ids?.includes(unitId)),
+  );
+  const jobNumbers = jobs.map((job) => job.nomor_job.trim());
+  const filledJobNumbers = jobNumbers.filter(Boolean).map((number) => number.toLocaleUpperCase("id-ID"));
+  const jobNumbersUnique = new Set(filledJobNumbers).size === filledJobNumbers.length;
+  const allocationsValid = jobs.length > 0 && jobs.every((job) =>
+    job.nomor_job.trim() && job.ros.length > 0 && job.ros.every((row) =>
+      row.nama_ro && row.mak_id && projectUnitIds.includes(row.id_unit_koordinator) &&
+      (row.unit_kolaborasi_ids ?? []).every((unitId) => projectUnitIds.includes(unitId) && unitId !== row.id_unit_koordinator) &&
+      Number(row.plafonText) > 0 && (row.detailMode === "later" || (row.pj.trim() && row.mulai_sk && row.berakhir_sk)),
+    ),
+  );
   const valid = Boolean(
     form.kode_proyek &&
     form.nama_proyek &&
@@ -234,8 +283,10 @@ export default function ProyekClientPage() {
     form.total_direct_cost !== "" &&
     form.total_margin !== "" &&
     contractOk &&
-    ros.length &&
-    ros.every((row) => row.nama_ro && row.mak_id && row.id_unit_koordinator && Number(row.plafonText) > 0 && (row.detailMode === "later" || (row.no_kontrak.trim() && row.pj.trim() && row.nomor_job.trim() && row.mulai_sk && row.berakhir_sk))) &&
+    unitPengusulId &&
+    collaborationAssigned &&
+    allocationsValid &&
+    jobNumbersUnique &&
     roTotal === numeric("total_direct_cost") &&
     terms.length &&
     terms.every((term) => Number(term.persentaseText) > 0) &&
@@ -244,7 +295,10 @@ export default function ProyekClientPage() {
 
   function resetForm() {
     setForm(blankForm());
-    setRos([blankRo()]);
+    setJobs([blankJob(identity.unitKerjaId)]);
+    setUnitPengusulId(identity.unitKerjaId);
+    setUnitKolaborasiIds([]);
+    setRoCollaboratorCandidates({});
     setTerms([blankTermin("100")]);
     setSk(null);
     setRab(null);
@@ -256,15 +310,19 @@ export default function ProyekClientPage() {
     localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(drafts));
   }
   function saveDraft() {
-    const draft: ProjectLocalDraft = { id: editingDraftId ?? crypto.randomUUID(), savedAt: new Date().toISOString(), form, ros, terms };
+    const draft: ProjectLocalDraft = { id: editingDraftId ?? crypto.randomUUID(), savedAt: new Date().toISOString(), form, jobs, terms, unitPengusulId, unitKolaborasiIds };
     persistDrafts([draft, ...localDrafts.filter((item) => item.id !== draft.id)]);
     setEditingDraftId(draft.id);
     setFormError("");
     setOpen(false);
   }
   function editDraft(draft: ProjectLocalDraft) {
-    setForm(draft.form);
-    setRos(draft.ros.map((row) => ({ ...blankRo(), ...row, detailMode: row.detailMode ?? "later" })));
+    setForm({ ...blankForm(), ...draft.form });
+    const savedLeadId = draft.unitPengusulId ?? identity.unitKerjaId;
+    setUnitPengusulId(savedLeadId);
+    setUnitKolaborasiIds(draft.unitKolaborasiIds ?? []);
+    setRoCollaboratorCandidates({});
+    setJobs(restoreJobDrafts(draft, savedLeadId));
     setTerms(draft.terms);
     setEditingDraftId(draft.id);
     setFormError("");
@@ -277,7 +335,81 @@ export default function ProyekClientPage() {
     if (editingDraftId === id) resetForm();
   }
   function updateRo(key: string, field: keyof RoDraft, value: string) {
-    setRos((rows) => rows.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
+    setJobs((currentJobs) => currentJobs.map((job) => ({
+      ...job,
+      ros: job.ros.map((row) => (row.key === key ? {
+        ...row,
+        [field]: value,
+        ...(field === "id_unit_koordinator" ? { unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((unitId) => unitId !== value) } : {}),
+      } : row)),
+    })));
+  }
+  function updateJob(key: string, nomorJob: string) {
+    setJobs((currentJobs) => currentJobs.map((job) => job.key === key ? { ...job, nomor_job: nomorJob } : job));
+  }
+  function addJob() {
+    setJobs((currentJobs) => [...currentJobs, blankJob(unitPengusulId)]);
+  }
+  function removeJob(key: string) {
+    if (jobs.length <= 1) return;
+    setJobs((currentJobs) => currentJobs.filter((job) => job.key !== key));
+  }
+  function addRo(jobKey: string) {
+    setJobs((currentJobs) => currentJobs.map((job) => job.key === jobKey
+      ? { ...job, ros: [...job.ros, blankRo(unitPengusulId)] }
+      : job));
+  }
+  function removeRo(key: string) {
+    setJobs((currentJobs) => currentJobs.map((job) => job.ros.length > 1
+      ? { ...job, ros: job.ros.filter((row) => row.key !== key) }
+      : job));
+  }
+  function addCollaborator(unitId: string) {
+    if (!unitId || unitId === unitPengusulId || unitKolaborasiIds.includes(unitId)) return;
+    setUnitKolaborasiIds((ids) => [...ids, unitId]);
+  }
+  function removeCollaborator(unitId: string) {
+    setUnitKolaborasiIds((ids) => ids.filter((id) => id !== unitId));
+    setJobs((currentJobs) => currentJobs.map((job) => ({
+      ...job,
+      ros: job.ros.map((row) => ({
+        ...row,
+        ...(row.id_unit_koordinator === unitId ? { id_unit_koordinator: unitPengusulId } : {}),
+        unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((id) => id !== unitId),
+      })),
+    })));
+  }
+  function addRoCollaborator(roKey: string) {
+    const unitId = roCollaboratorCandidates[roKey];
+    if (!unitId) return;
+    setJobs((currentJobs) => currentJobs.map((job) => ({
+      ...job,
+      ros: job.ros.map((row) => row.key === roKey
+        ? { ...row, unit_kolaborasi_ids: [...new Set([...(row.unit_kolaborasi_ids ?? []), unitId])] }
+        : row),
+    })));
+    setRoCollaboratorCandidates((candidates) => ({ ...candidates, [roKey]: "" }));
+  }
+  function removeRoCollaborator(roKey: string, unitId: string) {
+    setJobs((currentJobs) => currentJobs.map((job) => ({
+      ...job,
+      ros: job.ros.map((row) => row.key === roKey
+        ? { ...row, unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((id) => id !== unitId) }
+        : row),
+    })));
+  }
+  function changeLeadUnit(unitId: string) {
+    const previousLeadId = unitPengusulId;
+    setUnitPengusulId(unitId);
+    setUnitKolaborasiIds((ids) => {
+      const next = ids.filter((id) => id !== unitId);
+      if (previousLeadId && previousLeadId !== unitId && roRows.some((row) => row.id_unit_koordinator === previousLeadId) && !next.includes(previousLeadId)) next.push(previousLeadId);
+      return next;
+    });
+    setJobs((currentJobs) => currentJobs.map((job) => ({
+      ...job,
+      ros: job.ros.map((row) => !row.id_unit_koordinator ? { ...row, id_unit_koordinator: unitId } : row),
+    })));
   }
   function updateTerm(key: string, value: string) {
     setTerms((rows) => rows.map((row) => (row.key === key ? { ...row, persentaseText: value } : row)));
@@ -305,7 +437,16 @@ export default function ProyekClientPage() {
       return;
     }
     if (!valid || create.isPending) {
-      setFormError("Lengkapi data. Kontrak = direct cost + margin, plafon RO = direct cost, termin = 100%.");
+      setFormError(!unitPengusulId
+        ? "Pilih unit pengusul proyek."
+        : !collaborationAssigned
+          ? "Setiap unit yang terlibat harus dipilih sebagai pemilik atau kolaborator pada minimal satu RO."
+          : !jobNumbersUnique
+            ? "Nomor Job hanya boleh digunakan pada satu card Job. Tambahkan RO split di dalam card Job yang sama."
+            : !allocationsValid
+              ? "Lengkapi nomor Job dan seluruh alokasi RO di dalamnya."
+          : "Lengkapi data. Kontrak = direct cost + margin, plafon RO = direct cost, termin = 100%."
+      );
       return;
     }
     setFormError("");
@@ -318,13 +459,20 @@ export default function ProyekClientPage() {
         nilai_kontrak: numeric("nilai_kontrak"),
         total_direct_cost: numeric("total_direct_cost"),
         total_margin: numeric("total_margin"),
-        ro_list: ros.map((row) => ({
-          nama_ro: row.nama_ro,
-          mak_id: row.mak_id,
-          id_unit_koordinator: row.id_unit_koordinator,
-          ...(row.rekening_id ? { rekening_id: row.rekening_id } : {}),
-          plafon: Number(row.plafonText),
-          ...(row.detailMode === "detail" ? { no_kontrak: row.no_kontrak, pj: row.pj, nomor_job: row.nomor_job, mulai_sk: row.mulai_sk, berakhir_sk: row.berakhir_sk } : {}),
+        no_kontrak: form.no_kontrak || undefined,
+        unit_pengusul_id: unitPengusulId,
+        unit_kolaborasi_ids: unitKolaborasiIds,
+        job_list: jobs.map((job) => ({
+          nomor_job: job.nomor_job.trim(),
+          ro_list: job.ros.map((row) => ({
+            nama_ro: row.nama_ro,
+            mak_id: row.mak_id,
+            id_unit_koordinator: row.id_unit_koordinator,
+            ...(row.rekening_id ? { rekening_id: row.rekening_id } : {}),
+            plafon: Number(row.plafonText),
+            unit_kolaborasi_ids: row.unit_kolaborasi_ids ?? [],
+            ...(row.detailMode === "detail" ? { pj: row.pj, mulai_sk: row.mulai_sk, berakhir_sk: row.berakhir_sk } : {}),
+          })),
         })),
         termin_list: terms.map(({ key, persentaseText }, index) => ({ nomor_termin: index + 1, persentase: Number(persentaseText) })),
       };
@@ -434,6 +582,15 @@ export default function ProyekClientPage() {
                   <div className="space-y-1">
                     <p className="font-medium">{row.kode_proyek}</p>
                     <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
+                    {row.unit_terlibat?.length ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {row.unit_terlibat.map((unit) => (
+                          <span key={unit.id} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                            {unit.nama_unit}{unit.peran === "PENGUSUL" ? " · Pengusul" : ""}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ),
               },
@@ -451,7 +608,7 @@ export default function ProyekClientPage() {
                       <span>
                         {formatDate(start)} – {formatDate(end)}
                       </span>
-                      <p className="mt-1 text-xs text-muted-foreground">{days !== null && days > 0 ? `±${days} hari` : "Tanggal RO belum lengkap"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{days !== null && days > 0 ? `Â±${days} hari` : "Tanggal RO belum lengkap"}</p>
                     </div>
                   );
                 },
@@ -675,9 +832,63 @@ export default function ProyekClientPage() {
             </div>
             <Field label="Sumber pendanaan" value={form.sumber_pendanaan} onChange={(value) => setForm((current) => ({ ...current, sumber_pendanaan: value }))} />
             <Field label="Nama client" value={form.nama_client} onChange={(value) => setForm((current) => ({ ...current, nama_client: value }))} />
+            <Field label="Nomor kontrak" value={form.no_kontrak} onChange={(value) => setForm((current) => ({ ...current, no_kontrak: value }))} />
             <Field label="PJ 1" value={form.pj_1} onChange={(value) => setForm((current) => ({ ...current, pj_1: value }))} />
             <Field label="PJ 2" value={form.pj_2} onChange={(value) => setForm((current) => ({ ...current, pj_2: value }))} />
           </div>
+        </section>
+        <section className="space-y-3 rounded-lg border p-4">
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold">Unit terlibat</h2>
+            <p className="max-w-3xl text-xs leading-5 text-muted-foreground">Daftarkan unit pengusul dan unit kerja yang terlibat. Pilih unit pemilik di tiap RO; beberapa RO dapat memakai nomor Job yang sama untuk membagi alokasi.</p>
+          </div>
+          <div className="grid items-start gap-3 sm:grid-cols-2">
+            <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+              <span>Unit pengusul *</span>
+              {identity.role === "superadmin" ? (
+                <FilterCombobox options={unitComboboxOptions} value={unitPengusulId} onValueChange={changeLeadUnit} label="Pilih unit pengusul" />
+              ) : (
+                <div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm font-normal">
+                  {[currentUnit?.kode_unit, currentUnit?.nama_unit].filter(Boolean).join(" · ") || "Unit akun belum tersedia"}
+                </div>
+              )}
+            </label>
+            <div className="grid min-w-0 gap-1.5 text-sm font-medium">
+              <span>Tambah unit kolaborator</span>
+              <FilterCombobox options={availableCollaboratorOptions} value="" onValueChange={addCollaborator} label="Pilih unit untuk ditambahkan" />
+              <span className="text-xs font-normal leading-4 text-muted-foreground">Unit yang dipilih langsung masuk ke daftar.</span>
+            </div>
+          </div>
+          {(unitPengusulId || unitKolaborasiIds.length > 0) && (
+            <div className="space-y-2 border-t pt-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <span>Unit pada proyek</span>
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{unitKolaborasiIds.length + Number(Boolean(unitPengusulId))}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {unitPengusulId && (() => {
+                  const unitLabel = unitComboboxOptions.find((option) => option.value === unitPengusulId)?.label ?? "Unit pengusul";
+                  return (
+                    <span title={unitLabel} className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
+                      <span className="shrink-0 font-semibold">Pengusul</span>
+                      <span className="min-w-0 max-w-[22rem] truncate">{unitLabel}</span>
+                    </span>
+                  );
+                })()}
+                {unitKolaborasiIds.map((unitId) => {
+                  const unitLabel = unitComboboxOptions.find((option) => option.value === unitId)?.label ?? "Unit kolaborator";
+                  return (
+                    <span key={unitId} title={unitLabel} className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs text-foreground">
+                      <span className="shrink-0 font-medium text-muted-foreground">Kolaborator</span>
+                      <span className="min-w-0 max-w-[22rem] truncate">{unitLabel}</span>
+                      <button type="button" aria-label={`Hapus ${unitLabel}`} onClick={() => removeCollaborator(unitId)} className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X size={13} /></button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {!unitPengusulId && <p className="text-xs text-amber-700">Pilih unit pengusul sebelum menentukan pemilik RO.</p>}
         </section>
         <section className="space-y-4 rounded-lg border p-4">
           <div>
@@ -696,79 +907,115 @@ export default function ProyekClientPage() {
         <section className="space-y-4 rounded-lg border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold">Alokasi RO awal</h2>
-              <p className="mt-1 text-xs text-muted-foreground">Pilih MAK, unit koordinator, dan rekening dari data master.</p>
+              <h2 className="text-sm font-semibold">Job dan alokasi RO</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Nomor Job menjadi induk. Tambahkan beberapa RO di dalam Job yang sama jika anggaran dibagi ke unit berbeda.</p>
             </div>
-            <Button type="button" size="sm" variant="outline" onClick={() => setRos((rows) => [...rows, blankRo()])}>
-              <Plus size={14} /> Tambah RO
+            <Button type="button" size="sm" variant="outline" onClick={addJob}>
+              <Plus size={14} /> Tambah Job
             </Button>
           </div>
-          {ros.map((row, index) => (
-            <article key={row.key} className="overflow-hidden rounded-xl border bg-background shadow-sm">
-              <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
-                <div>
-                  <h3 className="font-semibold">
-                    RO {String(index + 1).padStart(2, "0")}
-                    {row.nama_ro.trim() ? ` · ${row.nama_ro}` : ""}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">{row.detailMode === "detail" ? "Detail administrasi diisi sekarang" : "Detail administrasi dilengkapi nanti"}</p>
-                </div>
-                {ros.length > 1 && (
-                  <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setRos((rows) => rows.filter((item) => item.key !== row.key))}>
-                    <Trash2 size={14} /> Hapus
-                  </Button>
-                )}
-              </header>
-              <div className="space-y-4 p-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Nama RO" required value={row.nama_ro} onChange={(value) => updateRo(row.key, "nama_ro", value)} />
-                  <MoneyField label="Plafon" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
-                  <fieldset className="grid gap-2 sm:col-span-2">
-                    <legend className="text-sm font-medium">Detail administrasi RO</legend>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "detail" ? "border-primary bg-primary/5" : ""}`}>
-                        <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "detail"} onChange={() => updateRo(row.key, "detailMode", "detail")} className="mt-1 accent-primary" />
-                        <span>
-                          <strong className="block">Isi sekarang</strong>
-                          <span className="text-xs text-muted-foreground">Lengkapi nomor kontrak, PJ, dan nomor Job RO.</span>
-                        </span>
-                      </label>
-                      <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "later" ? "border-primary bg-primary/5" : ""}`}>
-                        <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "later"} onChange={() => updateRo(row.key, "detailMode", "later")} className="mt-1 accent-primary" />
-                        <span>
-                          <strong className="block">Lengkapi nanti</strong>
-                          <span className="text-xs text-muted-foreground">RO dibuat tanpa detail administrasi.</span>
-                        </span>
-                      </label>
-                    </div>
-                  </fieldset>
-                  {row.detailMode === "detail" && (
-                    <>
-                      <Field label="Nomor kontrak RO" required value={row.no_kontrak} onChange={(value) => updateRo(row.key, "no_kontrak", value)} />
-                      <Field label="Penanggung jawab RO" required value={row.pj} onChange={(value) => updateRo(row.key, "pj", value)} />
-                      <Field label="Nomor Job" required value={row.nomor_job ?? ""} onChange={(value) => updateRo(row.key, "nomor_job", value)} />
-                      <Field label="Mulai SK" type="date" required value={row.mulai_sk} onChange={(value) => updateRo(row.key, "mulai_sk", value)} />
-                      <Field label="Berakhir SK" type="date" required value={row.berakhir_sk} onChange={(value) => updateRo(row.key, "berakhir_sk", value)} />
-                    </>
-                  )}
-                  <div className="sm:col-span-2">
-                    <label className="grid min-w-0 gap-1.5 text-sm font-medium">
-                      <span>MAK *</span>
-                      <FilterCombobox options={makComboboxOptions} value={row.mak_id} onValueChange={(value) => updateRo(row.key, "mak_id", value)} label="Pilih MAK" />
-                    </label>
+          {jobs.map((job, jobIndex) => {
+            const jobRoTotal = job.ros.reduce((total, row) => total + (Number(row.plafonText) || 0), 0);
+            const duplicateJob = job.nomor_job.trim() && jobs.some((other) => other.key !== job.key && other.nomor_job.trim().toLocaleUpperCase("id-ID") === job.nomor_job.trim().toLocaleUpperCase("id-ID"));
+            return (
+              <article key={job.key} className="overflow-hidden rounded-xl border bg-background shadow-sm">
+                <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
+                  <div>
+                    <h3 className="font-semibold">Job {String(jobIndex + 1).padStart(2, "0")}{job.nomor_job.trim() ? ` · ${job.nomor_job.trim()}` : ""}</h3>
+                    <p className="text-xs text-muted-foreground">{job.ros.length > 1 ? `Split ke ${job.ros.length} RO · Total ${formatRupiah(jobRoTotal)}` : "Satu Job dapat memuat satu atau beberapa alokasi RO."}</p>
                   </div>
-                  <label className="grid min-w-0 gap-1.5 text-sm font-medium">
-                    <span>Unit koordinator *</span>
-                    <FilterCombobox options={unitComboboxOptions} value={row.id_unit_koordinator} onValueChange={(value) => updateRo(row.key, "id_unit_koordinator", value)} label="Pilih unit koordinator" />
-                  </label>
-                  <label className="grid min-w-0 gap-1.5 text-sm font-medium">
-                    <span>Rekening tujuan</span>
-                    <FilterCombobox options={rekeningComboboxOptions} value={row.rekening_id ?? ""} onValueChange={(value) => updateRo(row.key, "rekening_id", value)} label="Pilih rekening (opsional)" />
-                  </label>
+                  {jobs.length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeJob(job.key)}>
+                      <Trash2 size={14} /> Hapus Job
+                    </Button>
+                  )}
+                </header>
+                <div className="space-y-4 p-4">
+                  <div className="max-w-xl">
+                    <Field label="Nomor Job *" required value={job.nomor_job} onChange={(value) => updateJob(job.key, value)} />
+                    {duplicateJob && <p className="mt-1 text-xs text-destructive">Nomor Job sudah dipakai. Tambahkan RO split pada card Job yang sama.</p>}
+                  </div>
+                  <div className="space-y-3">
+                    {job.ros.map((row, rowIndex) => {
+                      const availableRoCollaborators = roUnitComboboxOptions.filter((option) => option.value !== row.id_unit_koordinator && !(row.unit_kolaborasi_ids ?? []).includes(option.value));
+                      return (
+                        <article key={row.key} className="overflow-hidden rounded-lg border">
+                          <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2">
+                            <div>
+                              <h4 className="text-sm font-semibold">RO {String(rowIndex + 1).padStart(2, "0")}{row.nama_ro.trim() ? ` · ${row.nama_ro.trim()}` : ""}</h4>
+                              <p className="text-xs text-muted-foreground">{row.detailMode === "detail" ? "PJ dan tanggal SK diisi sekarang" : "PJ dan tanggal SK dilengkapi nanti"}</p>
+                            </div>
+                            {job.ros.length > 1 && <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeRo(row.key)}><Trash2 size={14} /> Hapus RO</Button>}
+                          </header>
+                          <div className="grid gap-4 p-3 sm:grid-cols-2">
+                            <Field label="Nama RO" required value={row.nama_ro} onChange={(value) => updateRo(row.key, "nama_ro", value)} />
+                            <MoneyField label="Plafon" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
+                            <fieldset className="grid gap-2 sm:col-span-2">
+                              <legend className="text-sm font-medium">Detail administrasi RO</legend>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "detail" ? "border-primary bg-primary/5" : ""}`}>
+                                  <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "detail"} onChange={() => updateRo(row.key, "detailMode", "detail")} className="mt-1 accent-primary" />
+                                  <span><strong className="block">Isi sekarang</strong><span className="text-xs text-muted-foreground">PJ dan tanggal SK dilengkapi khusus untuk RO ini.</span></span>
+                                </label>
+                                <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "later" ? "border-primary bg-primary/5" : ""}`}>
+                                  <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "later"} onChange={() => updateRo(row.key, "detailMode", "later")} className="mt-1 accent-primary" />
+                                  <span><strong className="block">Lengkapi nanti</strong><span className="text-xs text-muted-foreground">Detail administrasi RO dapat dilengkapi setelah proyek disetujui.</span></span>
+                                </label>
+                              </div>
+                            </fieldset>
+                            {row.detailMode === "detail" && (
+                              <>
+                                <Field label="Penanggung jawab RO" required value={row.pj} onChange={(value) => updateRo(row.key, "pj", value)} />
+                                <Field label="Mulai SK" type="date" required value={row.mulai_sk} onChange={(value) => updateRo(row.key, "mulai_sk", value)} />
+                                <Field label="Berakhir SK" type="date" required value={row.berakhir_sk} onChange={(value) => updateRo(row.key, "berakhir_sk", value)} />
+                              </>
+                            )}
+                            <div className="sm:col-span-2">
+                              <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                                <span>MAK *</span>
+                                <FilterCombobox options={makComboboxOptions} value={row.mak_id} onValueChange={(value) => updateRo(row.key, "mak_id", value)} label="Pilih MAK" />
+                              </label>
+                            </div>
+                            <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                              <span>Unit pemilik RO *</span>
+                              <FilterCombobox options={roUnitComboboxOptions} value={row.id_unit_koordinator} onValueChange={(value) => updateRo(row.key, "id_unit_koordinator", value)} label="Pilih unit pemilik RO" />
+                            </label>
+                            <div className="grid min-w-0 gap-1.5 text-sm font-medium">
+                              <span>Unit kolaborasi RO</span>
+                              {availableRoCollaborators.length ? (
+                                <div className="flex gap-2">
+                                  <div className="min-w-0 flex-1"><FilterCombobox options={availableRoCollaborators} value={roCollaboratorCandidates[row.key] ?? ""} onValueChange={(value) => setRoCollaboratorCandidates((state) => ({ ...state, [row.key]: value }))} label="Pilih unit terlibat pada RO ini" /></div>
+                                  <Button type="button" variant="outline" disabled={!roCollaboratorCandidates[row.key]} onClick={() => addRoCollaborator(row.key)}><Plus size={14} /> Tambah</Button>
+                                </div>
+                              ) : <p className="rounded-md border border-dashed px-3 py-2 text-xs font-normal text-muted-foreground">Tidak ada unit lain yang tersedia untuk RO ini.</p>}
+                              {(row.unit_kolaborasi_ids ?? []).length ? (
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {(row.unit_kolaborasi_ids ?? []).map((unitId) => (
+                                    <span key={unitId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-normal text-primary">
+                                      {unitComboboxOptions.find((option) => option.value === unitId)?.label ?? "Unit kolaborator"}
+                                      <button type="button" aria-label="Hapus unit kolaborasi" onClick={() => removeRoCollaborator(row.key, unitId)} className="rounded-full p-0.5 hover:bg-background"><X size={12} /></button>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : <span className="text-xs font-normal text-muted-foreground">Opsional. Gunakan untuk unit yang ikut terlibat dalam RO ini.</span>}
+                            </div>
+                            <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                              <span>Rekening tujuan</span>
+                              <FilterCombobox options={rekeningComboboxOptions} value={row.rekening_id ?? ""} onValueChange={(value) => updateRo(row.key, "rekening_id", value)} label="Pilih rekening (opsional)" />
+                            </label>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                    <p className="text-xs text-muted-foreground">Total alokasi Job: <strong className="text-foreground">{formatRupiah(jobRoTotal)}</strong></p>
+                    <Button type="button" size="sm" variant="outline" onClick={() => addRo(job.key)}><Plus size={14} /> Tambah RO split</Button>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
           <p className={roTotal === numeric("total_direct_cost") ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total plafon RO: {formatRupiah(roTotal)}. Harus sama dengan direct cost.</p>
         </section>
         <section className="space-y-4 rounded-lg border p-4">

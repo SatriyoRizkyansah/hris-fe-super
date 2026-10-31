@@ -81,7 +81,8 @@ export function buildProjectReportHtml(input: {
     const name = valueText(ro.nama_mak, "MAK belum diisi");
     const key = `${code}:${name}`;
     const group = byMak.get(key) ?? { code, name, descriptions: [], budget: 0 };
-    group.descriptions.push(valueText(ro.nama_ro));
+    const collaboration = Array.isArray(ro.unit_kolaborasi) ? unique(ro.unit_kolaborasi).join(", ") : "";
+    group.descriptions.push(valueText(ro.nama_unit_koordinator, "Unit belum tersedia") + " / " + valueText(ro.nama_ro) + (collaboration ? " / Kolaborasi: " + collaboration : ""));
     group.budget += budget;
     byMak.set(key, group);
   });
@@ -91,9 +92,11 @@ export function buildProjectReportHtml(input: {
   const margin = amount(project.total_margin);
   const profitPercent = contract > 0 ? (margin / contract) * 100 : 0;
   const generatedDate = date(generatedAt);
-  const contractNumber = unique(ros.map((ro) => ro.no_kontrak)).join(" · ") || valueText(project.kode_proyek);
+  const contractNumber = valueText(project.no_kontrak, unique(ros.map((ro) => ro.no_kontrak)).join(" · ") || valueText(project.kode_proyek));
   const jobs = unique(ros.map((ro) => ro.nomor_job));
-  const units = unique(ros.map((ro) => ro.nama_unit_koordinator));
+  const jobCounts = new Map<string, number>();
+  for (const job of jobs) jobCounts.set(job, ros.filter((ro) => valueText(ro.nomor_job, "") === job).length);
+  const units = unique(project.unit_terlibat?.map((unit) => unit.nama_unit) ?? ros.map((ro) => ro.nama_unit_koordinator));
   const periodStart = project.mulai_proyek ?? ros.map((ro) => ro.mulai_sk).find(Boolean);
   const periodEnd = project.estimasi_selesai_proyek ?? ros.map((ro) => ro.berakhir_sk).find(Boolean);
   const fileName = valueText(project.file_rab || ros.find((ro) => ro.file_rab)?.file_rab, "Rekap aplikasi").split(/[\\/]/).pop() || "Rekap aplikasi";
@@ -107,7 +110,12 @@ export function buildProjectReportHtml(input: {
 
   const allocationRows = reports.map(({ ro, budget }, index) => {
     const percentage = directCost > 0 ? (budget / directCost) * 100 : 0;
-    return `<tr><td class="center">${index + 1}</td><td>${escapeHtml(valueText(ro.nama_ro))}</td><td class="number">${percentage.toFixed(2)}</td><td>%</td>${amountCell(budget)}</tr>`;
+    const collaboration = Array.isArray(ro.unit_kolaborasi) ? unique(ro.unit_kolaborasi).join(", ") : "";
+    const job = valueText(ro.nomor_job, "");
+    const splitParts = job ? (jobCounts.get(job) ?? 0) : 0;
+    const splitLabel = splitParts > 1 ? " / RO split " + splitParts : "";
+    const allocation = valueText(ro.nama_unit_koordinator, "Unit belum tersedia") + " / " + valueText(ro.nama_ro) + (collaboration ? " / Kolaborasi: " + collaboration : "") + splitLabel;
+    return `<tr><td class="center">${index + 1}</td><td>${escapeHtml(allocation)}</td><td class="number">${percentage.toFixed(2)}</td><td>%</td>${amountCell(budget)}</tr>`;
   }).join("");
 
   const operationalRows = [...byMak.values()].map((group, index) => `<tr><td class="center">${index + 1}</td><td>${escapeHtml(group.code)} · ${escapeHtml(group.name)}</td>${amountCell(group.budget)}</tr>`).join("");
@@ -129,7 +137,7 @@ export function buildProjectReportHtml(input: {
     }).join("");
     const expenseTotal = expenses.reduce((sum, transaction) => sum + amount(transaction.kredit), 0);
     return `<section class="mak-section">
-      <div class="group-title"><strong>${escapeHtml(valueText(ro.kode_mak))} · ${escapeHtml(valueText(ro.nama_mak))}</strong><span>${escapeHtml(valueText(ro.nama_ro))}</span></div>
+      <div class="group-title"><strong>${escapeHtml(valueText(ro.kode_mak))} · ${escapeHtml(valueText(ro.nama_mak))}</strong><span>${escapeHtml(valueText(ro.nama_unit_koordinator, "Unit belum tersedia"))} · ${escapeHtml(valueText(ro.nama_ro))}</span></div>
       <table><thead><tr><th class="center">No.</th><th>Uraian</th><th>Rincian / keterangan</th><th class="number">Jumlah</th><th>Satuan</th><th class="number">Unit Biaya [Rp]</th><th class="number">Total [Rp]</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7" class="empty">Belum ada rincian transaksi.</td></tr>`}</tbody>
         <tfoot><tr><th colspan="6">Total ${escapeHtml(valueText(ro.nama_mak))}</th>${amountCell(expenseTotal || reports[roIndex].budget)}</tr></tfoot>
@@ -157,13 +165,13 @@ export function buildProjectReportHtml(input: {
 <tbody>${summaryRows || `<tr><td colspan="4" class="empty">Belum ada rincian MAK pada proyek ini.</td></tr>`}</tbody>
 <tfoot><tr><th colspan="3">Total Biaya Operasional</th>${amountCell(directCost)}</tr></tfoot></table>
 <div class="profit-total"><span>Profit: ${profitPercent.toFixed(2)}%</span><span>Total (Rp): ${escapeHtml(money(directCost))}</span></div>
-<div class="evaluation-title">Dievaluasi</div><div class="signatures"><div><strong>Kepala Bagian Umum</strong><div class="signature-space"></div><div>(........................................)</div></div><div><strong>Koordinator ${escapeHtml(units[0] ?? "")}</strong><div class="signature-space"></div><div>(${escapeHtml(valueText(project.pj_1))})</div></div></div>
+<div class="evaluation-title">Dievaluasi</div><div class="signatures"><div><strong>Kepala Bagian Umum</strong><div class="signature-space"></div><div>(........................................)</div></div><div><strong>Koordinator ${escapeHtml(units.join(" · "))}</strong><div class="signature-space"></div><div>(${escapeHtml(valueText(project.pj_1))})</div></div></div>
 <div class="approval-title">Disetujui</div><div class="approval"><strong>Pimpinan BLU</strong><div class="signature-space"></div><div>(........................................)</div></div>
 
 <div class="page-break"></div>
-<h1 class="form-heading">Rencana Operasional</h1><h2 class="form-subheading">Tahun Anggaran ${escapeHtml(project.tahun_fiscal)} · ${escapeHtml(units[0] ?? "")}</h2>
+<h1 class="form-heading">Rencana Operasional</h1><h2 class="form-subheading">Tahun Anggaran ${escapeHtml(project.tahun_fiscal)} · ${escapeHtml(units.join(" · "))}</h2>
 <table class="form-meta"><tbody>
-<tr><td>Kelompok</td><td>${escapeHtml(units[0] ?? "—")}</td><td>Penanggung jawab</td><td>${escapeHtml(valueText(project.pj_1))}</td></tr>
+<tr><td>Kelompok</td><td>${escapeHtml(units.join(" · ") || "—")}</td><td>Penanggung jawab</td><td>${escapeHtml(valueText(project.pj_1))}</td></tr>
 <tr><td>Judul kegiatan</td><td colspan="3">${escapeHtml(project.nama_proyek)}</td></tr>
 <tr><td>Nama pelanggan</td><td>${escapeHtml(project.nama_client)}</td><td>Nomor kontrak</td><td>${escapeHtml(contractNumber)}</td></tr>
 <tr><td>Nomor Job</td><td>${escapeHtml(jobs.join(" · ") || "—")}</td><td>Durasi</td><td>${escapeHtml(date(periodStart, false))} s.d. ${escapeHtml(date(periodEnd, false))}</td></tr>

@@ -39,6 +39,9 @@ export function ProjectFinalReportButton({ project, compact = false }: { project
         ));
         remainingPages.forEach((response) => ros.push(...envelopeRows<Row>(response)));
       }
+      if (ros.some((ro) => ro.can_access_detail === false)) {
+        throw new Error("Laporan lengkap hanya tersedia bagi pengguna yang memiliki akses ke seluruh detail RO proyek.");
+      }
 
       const roDetails: Row[] = [];
       for (let index = 0; index < ros.length; index += 8) {
