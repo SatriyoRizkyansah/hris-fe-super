@@ -233,6 +233,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor kontrak · {text(project.no_kontrak)}</span>
+            <span className="rounded-md bg-muted px-2.5 py-1.5">Periode SK proyek · {formatDate(String(project.mulai_sk ?? ""))} – {formatDate(String(project.berakhir_sk ?? ""))}</span>
           </div>
           {project.unit_terlibat?.length ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -466,7 +467,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               const jobNumber = String(row.nomor_job ?? "").trim();
               const splitParts = jobNumber ? roRows.filter((item) => String(item.nomor_job ?? "").trim() === jobNumber).length : 0;
               const collaborationUnits = Array.isArray(row.unit_kolaborasi) ? (row.unit_kolaborasi as Row[]).map((unit) => String(unit.nama_unit ?? "")).filter(Boolean) : [];
-              const missing = [!(row.no_kontrak ?? project.no_kontrak) && "No Kontrak", !row.pj && "PJ", !row.nomor_job && !row.no_sk && "Nomor Job", !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean) as string[];
+              const missing = [!(row.no_kontrak ?? project.no_kontrak) && "No Kontrak", !row.pj && "PJ", !row.nomor_job && !row.no_sk && "Nomor Job", !project.mulai_sk && "Mulai SK proyek", !project.berakhir_sk && "Berakhir SK proyek"].filter(Boolean) as string[];
               const allocations = Array.isArray(detailRow?.alokasi_list) ? (detailRow.alokasi_list as Row[]) : [];
               const ledger = Array.isArray(detailRow?.transaksi_list) ? (detailRow.transaksi_list as Row[]) : [];
               return (
@@ -547,7 +548,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
                           </div>
                           <div className="grid gap-3 text-sm sm:grid-cols-2">
                             <p><span className="text-muted-foreground">Penanggung jawab:</span> {text(row.pj)}</p>
-                            <p><span className="text-muted-foreground">Periode SK:</span> {formatDate(String(row.mulai_sk ?? ""))} – {formatDate(String(row.berakhir_sk ?? ""))}</p>
+                            <p><span className="text-muted-foreground">Periode SK:</span> mengikuti periode SK proyek.</p>
                           </div>
                           <p className="text-xs text-muted-foreground">
                             No. kontrak proyek: {text(row.no_kontrak ?? project.no_kontrak)} · No. Job RO: {text(row.nomor_job)} · No. SK: {text(row.no_sk)}

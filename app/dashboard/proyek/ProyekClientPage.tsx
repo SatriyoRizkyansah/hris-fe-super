@@ -29,6 +29,8 @@ type ProjectForm = {
   tahun_fiscal: string;
   mulai_proyek: string;
   estimasi_selesai_proyek: string;
+  mulai_sk: string;
+  berakhir_sk: string;
   sumber_pendanaan: string;
   nama_client: string;
   no_kontrak: string;
@@ -38,7 +40,7 @@ type ProjectForm = {
   total_direct_cost: string;
   total_margin: string;
 };
-type RoDraft = Omit<RoInputDto, "nomor_job"> & { key: string; plafonText: string; detailMode: "detail" | "later"; no_kontrak: string; pj: string; mulai_sk: string; berakhir_sk: string };
+type RoDraft = Omit<RoInputDto, "nomor_job"> & { key: string; plafonText: string; detailMode: "detail" | "later"; no_kontrak: string; pj: string };
 type JobDraft = { key: string; nomor_job: string; ros: RoDraft[] };
 type TerminDraft = TerminInputDto & { key: string; persentaseText: string };
 type LookupRow = { id: string; [key: string]: unknown };
@@ -49,12 +51,15 @@ type LegacyRoDraft = RoDraft & { nomor_job?: string };
 type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; jobs?: JobDraft[]; ros?: LegacyRoDraft[]; terms: TerminDraft[]; unitPengusulId?: string; unitKolaborasiIds?: string[] };
 const DRAFTS_STORAGE_KEY = "lemigas:proyek:drafts:v1";
 const currentYear = new Date().getFullYear();
+const normalizeUnitId = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("en-US");
 const blankForm = (): ProjectForm => ({
   kode_proyek: "",
   nama_proyek: "",
   tahun_fiscal: String(currentYear),
   mulai_proyek: "",
   estimasi_selesai_proyek: "",
+  mulai_sk: "",
+  berakhir_sk: "",
   sumber_pendanaan: "",
   nama_client: "",
   no_kontrak: "",
@@ -76,8 +81,6 @@ const blankRo = (unitId = ""): RoDraft => ({
   no_kontrak: "",
   pj: "",
   unit_kolaborasi_ids: [],
-  mulai_sk: "",
-  berakhir_sk: "",
 });
 const blankJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nomor_job: "", ros: [blankRo(unitId)] });
 const blankTermin = (persentase = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(persentase) || 0, persentaseText: persentase });
@@ -153,7 +156,6 @@ export default function ProyekClientPage() {
   const [jobs, setJobs] = useState<JobDraft[]>([blankJob()]);
   const [unitPengusulId, setUnitPengusulId] = useState("");
   const [unitKolaborasiIds, setUnitKolaborasiIds] = useState<string[]>([]);
-  const [roCollaboratorCandidates, setRoCollaboratorCandidates] = useState<Record<string, string>>({});
   const [terms, setTerms] = useState<TerminDraft[]>([blankTermin("100")]);
   const [sk, setSk] = useState<File | null>(null);
   const [rab, setRab] = useState<File | null>(null);
@@ -262,19 +264,27 @@ export default function ProyekClientPage() {
   const roRows = jobs.flatMap((job) => job.ros);
   const roTotal = roRows.reduce((total, row) => total + (Number(row.plafonText) || 0), 0);
   const termsTotal = terms.reduce((total, term) => total + (Number(term.persentaseText) || 0), 0);
-  const collaborationAssigned = projectUnitIds.every((unitId) =>
-    roRows.some((row) => row.id_unit_koordinator === unitId || row.unit_kolaborasi_ids?.includes(unitId)),
-  );
+  const assignedRoUnitIds = new Set(roRows.flatMap((row) => [
+    row.id_unit_koordinator,
+    ...(row.unit_kolaborasi_ids ?? []),
+  ]).map(normalizeUnitId).filter(Boolean));
+  // Unit pengusul may coordinate the project without owning an RO; only project collaborators must be assigned to an RO.
+  const unassignedCollaboratorIds = unitKolaborasiIds.filter((unitId) => !assignedRoUnitIds.has(normalizeUnitId(unitId)));
+  const collaborationAssigned = unassignedCollaboratorIds.length === 0;
   const jobNumbers = jobs.map((job) => job.nomor_job.trim());
   const filledJobNumbers = jobNumbers.filter(Boolean).map((number) => number.toLocaleUpperCase("id-ID"));
   const jobNumbersUnique = new Set(filledJobNumbers).size === filledJobNumbers.length;
   const allocationsValid = jobs.length > 0 && jobs.every((job) =>
     job.nomor_job.trim() && job.ros.length > 0 && job.ros.every((row) =>
-      row.nama_ro && row.mak_id && projectUnitIds.includes(row.id_unit_koordinator) &&
-      (row.unit_kolaborasi_ids ?? []).every((unitId) => projectUnitIds.includes(unitId) && unitId !== row.id_unit_koordinator) &&
-      Number(row.plafonText) > 0 && (row.detailMode === "later" || (row.pj.trim() && row.mulai_sk && row.berakhir_sk)),
+      row.nama_ro && row.mak_id && projectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) &&
+      (row.unit_kolaborasi_ids ?? []).every((unitId) => projectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator)) &&
+      Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()),
     ),
   );
+  const projectSkRequired = roRows.some((row) => row.detailMode === "detail");
+  const projectSkRangeValid = (
+    !form.mulai_sk && !form.berakhir_sk && !projectSkRequired
+  ) || Boolean(form.mulai_sk && form.berakhir_sk && form.berakhir_sk >= form.mulai_sk);
   const valid = Boolean(
     form.kode_proyek &&
     form.nama_proyek &&
@@ -283,6 +293,7 @@ export default function ProyekClientPage() {
     form.total_direct_cost !== "" &&
     form.total_margin !== "" &&
     contractOk &&
+    projectSkRangeValid &&
     unitPengusulId &&
     collaborationAssigned &&
     allocationsValid &&
@@ -298,7 +309,6 @@ export default function ProyekClientPage() {
     setJobs([blankJob(identity.unitKerjaId)]);
     setUnitPengusulId(identity.unitKerjaId);
     setUnitKolaborasiIds([]);
-    setRoCollaboratorCandidates({});
     setTerms([blankTermin("100")]);
     setSk(null);
     setRab(null);
@@ -321,7 +331,6 @@ export default function ProyekClientPage() {
     const savedLeadId = draft.unitPengusulId ?? identity.unitKerjaId;
     setUnitPengusulId(savedLeadId);
     setUnitKolaborasiIds(draft.unitKolaborasiIds ?? []);
-    setRoCollaboratorCandidates({});
     setJobs(restoreJobDrafts(draft, savedLeadId));
     setTerms(draft.terms);
     setEditingDraftId(draft.id);
@@ -379,16 +388,18 @@ export default function ProyekClientPage() {
       })),
     })));
   }
-  function addRoCollaborator(roKey: string) {
-    const unitId = roCollaboratorCandidates[roKey];
+  function addRoCollaborator(roKey: string, unitId: string) {
     if (!unitId) return;
     setJobs((currentJobs) => currentJobs.map((job) => ({
       ...job,
-      ros: job.ros.map((row) => row.key === roKey
-        ? { ...row, unit_kolaborasi_ids: [...new Set([...(row.unit_kolaborasi_ids ?? []), unitId])] }
-        : row),
+      ros: job.ros.map((row) => {
+        if (row.key !== roKey || normalizeUnitId(row.id_unit_koordinator) === normalizeUnitId(unitId)) return row;
+        const currentIds = row.unit_kolaborasi_ids ?? [];
+        return currentIds.some((id) => normalizeUnitId(id) === normalizeUnitId(unitId))
+          ? row
+          : { ...row, unit_kolaborasi_ids: [...currentIds, unitId] };
+      }),
     })));
-    setRoCollaboratorCandidates((candidates) => ({ ...candidates, [roKey]: "" }));
   }
   function removeRoCollaborator(roKey: string, unitId: string) {
     setJobs((currentJobs) => currentJobs.map((job) => ({
@@ -432,6 +443,10 @@ export default function ProyekClientPage() {
   }
 
   async function submit() {
+    if (!projectSkRangeValid) {
+      setFormError("Isi tanggal Mulai SK dan Berakhir SK proyek secara lengkap; tanggal akhir tidak boleh sebelum tanggal mulai.");
+      return;
+    }
     if (form.mulai_proyek && form.estimasi_selesai_proyek && form.estimasi_selesai_proyek < form.mulai_proyek) {
       setFormError("Estimasi selesai proyek tidak boleh sebelum tanggal mulai.");
       return;
@@ -440,7 +455,7 @@ export default function ProyekClientPage() {
       setFormError(!unitPengusulId
         ? "Pilih unit pengusul proyek."
         : !collaborationAssigned
-          ? "Setiap unit yang terlibat harus dipilih sebagai pemilik atau kolaborator pada minimal satu RO."
+          ? `Unit kolaborator berikut belum ditugaskan ke RO: ${unassignedCollaboratorIds.map((unitId) => unitComboboxOptions.find((option) => normalizeUnitId(option.value) === normalizeUnitId(unitId))?.label ?? unitId).join(", ")}. Pilih sebagai pemilik RO atau tambahkan sebagai kolaborator RO.`
           : !jobNumbersUnique
             ? "Nomor Job hanya boleh digunakan pada satu card Job. Tambahkan RO split di dalam card Job yang sama."
             : !allocationsValid
@@ -456,22 +471,24 @@ export default function ProyekClientPage() {
         tahun_fiscal: Number(form.tahun_fiscal),
         mulai_proyek: form.mulai_proyek || undefined,
         estimasi_selesai_proyek: form.estimasi_selesai_proyek || undefined,
+        mulai_sk: form.mulai_sk || undefined,
+        berakhir_sk: form.berakhir_sk || undefined,
         nilai_kontrak: numeric("nilai_kontrak"),
         total_direct_cost: numeric("total_direct_cost"),
         total_margin: numeric("total_margin"),
         no_kontrak: form.no_kontrak || undefined,
-        unit_pengusul_id: unitPengusulId,
-        unit_kolaborasi_ids: unitKolaborasiIds,
+        unit_pengusul_id: normalizeUnitId(unitPengusulId),
+        unit_kolaborasi_ids: unitKolaborasiIds.map(normalizeUnitId),
         job_list: jobs.map((job) => ({
           nomor_job: job.nomor_job.trim(),
           ro_list: job.ros.map((row) => ({
             nama_ro: row.nama_ro,
             mak_id: row.mak_id,
-            id_unit_koordinator: row.id_unit_koordinator,
+            id_unit_koordinator: normalizeUnitId(row.id_unit_koordinator),
             ...(row.rekening_id ? { rekening_id: row.rekening_id } : {}),
             plafon: Number(row.plafonText),
-            unit_kolaborasi_ids: row.unit_kolaborasi_ids ?? [],
-            ...(row.detailMode === "detail" ? { pj: row.pj, mulai_sk: row.mulai_sk, berakhir_sk: row.berakhir_sk } : {}),
+            unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).map(normalizeUnitId),
+            ...(row.detailMode === "detail" ? { pj: row.pj } : {}),
           })),
         })),
         termin_list: terms.map(({ key, persentaseText }, index) => ({ nomor_termin: index + 1, persentase: Number(persentaseText) })),
@@ -823,19 +840,18 @@ export default function ProyekClientPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Kode proyek" required value={form.kode_proyek} onChange={(value) => setForm((current) => ({ ...current, kode_proyek: value }))} />
             <Field label="Tahun fiscal" type="number" required value={form.tahun_fiscal} onChange={(value) => setForm((current) => ({ ...current, tahun_fiscal: value }))} />
-            <div className="sm:col-span-2 grid gap-4 sm:grid-cols-2">
-              <Field label="Mulai proyek" type="date" value={form.mulai_proyek} onChange={(value) => setForm((current) => ({ ...current, mulai_proyek: value }))} />
-              <Field label="Estimasi selesai proyek" type="date" value={form.estimasi_selesai_proyek} onChange={(value) => setForm((current) => ({ ...current, estimasi_selesai_proyek: value }))} />
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="Nama proyek" required value={form.nama_proyek} onChange={(value) => setForm((current) => ({ ...current, nama_proyek: value }))} />
-            </div>
-            <Field label="Sumber pendanaan" value={form.sumber_pendanaan} onChange={(value) => setForm((current) => ({ ...current, sumber_pendanaan: value }))} />
+            <Field label="Nama proyek" required value={form.nama_proyek} onChange={(value) => setForm((current) => ({ ...current, nama_proyek: value }))} />
             <Field label="Nama client" value={form.nama_client} onChange={(value) => setForm((current) => ({ ...current, nama_client: value }))} />
+            <Field label="Sumber pendanaan" value={form.sumber_pendanaan} onChange={(value) => setForm((current) => ({ ...current, sumber_pendanaan: value }))} />
             <Field label="Nomor kontrak" value={form.no_kontrak} onChange={(value) => setForm((current) => ({ ...current, no_kontrak: value }))} />
             <Field label="PJ 1" value={form.pj_1} onChange={(value) => setForm((current) => ({ ...current, pj_1: value }))} />
             <Field label="PJ 2" value={form.pj_2} onChange={(value) => setForm((current) => ({ ...current, pj_2: value }))} />
+            <Field label="Mulai proyek" type="date" value={form.mulai_proyek} onChange={(value) => setForm((current) => ({ ...current, mulai_proyek: value }))} />
+            <Field label="Estimasi selesai proyek" type="date" value={form.estimasi_selesai_proyek} onChange={(value) => setForm((current) => ({ ...current, estimasi_selesai_proyek: value }))} />
+            <Field label="Mulai SK" type="date" required={projectSkRequired} value={form.mulai_sk} onChange={(value) => setForm((current) => ({ ...current, mulai_sk: value }))} />
+            <Field label="Berakhir SK" type="date" required={projectSkRequired} value={form.berakhir_sk} onChange={(value) => setForm((current) => ({ ...current, berakhir_sk: value }))} />
           </div>
+          <p className="text-xs text-muted-foreground">Periode SK ini berlaku untuk seluruh RO. Wajib diisi jika detail administrasi RO dilengkapi sekarang.</p>
         </section>
         <section className="space-y-3 rounded-lg border p-4">
           <div className="space-y-1">
@@ -865,24 +881,27 @@ export default function ProyekClientPage() {
                 <span>Unit pada proyek</span>
                 <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{unitKolaborasiIds.length + Number(Boolean(unitPengusulId))}</span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="grid gap-1.5">
                 {unitPengusulId && (() => {
                   const unitLabel = unitComboboxOptions.find((option) => option.value === unitPengusulId)?.label ?? "Unit pengusul";
                   return (
-                    <span title={unitLabel} className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
-                      <span className="shrink-0 font-semibold">Pengusul</span>
-                      <span className="min-w-0 max-w-[22rem] truncate">{unitLabel}</span>
-                    </span>
+                    <div title={unitLabel} className="flex min-h-9 min-w-0 items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs">
+                      <span className="inline-flex w-24 shrink-0 justify-center rounded-full bg-primary/10 px-2 py-1 font-semibold text-primary">Pengusul</span>
+                      <span className="min-w-0 flex-1 truncate text-foreground">{unitLabel}</span>
+                    </div>
                   );
                 })()}
                 {unitKolaborasiIds.map((unitId) => {
                   const unitLabel = unitComboboxOptions.find((option) => option.value === unitId)?.label ?? "Unit kolaborator";
                   return (
-                    <span key={unitId} title={unitLabel} className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs text-foreground">
-                      <span className="shrink-0 font-medium text-muted-foreground">Kolaborator</span>
-                      <span className="min-w-0 max-w-[22rem] truncate">{unitLabel}</span>
-                      <button type="button" aria-label={`Hapus ${unitLabel}`} onClick={() => removeCollaborator(unitId)} className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X size={13} /></button>
-                    </span>
+                    <div key={unitId} title={unitLabel} className="flex min-h-9 min-w-0 items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs">
+                      <span className="inline-flex w-24 shrink-0 justify-center rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground">Kolaborator</span>
+                      <span className="min-w-0 flex-1 truncate">{unitLabel}</span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${assignedRoUnitIds.has(normalizeUnitId(unitId)) ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                        {assignedRoUnitIds.has(normalizeUnitId(unitId)) ? "Ada di RO" : "Belum di RO"}
+                      </span>
+                      <button type="button" aria-label={`Hapus ${unitLabel}`} onClick={() => removeCollaborator(unitId)} className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><X size={13} /></button>
+                    </div>
                   );
                 })}
               </div>
@@ -943,7 +962,7 @@ export default function ProyekClientPage() {
                           <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2">
                             <div>
                               <h4 className="text-sm font-semibold">RO {String(rowIndex + 1).padStart(2, "0")}{row.nama_ro.trim() ? ` · ${row.nama_ro.trim()}` : ""}</h4>
-                              <p className="text-xs text-muted-foreground">{row.detailMode === "detail" ? "PJ dan tanggal SK diisi sekarang" : "PJ dan tanggal SK dilengkapi nanti"}</p>
+                              <p className="text-xs text-muted-foreground">{row.detailMode === "detail" ? "PJ RO diisi sekarang" : "PJ RO dilengkapi nanti"}</p>
                             </div>
                             {job.ros.length > 1 && <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeRo(row.key)}><Trash2 size={14} /> Hapus RO</Button>}
                           </header>
@@ -955,19 +974,19 @@ export default function ProyekClientPage() {
                               <div className="grid gap-2 sm:grid-cols-2">
                                 <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "detail" ? "border-primary bg-primary/5" : ""}`}>
                                   <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "detail"} onChange={() => updateRo(row.key, "detailMode", "detail")} className="mt-1 accent-primary" />
-                                  <span><strong className="block">Isi sekarang</strong><span className="text-xs text-muted-foreground">PJ dan tanggal SK dilengkapi khusus untuk RO ini.</span></span>
+                                  <span><strong className="block">Isi sekarang</strong><span className="text-xs text-muted-foreground">Isi PJ khusus untuk RO ini. Periode SK diatur di informasi proyek.</span></span>
                                 </label>
                                 <label className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${row.detailMode === "later" ? "border-primary bg-primary/5" : ""}`}>
                                   <input type="radio" name={`ro-detail-${row.key}`} checked={row.detailMode === "later"} onChange={() => updateRo(row.key, "detailMode", "later")} className="mt-1 accent-primary" />
-                                  <span><strong className="block">Lengkapi nanti</strong><span className="text-xs text-muted-foreground">Detail administrasi RO dapat dilengkapi setelah proyek disetujui.</span></span>
+                                  <span><strong className="block">Lengkapi nanti</strong><span className="text-xs text-muted-foreground">PJ RO dapat dilengkapi setelah proyek disetujui.</span></span>
                                 </label>
                               </div>
                             </fieldset>
                             {row.detailMode === "detail" && (
                               <>
-                                <Field label="Penanggung jawab RO" required value={row.pj} onChange={(value) => updateRo(row.key, "pj", value)} />
-                                <Field label="Mulai SK" type="date" required value={row.mulai_sk} onChange={(value) => updateRo(row.key, "mulai_sk", value)} />
-                                <Field label="Berakhir SK" type="date" required value={row.berakhir_sk} onChange={(value) => updateRo(row.key, "berakhir_sk", value)} />
+                                <div className="sm:col-span-2">
+                                  <Field label="Penanggung jawab RO" required value={row.pj} onChange={(value) => updateRo(row.key, "pj", value)} />
+                                </div>
                               </>
                             )}
                             <div className="sm:col-span-2">
@@ -980,29 +999,26 @@ export default function ProyekClientPage() {
                               <span>Unit pemilik RO *</span>
                               <FilterCombobox options={roUnitComboboxOptions} value={row.id_unit_koordinator} onValueChange={(value) => updateRo(row.key, "id_unit_koordinator", value)} label="Pilih unit pemilik RO" />
                             </label>
-                            <div className="grid min-w-0 gap-1.5 text-sm font-medium">
-                              <span>Unit kolaborasi RO</span>
-                              {availableRoCollaborators.length ? (
-                                <div className="flex gap-2">
-                                  <div className="min-w-0 flex-1"><FilterCombobox options={availableRoCollaborators} value={roCollaboratorCandidates[row.key] ?? ""} onValueChange={(value) => setRoCollaboratorCandidates((state) => ({ ...state, [row.key]: value }))} label="Pilih unit terlibat pada RO ini" /></div>
-                                  <Button type="button" variant="outline" disabled={!roCollaboratorCandidates[row.key]} onClick={() => addRoCollaborator(row.key)}><Plus size={14} /> Tambah</Button>
-                                </div>
-                              ) : <p className="rounded-md border border-dashed px-3 py-2 text-xs font-normal text-muted-foreground">Tidak ada unit lain yang tersedia untuk RO ini.</p>}
-                              {(row.unit_kolaborasi_ids ?? []).length ? (
-                                <div className="flex flex-wrap gap-1.5 pt-1">
-                                  {(row.unit_kolaborasi_ids ?? []).map((unitId) => (
-                                    <span key={unitId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-normal text-primary">
-                                      {unitComboboxOptions.find((option) => option.value === unitId)?.label ?? "Unit kolaborator"}
-                                      <button type="button" aria-label="Hapus unit kolaborasi" onClick={() => removeRoCollaborator(row.key, unitId)} className="rounded-full p-0.5 hover:bg-background"><X size={12} /></button>
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : <span className="text-xs font-normal text-muted-foreground">Opsional. Gunakan untuk unit yang ikut terlibat dalam RO ini.</span>}
-                            </div>
                             <label className="grid min-w-0 gap-1.5 text-sm font-medium">
                               <span>Rekening tujuan</span>
                               <FilterCombobox options={rekeningComboboxOptions} value={row.rekening_id ?? ""} onValueChange={(value) => updateRo(row.key, "rekening_id", value)} label="Pilih rekening (opsional)" />
                             </label>
+                            <div className="grid min-w-0 content-start gap-1.5 text-sm font-medium sm:col-span-2">
+                              <span>Unit kolaborasi RO</span>
+                              {availableRoCollaborators.length ? (
+                                <FilterCombobox options={availableRoCollaborators} value="" onValueChange={(value) => addRoCollaborator(row.key, value)} label="Pilih unit untuk langsung ditambahkan ke RO ini" />
+                              ) : <p className="flex h-10 items-center rounded-md border border-dashed px-3 text-xs font-normal text-muted-foreground">Tidak ada unit lain untuk dipilih.</p>}
+                              {(row.unit_kolaborasi_ids ?? []).length ? (
+                                <div className="grid gap-1.5 pt-1">
+                                  {(row.unit_kolaborasi_ids ?? []).map((unitId) => (
+                                    <div key={unitId} title={unitComboboxOptions.find((option) => option.value === unitId)?.label ?? "Unit kolaborator"} className="flex min-h-9 min-w-0 items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs font-normal">
+                                      <span className="min-w-0 flex-1 truncate text-foreground">{unitComboboxOptions.find((option) => option.value === unitId)?.label ?? "Unit kolaborator"}</span>
+                                      <button type="button" aria-label="Hapus unit kolaborasi" onClick={() => removeRoCollaborator(row.key, unitId)} className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><X size={12} /></button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : <span className="text-xs font-normal text-muted-foreground">Opsional. Gunakan untuk unit yang ikut terlibat dalam RO ini.</span>}
+                            </div>
                           </div>
                         </article>
                       );

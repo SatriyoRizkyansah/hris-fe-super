@@ -47,6 +47,12 @@ function objectData(value: unknown): Row {
   }
   return current && typeof current === "object" ? current : {};
 }
+function roDisplayName(ro: Row) {
+  return String(ro.nama_ro ?? "RO");
+}
+function roAccountingReference(ro: Row) {
+  return ro.kode_mak ? `MAK ${String(ro.kode_mak)}` : ro.nomor_job ? `Job ${String(ro.nomor_job)}` : null;
+}
 function formatDateTime(value: unknown) {
   if (!value) return "—";
   const date = new Date(String(value));
@@ -302,7 +308,10 @@ export default function PengajuanBelanjaPageClient() {
   });
   const ros = listRows(rosQuery.data);
   const projectOptions = projects.map((project) => ({ value: String(project.id), label: `${project.kode_proyek ?? ""} · ${project.nama_proyek ?? "Proyek"} · TA ${project.tahun_fiscal ?? "—"}` }));
-  const roOptions = ros.map((ro) => ({ value: String(ro.id), label: `${String(ro.kode_ro ?? "")} · ${String(ro.nama_ro ?? "RO")} · sisa ${formatRupiah(ro.sisa_saldo ?? ro.total_plafon)}` }));
+  const roOptions = ros.map((ro) => ({
+    value: String(ro.id),
+    label: [roDisplayName(ro), roAccountingReference(ro), `sisa ${formatRupiah(ro.sisa_saldo ?? ro.total_plafon)}`].filter(Boolean).join(" · "),
+  }));
   const selectedProject = projects.find((project) => String(project.id) === selectedProjectId);
   const selectedRo = ros.find((ro) => String(ro.id) === form.ro_id);
   const retailDetailJob = (retailDetailRequest?.retail_job ?? {}) as Row;
@@ -759,7 +768,6 @@ export default function PengajuanBelanjaPageClient() {
                   documents={[
                     { label: "Bukti kuitansi", path: detailRequest.file_bukti },
                     { label: "RAB RO", path: detailRequest.ro?.file_rab },
-                    { label: "SK RO", path: detailRequest.ro?.file_sk },
                   ]}
                 />
               </div>
@@ -1079,8 +1087,6 @@ export default function PengajuanBelanjaPageClient() {
                   }}
                   label="Proyek"
                 />
-                {projectsQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar proyek…</p>}
-                {projectsQuery.isError && <p className="text-xs text-destructive">{apiErrorMessage(projectsQuery.error, "Gagal memuat proyek.")}</p>}
                 {selectedProject && (
                   <div className="rounded-lg border border-primary/15 bg-background px-3 py-2.5">
                     <p className="text-xs font-medium text-muted-foreground">Proyek terpilih</p>
@@ -1090,6 +1096,8 @@ export default function PengajuanBelanjaPageClient() {
                     </p>
                   </div>
                 )}
+                {projectsQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar proyek…</p>}
+                {projectsQuery.isError && <p className="text-xs text-destructive">{apiErrorMessage(projectsQuery.error, "Gagal memuat proyek.")}</p>}
               </CardContent>
             </Card>
             {selectedProjectId && (
@@ -1107,7 +1115,7 @@ export default function PengajuanBelanjaPageClient() {
                       <p className="text-xs font-medium text-emerald-800">RO terpilih</p>
                       <p className="mt-0.5 font-semibold text-emerald-950">{String(selectedRo.nama_ro ?? "RO")}</p>
                       <p className="mt-0.5 text-xs text-emerald-800">
-                        {String(selectedRo.kode_ro ?? "")} · Sisa saldo {formatRupiah(selectedRo.sisa_saldo ?? selectedRo.total_plafon)}
+                        {[roAccountingReference(selectedRo), `Sisa saldo ${formatRupiah(selectedRo.sisa_saldo ?? selectedRo.total_plafon)}`].filter(Boolean).join(" · ")}
                       </p>
                     </div>
                   )}
@@ -1205,7 +1213,6 @@ export default function PengajuanBelanjaPageClient() {
                   documents={[
                     { label: "Bukti kuitansi", path: reviewRequest.file_bukti },
                     { label: "RAB RO", path: reviewRequest.ro?.file_rab },
-                    { label: "SK RO", path: reviewRequest.ro?.file_sk },
                     { label: "RAB proyek", path: reviewProject.file_rab },
                     { label: "SK proyek", path: reviewProject.file_sk },
                   ]}

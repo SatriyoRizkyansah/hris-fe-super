@@ -12,6 +12,7 @@ import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, envelopeRows } from "@/lib/hris/api";
+import { formatDate } from "@/lib/hris/format";
 import type { CreateRoDto, ProyekItemDto } from "@/lib/api/generated/api-generated";
 
 type Row = Record<string, unknown>;
@@ -27,8 +28,6 @@ type Form = {
   nomor_job: string;
   pj: string;
   no_sk: string;
-  mulai_sk: string;
-  berakhir_sk: string;
 };
 const blank = (): Form => ({
   nama_ro: "",
@@ -42,8 +41,6 @@ const blank = (): Form => ({
   nomor_job: "",
   pj: "",
   no_sk: "",
-  mulai_sk: "",
-  berakhir_sk: "",
 });
 
 export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: () => Promise<unknown> | void }) {
@@ -121,10 +118,6 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
       setError("MAK, nama, proyek, unit pemilik, tahun fiskal, nomor Job, dan plafon wajib diisi.");
       return;
     }
-    if (form.mulai_sk && form.berakhir_sk && form.berakhir_sk < form.mulai_sk) {
-      setError("Berakhir SK tidak boleh sebelum Mulai SK.");
-      return;
-    }
     try {
       setError("");
       await create.mutateAsync({
@@ -140,8 +133,6 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
         unit_kolaborasi_ids: collaboratorIds,
         pj: form.pj || undefined,
         no_sk: form.no_sk || undefined,
-        mulai_sk: form.mulai_sk || undefined,
-        berakhir_sk: form.berakhir_sk || undefined,
       });
     } catch (cause) {
       setError(apiErrorMessage(cause, "Gagal membuat RO."));
@@ -268,14 +259,13 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
           No SK
           <Input value={form.no_sk} onChange={(event) => field("no_sk", event.target.value)} />
         </label>
-        <label className="grid gap-1 text-sm">
-          Mulai SK
-          <Input type="date" value={form.mulai_sk} onChange={(event) => field("mulai_sk", event.target.value)} />
-        </label>
-        <label className="grid gap-1 text-sm">
-          Berakhir SK
-          <Input type="date" value={form.berakhir_sk} onChange={(event) => field("berakhir_sk", event.target.value)} />
-        </label>
+        {selectedProject && (
+          <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">
+            Periode SK proyek: {selectedProject.mulai_sk ? formatDate(String(selectedProject.mulai_sk)) : "Belum diatur"}
+            {" – "}
+            {selectedProject.berakhir_sk ? formatDate(String(selectedProject.berakhir_sk)) : "Belum diatur"}
+          </p>
+        )}
       </div>
       {error && (
         <Alert variant="destructive">

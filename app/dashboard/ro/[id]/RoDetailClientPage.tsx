@@ -17,18 +17,21 @@ import { DataTable } from "@/components/table";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
+import { apiQueryKeys } from "@/lib/api/query-keys";
 import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, envelopeData, envelopeRows, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
-import type { RoItemDto, UpdateRoDto } from "@/lib/api/generated/api-generated";
+import type { CreatePengajuanBelanjaDto, RoItemDto, UpdateRoDto } from "@/lib/api/generated/api-generated";
 
 type AnyRow = Record<string, unknown>;
-type EditForm = { nama_ro: string; total_plafon: string; no_kontrak: string; nomor_job: string; unit_kolaborasi_ids: string[]; pj: string; no_sk: string; mulai_sk: string; berakhir_sk: string; status_ro: "AKTIF" | "NONAKTIF" | "SELESAI" };
+type EditForm = { nama_ro: string; total_plafon: string; no_kontrak: string; nomor_job: string; unit_kolaborasi_ids: string[]; pj: string; no_sk: string; status_ro: "AKTIF" | "NONAKTIF" | "SELESAI" };
 type TransactionForm = { nama_kegiatan: string; no_kuitansi: string; tanggal: string; debit: string; kredit: string; keterangan: string };
+type SpendRequestForm = { nama_kegiatan: string; no_kuitansi: string; tanggal: string; jumlah: string; keterangan: string };
 type TransactionDirection = "debit" | "kredit";
-const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: "", nomor_job: "", unit_kolaborasi_ids: [], pj: "", no_sk: "", mulai_sk: "", berakhir_sk: "", status_ro: "AKTIF" });
+const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: "", nomor_job: "", unit_kolaborasi_ids: [], pj: "", no_sk: "", status_ro: "AKTIF" });
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
+const emptySpendRequest = (): SpendRequestForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), jumlah: "", keterangan: "" });
 function missing(row: RoItemDto) {
   return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", (row.id_proyek ? !row.nomor_job && !row.no_sk : !row.no_sk) && (row.id_proyek ? "Nomor Job" : "No SK"), !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean);
 }
@@ -36,13 +39,16 @@ function missing(row: RoItemDto) {
 export default function RoDetailClientPage({ id }: { id: string }) {
   const identity = useMemo(browserIdentity, []);
   const canManage = identity.role === "superadmin" || identity.role === "koordinator";
+  const canCreateRequest = ["superadmin", "koordinator", "subkoor"].includes(identity.role ?? "");
   const [tab, setTab] = useState<"ledger" | "alokasi">("ledger");
+  const [spendRequestOpen, setSpendRequestOpen] = useState(false);
+  const [spendRequest, setSpendRequest] = useState<SpendRequestForm>(emptySpendRequest);
+  const [spendRequestError, setSpendRequestError] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [edit, setEdit] = useState<EditForm>(emptyEdit);
   const [collaboratorCandidate, setCollaboratorCandidate] = useState("");
   const [rabFile, setRabFile] = useState<File | null>(null);
-  const [skFile, setSkFile] = useState<File | null>(null);
-  const [uploadKind, setUploadKind] = useState<"rab" | "sk" | null>(null);
+  const [rabUploading, setRabUploading] = useState(false);
   const [notice, setNotice] = useState("");
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [transaction, setTransaction] = useState<TransactionForm>(emptyTransaction);
@@ -134,6 +140,24 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       await refresh();
     },
   });
+  const createSpendRequest = use_mutation<unknown, Error, CreatePengajuanBelanjaDto>({
+    tag: "keuanganPengajuanBelanja",
+    method: "pengajuanBelanjaControllerCreate",
+    invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja")],
+    mutationFn: async (data) => {
+      setBrowserToken();
+      return (await browserApi.keuanganPengajuanBelanja.pengajuanBelanjaControllerCreate(data, { format: "json" })).data;
+    },
+    onSuccess: (response) => {
+      setSpendRequestOpen(false);
+      setSpendRequest(emptySpendRequest());
+      setSpendRequestError("");
+      const payload = response as AnyRow;
+      const message = typeof payload?.message === "string" ? payload.message : "Pengajuan belanja berhasil dikirim.";
+      window.dispatchEvent(new CustomEvent("api:success", { detail: { message } }));
+    },
+    onError: (error) => setSpendRequestError(apiErrorMessage(error, "Pengajuan belanja gagal disimpan.")),
+  });
   const removeTransaction = use_mutation({
     tag: "masterRoTransaksi",
     method: "remove",
@@ -157,8 +181,6 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       unit_kolaborasi_ids: (ro.unit_kolaborasi ?? []).map((unit) => unit.id),
       pj: String(ro.pj ?? ""),
       no_sk: String(ro.no_sk ?? ""),
-      mulai_sk: String(ro.mulai_sk ?? "").slice(0, 10),
-      berakhir_sk: String(ro.berakhir_sk ?? "").slice(0, 10),
       status_ro: (ro.status_ro as EditForm["status_ro"]) ?? "AKTIF",
     });
     setNotice("");
@@ -170,10 +192,6 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       setNotice("Nama RO wajib diisi dan plafon awal proyek harus lebih dari Rp0.");
       return;
     }
-    if (edit.mulai_sk && edit.berakhir_sk && edit.berakhir_sk < edit.mulai_sk) {
-      setNotice("Berakhir SK tidak boleh sebelum Mulai SK.");
-      return;
-    }
     try {
       const { total_plafon: _lockedPlan, ...metadata } = edit;
       await update.mutateAsync({
@@ -183,8 +201,6 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         unit_kolaborasi_ids: edit.unit_kolaborasi_ids,
         pj: edit.pj || undefined,
         no_sk: edit.no_sk || undefined,
-        mulai_sk: edit.mulai_sk || undefined,
-        berakhir_sk: edit.berakhir_sk || undefined,
       });
     } catch (error) {
       setNotice(apiErrorMessage(error, "Gagal memperbarui RO. RO dari proyek dapat ditolak backend; periksa pesan ini."));
@@ -238,23 +254,45 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       setReceiptUploading(false);
     }
   }
-  async function upload(kind: "rab" | "sk") {
-    const selectedFile = kind === "rab" ? rabFile : skFile;
-    if (!selectedFile) {
+  async function submitSpendRequest() {
+    if (!ro?.id_proyek || !spendRequest.nama_kegiatan.trim() || !spendRequest.tanggal || Number(spendRequest.jumlah) <= 0) {
+      setSpendRequestError("Nama kegiatan, tanggal, dan jumlah lebih dari nol wajib diisi.");
+      return;
+    }
+    try {
+      setSpendRequestError("");
+      await createSpendRequest.mutateAsync({
+        ro_id: ro.id,
+        nama_kegiatan: spendRequest.nama_kegiatan.trim(),
+        no_kuitansi: spendRequest.no_kuitansi.trim() || undefined,
+        tanggal: spendRequest.tanggal,
+        jumlah: Number(spendRequest.jumlah),
+        keterangan: spendRequest.keterangan.trim() || undefined,
+      });
+    } catch (error) {
+      setSpendRequestError(apiErrorMessage(error, "Pengajuan belanja gagal disimpan."));
+    }
+  }
+  function openSpendRequest() {
+    setSpendRequest(emptySpendRequest());
+    setSpendRequestError("");
+    setSpendRequestOpen(true);
+  }
+  async function uploadRab() {
+    if (!rabFile) {
       setNotice("Pilih dokumen lebih dulu.");
       return;
     }
     try {
-      setUploadKind(kind);
-      await uploadHrisFile(`/api/ro/${id}/${kind}`, selectedFile);
-      if (kind === "rab") setRabFile(null);
-      else setSkFile(null);
+      setRabUploading(true);
+      await uploadHrisFile(`/api/ro/${id}/rab`, rabFile);
+      setRabFile(null);
       setNotice("");
       await refresh();
     } catch (error) {
       setNotice(apiErrorMessage(error, "Unggah dokumen gagal."));
     } finally {
-      setUploadKind(null);
+      setRabUploading(false);
     }
   }
   if (detail.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memuat RO...</div>;
@@ -363,35 +401,25 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         </p>
         <p>
           <span className="block text-xs text-muted-foreground">SK</span>
-          {String(ro.no_sk ?? "—")} · {formatDate(ro.mulai_sk)} – {formatDate(ro.berakhir_sk)}
+          {String(ro.no_sk ?? "—")} · Periode SK proyek {formatDate(ro.mulai_sk)} – {formatDate(ro.berakhir_sk)}
         </p>
       </section>
       {canManage && (
-        <section className="grid gap-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:grid-cols-2">
+        <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
           <DocumentUploadField
             label="Dokumen RAB"
             accept=".pdf,.xls,.xlsx"
             value={rabFile}
             onChange={setRabFile}
-            onUpload={() => upload("rab")}
+            onUpload={uploadRab}
             currentFile={typeof ro.file_rab === "string" ? ro.file_rab : null}
-            pending={uploadKind === "rab"}
-            disabled={uploadKind !== null && uploadKind !== "rab"}
-          />
-          <DocumentUploadField
-            label="Dokumen SK"
-            accept=".pdf"
-            value={skFile}
-            onChange={setSkFile}
-            onUpload={() => upload("sk")}
-            currentFile={typeof ro.file_sk === "string" ? ro.file_sk : null}
-            pending={uploadKind === "sk"}
-            disabled={uploadKind !== null && uploadKind !== "sk"}
+            pending={rabUploading}
+            disabled={rabUploading}
           />
         </section>
       )}
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
-        <div className="flex items-center justify-between border-b bg-muted/40">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/40 pr-3">
           <div className="flex">
             <button className={`px-4 py-3 text-sm font-medium ${tab === "ledger" ? "border-b-2 border-primary" : "text-muted-foreground"}`} onClick={() => setTab("ledger")}>
               Ledger ({ledgerRows.length})
@@ -400,6 +428,11 @@ export default function RoDetailClientPage({ id }: { id: string }) {
               Alokasi Gaji ({allocations.length})
             </button>
           </div>
+          {tab === "ledger" && canCreateRequest && ro.id_proyek && (
+            <Button size="sm" onClick={openSpendRequest}>
+              <Plus size={16} /> Ajukan Belanja
+            </Button>
+          )}
         </div>
         <div className="p-5">
           {tab === "ledger" ? (
@@ -517,14 +550,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
             No SK
             <Input value={edit.no_sk} onChange={(event) => setEdit((state) => ({ ...state, no_sk: event.target.value }))} />
           </label>
-          <label className="grid gap-1 text-sm">
-            Mulai SK
-            <Input type="date" value={edit.mulai_sk} onChange={(event) => setEdit((state) => ({ ...state, mulai_sk: event.target.value }))} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Berakhir SK
-            <Input type="date" value={edit.berakhir_sk} onChange={(event) => setEdit((state) => ({ ...state, berakhir_sk: event.target.value }))} />
-          </label>
+          {ro.id_proyek && <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">Periode SK mengikuti proyek: {formatDate(ro.mulai_sk)} – {formatDate(ro.berakhir_sk)}. Ubah periode dari detail proyek.</p>}
         </div>
       </Modal>
       <Modal
@@ -612,6 +638,61 @@ export default function RoDetailClientPage({ id }: { id: string }) {
             currentFile={String(ledgerRows.find((row) => String(row.id) === transactionId)?.file_bukti ?? "") || null}
             disabled={saveTransaction.isPending || receiptUploading}
           />
+        </div>
+      </Modal>
+      <Modal
+        open={spendRequestOpen}
+        onClose={() => setSpendRequestOpen(false)}
+        title="Ajukan Belanja"
+        description="Pengajuan ini otomatis menggunakan proyek dan RO yang sedang dibuka."
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setSpendRequestOpen(false)}>
+              Batal
+            </Button>
+            <Button disabled={createSpendRequest.isPending} onClick={submitSpendRequest}>
+              {createSpendRequest.isPending && <LoaderCircle className="animate-spin" size={16} />} Kirim Pengajuan
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <section className="space-y-2 rounded-xl border border-primary/15 bg-primary/[0.02] p-3 sm:col-span-2">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Proyek terkunci</p>
+              <p className="font-semibold">{String(ro.nama_proyek ?? "Proyek")}</p>
+              <p className="text-xs text-muted-foreground">Tahun fiskal {ro.tahun_fiscal}</p>
+            </div>
+            <div className="border-t border-border/70 pt-2">
+              <p className="text-xs font-medium text-muted-foreground">RO sumber dana terkunci</p>
+              <p className="font-semibold">{ro.nama_ro}</p>
+              <p className="text-xs text-muted-foreground">
+                {[ro.kode_mak ? `MAK ${String(ro.kode_mak)}` : null, `Sisa hak belanja ${formatRupiah(remainingRight)}`].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+          </section>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Nama kegiatan *
+            <Input maxLength={200} value={spendRequest.nama_kegiatan} onChange={(event) => setSpendRequest((current) => ({ ...current, nama_kegiatan: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Tanggal *
+            <Input type="date" value={spendRequest.tanggal} onChange={(event) => setSpendRequest((current) => ({ ...current, tanggal: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Nomor kuitansi
+            <Input maxLength={100} value={spendRequest.no_kuitansi} onChange={(event) => setSpendRequest((current) => ({ ...current, no_kuitansi: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Jumlah *
+            <MoneyInput value={spendRequest.jumlah} onValueChange={(value) => setSpendRequest((current) => ({ ...current, jumlah: value }))} />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Keterangan
+            <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={1000} value={spendRequest.keterangan} onChange={(event) => setSpendRequest((current) => ({ ...current, keterangan: event.target.value }))} placeholder="Rincian kebutuhan belanja (opsional)" />
+          </label>
+          {spendRequestError && <Alert variant="destructive" className="sm:col-span-2"><AlertDescription>{spendRequestError}</AlertDescription></Alert>}
         </div>
       </Modal>
       <AlertDialog open={Boolean(deleteTransaction)} onOpenChange={(open) => !open && setDeleteTransaction(null)}>

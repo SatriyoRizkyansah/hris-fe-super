@@ -227,6 +227,8 @@ export interface ProyekItemDto {
   kode_proyek: string;
   nama_proyek: string;
   tahun_fiscal: number;
+  mulai_sk?: object | null;
+  berakhir_sk?: object | null;
   sumber_pendanaan?: object | null;
   pj_1?: object | null;
   pj_2?: object | null;
@@ -284,10 +286,6 @@ export interface RoInputDto {
   pj?: string;
   /** @example "SK-RO-001" */
   no_sk?: string;
-  /** @example "2026-01-01" */
-  mulai_sk?: string;
-  /** @example "2026-12-31" */
-  berakhir_sk?: string;
 }
 
 export interface TerminInputDto {
@@ -324,6 +322,9 @@ export interface CreateProyekDto {
    * @example "2026-12-31"
    */
   estimasi_selesai_proyek?: string;
+  /** Periode SK yang berlaku untuk seluruh RO di proyek */
+  mulai_sk?: string;
+  berakhir_sk?: string;
   /** @example "APBN 2026" */
   sumber_pendanaan?: string;
   /** @example "Nama Penanggung Jawab 1" */
@@ -365,6 +366,8 @@ export interface UpdateProyekDto {
   nama_proyek?: string;
   /** @example 2026 */
   tahun_fiscal?: number;
+  mulai_sk?: string;
+  berakhir_sk?: string;
   sumber_pendanaan?: string;
   pj_1?: string;
   pj_2?: string;
@@ -418,7 +421,6 @@ export interface RoItemDto {
   unit_kolaborasi?: { id: string; kode_unit: string; nama_unit: string }[];
   pj?: object | null;
   file_rab?: object | null;
-  file_sk?: object | null;
   status_ro?: string;
   no_sk?: object | null;
   mulai_sk?: object | null;
@@ -456,10 +458,6 @@ export interface CreateRoDto {
   pj?: string;
   /** @example "SK-RO-001" */
   no_sk?: string;
-  /** @example "2026-01-01" */
-  mulai_sk?: string;
-  /** @example "2026-12-31" */
-  berakhir_sk?: string;
   /** @default "AKTIF" */
   status_ro?: "AKTIF" | "NONAKTIF" | "SELESAI";
 }
@@ -476,8 +474,6 @@ export interface UpdateRoDto {
   unit_kolaborasi_ids?: string[];
   pj?: string;
   no_sk?: string;
-  mulai_sk?: string;
-  berakhir_sk?: string;
   status_ro?: "AKTIF" | "NONAKTIF" | "SELESAI";
 }
 
@@ -1962,22 +1958,6 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         ...params,
       }),
 
-    /**
-     * No description
-     *
-     * @tags Master - RO
-     * @name RoControllerUploadSk
-     * @summary Upload SK RO (Superadmin, Koordinator)
-     * @request POST:/api/ro/{id}/sk
-     * @secure
-     */
-    roControllerUploadSk: (id: string, params: RequestParams = {}) =>
-      this.request<void, any>({
-        path: `/api/ro/${id}/sk`,
-        method: "POST",
-        secure: true,
-        ...params,
-      }),
   };
   masterRoTransaksi = {
     /**

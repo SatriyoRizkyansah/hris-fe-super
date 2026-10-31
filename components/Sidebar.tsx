@@ -36,6 +36,7 @@ const sections = [
       { href: "/dashboard/proyek", label: "Proyek", icon: BriefcaseBusiness, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_karwas", "pimpinan"] },
       { href: "/dashboard/retail", label: "Proyek Retail", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"] },
       { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"] },
+      { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"] },
     ],
   },
   {
@@ -43,7 +44,6 @@ const sections = [
     items: [
       { href: "/dashboard/termin", label: "Penagihan", icon: ClipboardCheck, roles: billing },
       { href: "/dashboard/invoice", label: "Invoice", icon: FileText, roles: ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "pimpinan", "spi"] },
-      { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"] },
       { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"] },
       { href: "/dashboard/rekening", label: "Rekening Bank", icon: Landmark, roles: treasury },
       { href: "/dashboard/mak", label: "MAK", icon: FileText, roles: finance },
