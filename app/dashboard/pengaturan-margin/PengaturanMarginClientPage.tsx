@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Check, LoaderCircle, Save, WalletCards } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
@@ -26,10 +26,16 @@ function responseRows<T extends ApiRow>(response: unknown): T[] {
   }
   return Array.isArray(value) ? (value as T[]) : [];
 }
-type OptionRow = { id: string; kode_unit?: string; nama_unit?: string; nama_bank?: string; nama_rekening?: string; nomor_rekening?: string; status_aktif?: string };
+type OptionRow = { id: string; nama_bank?: string; nama_rekening?: string; nomor_rekening?: string; status_aktif?: string };
+const FIXED_PERCENTAGES: Record<string, number> = {
+  P1_PNS_NON_PNS: 48,
+  P2_KP3: 30,
+  OPS_KANTOR: 17,
+  OPS_KP3: 2.5,
+  MULOS_SPI: 2.5,
+};
 const formatPct = (value: number) => `${value.toFixed(2).replace(/\.00$/, "")}%`;
 const isUuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-const unitLabel = (unit?: OptionRow) => (unit ? [unit.kode_unit, unit.nama_unit].filter(Boolean).join(" — ") : "Unit koordinator belum dipilih");
 const accountLabel = (account?: OptionRow) => (account ? [account.nama_bank, account.nama_rekening, account.nomor_rekening ? `(${account.nomor_rekening})` : ""].filter(Boolean).join(" — ") : "Rekening belum dipilih");
 
 export default function PengaturanMarginClientPage() {
@@ -46,15 +52,6 @@ export default function PengaturanMarginClientPage() {
       return apiData(browserApi.masterPengaturanMargin.pengaturanMarginControllerGetData({ format: "json" }));
     },
   });
-  const units = use_query({
-    tag: "masterUnitKerja",
-    method: "list",
-    params: { tipe: "KOORDINATOR" },
-    queryFn: async () => {
-      setBrowserToken();
-      return apiData(browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 }, { format: "json" }));
-    },
-  });
   const accounts = use_query({
     tag: "masterRekeningBank",
     method: "list",
@@ -65,9 +62,8 @@ export default function PengaturanMarginClientPage() {
     },
   });
   const rows = responseRows<MarginRow>(settings.data).map((row) => drafts[row.id] ?? row);
-  const unitRows = responseRows<OptionRow>(units.data);
   const accountRows = responseRows<OptionRow>(accounts.data).filter((row) => row.status_aktif === "AKTIF");
-  const total = rows.reduce((sum, row) => sum + (Number(row.persentase) || 0), 0);
+  const total = Object.values(FIXED_PERCENTAGES).reduce((sum, percentage) => sum + percentage, 0);
   const totalOk = Math.abs(total - 100) < 0.01;
   const update = use_mutation({
     tag: "masterPengaturanMargin",
@@ -76,14 +72,11 @@ export default function PengaturanMarginClientPage() {
       setBrowserToken();
       return browserApi.masterPengaturanMargin.pengaturanMarginControllerUpdate(id, {
         nama_kamar: String(row.nama_kamar ?? ""),
-        persentase: Number(row.persentase) || 0,
-        unit_kerja_id: String(row.unit_kerja_id ?? "") || undefined,
         rekening_id: String(row.rekening_id ?? "") || undefined,
       });
     },
     invalidateKeys: [["api", "masterPengaturanMargin"]],
   });
-  const percentages = useMemo(() => rows.map((row) => Number(row.persentase) || 0), [rows]);
   function patch(row: MarginRow, key: keyof MarginRow, value: string | number) {
     setDrafts((current) => ({ ...current, [row.id]: { ...row, [key]: value } }));
     setSavedId("");
@@ -110,7 +103,7 @@ export default function PengaturanMarginClientPage() {
     <section className="hris-page space-y-5">
       <header>
         <h1 className="text-2xl font-bold">Pengaturan Margin</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Atur persentase pembagian margin, unit koordinator pemilik wallet, dan rekening tujuan.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Persentase pembagian dan pemilik wallet mengikuti ketentuan tetap. Rekening tujuan dapat disesuaikan.</p>
       </header>
       <Alert className="border-sky-200 bg-sky-50/70 text-sky-950">
         <AlertTitle>Dasar peraturan</AlertTitle>
@@ -130,7 +123,7 @@ export default function PengaturanMarginClientPage() {
             </span>
             <div>
               <p className="text-sm font-semibold">Total pembagian persentase kamar</p>
-              <p className="mt-1 text-xs text-muted-foreground">Jumlah seluruh alokasi harus tepat 100% sebelum distribusi margin.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Pembagian baku: 48% + 30% + 17% + 2,5% + 2,5%.</p>
             </div>
           </div>
           <div className="flex items-baseline gap-2">
@@ -148,12 +141,6 @@ export default function PengaturanMarginClientPage() {
         <Alert variant="destructive">
           <AlertTitle>Gagal memuat pengaturan</AlertTitle>
           <AlertDescription>{apiErrorMessage(settings.error)}</AlertDescription>
-        </Alert>
-      )}
-      {units.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Gagal memuat unit koordinator</AlertTitle>
-          <AlertDescription>{apiErrorMessage(units.error)}</AlertDescription>
         </Alert>
       )}
       {accounts.error && (
@@ -177,7 +164,7 @@ export default function PengaturanMarginClientPage() {
                       <h2 className="truncate text-base font-semibold leading-5">{String(row.kategori_kamar ?? "Kamar").replaceAll("_", " ")}</h2>
                     </div>
                   </div>
-                  <span className="shrink-0 rounded-md bg-muted px-2.5 py-1 text-sm font-semibold tabular-nums">{formatPct(percentages[index] ?? 0)}</span>
+                  <span className="shrink-0 rounded-md bg-muted px-2.5 py-1 text-sm font-semibold tabular-nums">{formatPct(FIXED_PERCENTAGES[String(row.kategori_kamar)] ?? 0)}</span>
                 </div>
                 <label className="grid gap-2 text-sm font-medium">
                   <span>Nama kamar</span>
@@ -187,24 +174,15 @@ export default function PengaturanMarginClientPage() {
                   <label className="grid gap-2 text-sm font-medium">
                     <span>Persentase</span>
                     <div className="relative">
-                      <Input type="number" min="0" max="100" step="0.01" value={String(row.persentase ?? 0)} onChange={(event) => patch(row, "persentase", event.target.value === "" ? 0 : Number(event.target.value))} className="pr-7" />
+                      <Input type="number" value={String(FIXED_PERCENTAGES[String(row.kategori_kamar)] ?? 0)} disabled className="pr-7" />
                       <span className="absolute right-3 top-2.5 text-sm text-muted-foreground">%</span>
                     </div>
                   </label>
                   <label className="grid min-w-0 gap-2 text-sm font-medium">
-                    <span>Unit koordinator</span>
-                    <select
-                      value={String(row.unit_kerja_id ?? "")}
-                      onChange={(event) => patch(row, "unit_kerja_id", event.target.value)}
-                      className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-                    >
-                      <option value="">Pilih unit koordinator…</option>
-                      {unitRows.map((unit) => (
-                        <option key={unit.id} value={unit.id}>
-                          {unitLabel(unit)}
-                        </option>
-                      ))}
-                    </select>
+                    <span>Unit pemilik wallet</span>
+                    <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3 text-sm font-normal">
+                      ORG-UMUM — Bagian Umum
+                    </div>
                   </label>
                 </div>
                 <label className="grid min-w-0 gap-2 text-sm font-medium">
