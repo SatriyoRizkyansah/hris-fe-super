@@ -31,6 +31,15 @@ const sections = [
     ],
   },
   {
+    title: "Monev",
+    items: [
+      { href: "/dashboard/karwas", label: "Ringkasan", icon: Gauge, roles: ["superadmin", "keu_karwas"] },
+      { href: "/dashboard/karwas/unit", label: "Kinerja Unit", icon: Building2, roles: ["superadmin", "keu_karwas"] },
+      { href: "/dashboard/karwas/proyek", label: "Analisis Proyek", icon: BriefcaseBusiness, roles: ["superadmin", "keu_karwas"] },
+      { href: "/dashboard/karwas/arus-kas", label: "Arus Kas & Piutang", icon: ChartNoAxesCombined, roles: ["superadmin", "keu_karwas"] },
+    ],
+  },
+  {
     title: "Management Proyek",
     items: [
       { href: "/dashboard/proyek", label: "Proyek", icon: BriefcaseBusiness, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_karwas", "pimpinan"] },
@@ -88,8 +97,10 @@ const allowedPath: Record<string, string[]> = {
   "/dashboard/profil": all,
 };
 const homeForRole = (value: string) =>
-  value === "pimpinan" || value === "keu_karwas"
+  value === "pimpinan"
     ? "/dashboard/proyek"
+    : value === "keu_karwas"
+      ? "/dashboard/karwas"
     : value === "keu_billing"
       ? "/dashboard/termin"
       : value === "keuangan"
@@ -180,7 +191,9 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
                 <p className="sidebar-title">{section.title}</p>
                 <ul className="nav">
                   {visibleItems.map(({ href, label, icon: Icon }) => {
-                    const active = href === "/dashboard" ? pathname === href : href === "/dashboard/alokasi-gaji" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+                    const active = href === "/dashboard" || href === "/dashboard/karwas" || href === "/dashboard/alokasi-gaji"
+                      ? pathname === href
+                      : pathname === href || pathname.startsWith(`${href}/`);
                     return (
                       <li key={href}>
                         <Link

@@ -2800,6 +2800,25 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       }),
 
     /**
+     * Ringkasan monitoring dan evaluasi keuangan untuk KARWAS.
+     * @tags Dashboard
+     * @name DashboardControllerGetMonev
+     * @request GET:/api/dashboard/monev
+     * @secure
+     */
+    dashboardControllerGetMonev: (
+      query?: { /** @example 2026 */ tahun?: number },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/dashboard/monev`,
+        method: "GET",
+        query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
      * No description
      *
      * @tags Dashboard
