@@ -130,8 +130,9 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
 
   const user = useCurrentUser();
   const role = user.data?.role?.toLowerCase() ?? "";
-  const canManage = ["superadmin", "koordinator", "subkoor"].includes(role);
-  const canRecordHandover = ["superadmin", "subkoor"].includes(role);
+  const canViewRetail = user.data?.canViewRetail === true;
+  const canManage = user.data?.canManageRetail === true;
+  const canRecordHandover = canManage;
   const canBill = ["superadmin", "keu_billing"].includes(role);
   const canSettle = ["superadmin", "keu_bendahara"].includes(role);
   const canReviewExpense = ["superadmin", "keu_karwas"].includes(role);
@@ -141,6 +142,7 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     tag: "retail",
     method: "retailJobDetail",
     params: { id },
+    enabled: canViewRetail,
     queryFn: async () => requestHrisApi(`/api/retail/jobs/${id}`),
   });
   const job = payload(detail.data);
@@ -337,6 +339,8 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     }
   }
 
+  if (user.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memeriksa akses...</div>;
+  if (!canViewRetail) return <Alert variant="destructive" className="m-6"><AlertTitle>Akses ditolak</AlertTitle><AlertDescription>Detail Proyek Retail hanya tersedia untuk Superadmin, role Keuangan, Koordinator Umum, dan operator retail yang ditetapkan.</AlertDescription></Alert>;
   if (detail.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memuat order retail...</div>;
   if (detail.isError || !job.id) return <div className="space-y-4 p-6"><Alert variant="destructive"><AlertTitle>Order retail tidak ditemukan</AlertTitle><AlertDescription>{detail.error ? apiErrorMessage(detail.error) : "Data order tidak tersedia."}</AlertDescription></Alert><Button variant="outline" render={<Link href="/dashboard/retail" />}><ArrowLeft size={16} /> Kembali ke Layanan Retail</Button></div>;
 

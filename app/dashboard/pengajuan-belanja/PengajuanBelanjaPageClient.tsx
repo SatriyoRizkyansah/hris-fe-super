@@ -131,6 +131,7 @@ export default function PengajuanBelanjaPageClient() {
   const [unitPelaksanaFilter, setUnitPelaksanaFilter] = useState("__all");
   const user = useCurrentUser();
   const role = user.data?.role?.toLowerCase() ?? "";
+  const canViewRetail = user.data?.canViewRetail === true;
   const canCreate = ["superadmin", "koordinator", "subkoor"].includes(role);
   const canReview = ["superadmin", "keu_karwas"].includes(role);
   const canPay = ["superadmin", "keu_bendahara"].includes(role);
@@ -614,12 +615,12 @@ export default function PengajuanBelanjaPageClient() {
                 searchPlaceholder="Cari kegiatan / kuitansi…"
                 onSearchChange={setSearch}
                 filters={[
-                  { field: "jenis_sumber", label: "Asal Pengajuan", options: [{ value: "PROYEK", label: "Proyek" }, { value: "LAYANAN_RETAIL", label: "Proyek Retail" }] },
+                  { field: "jenis_sumber", label: "Asal Pengajuan", options: canViewRetail ? [{ value: "PROYEK", label: "Proyek" }, { value: "LAYANAN_RETAIL", label: "Proyek Retail" }] : [{ value: "PROYEK", label: "Proyek" }] },
                   { field: "status", label: "Status", options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })) },
                   { field: "koordinator", label: "Koordinator", options: coordinatorOptions },
                   { field: "proyek", label: "Proyek", options: filterProjectOptions },
                   { field: "ro", label: "RO", options: roFilterOptions },
-                  { field: "unit_pelaksana_id", label: "Unit Pelaksana Retail", options: retailUnitOptions },
+                  ...(canViewRetail ? [{ field: "unit_pelaksana_id", label: "Unit Pelaksana Retail", options: retailUnitOptions }] : []),
                   { field: "tahun_fiscal", label: "Tahun Fiskal", options: fiscalYearOptions },
                 ]}
                 filterLayout="balanced-4-3"

@@ -21,6 +21,8 @@ export type CurrentUser = {
   role: string;
   unitKerja?: string;
   unitKerjaKode?: string | null;
+  canManageRetail?: boolean;
+  canViewRetail?: boolean;
 };
 
 export function setBrowserToken() {

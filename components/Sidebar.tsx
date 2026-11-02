@@ -114,8 +114,9 @@ const homeForRole = (value: string) =>
 export default function Sidebar({ collapsed, open, onToggle, role = "", accesses = [], activeToken = "" }: Props) {
   const pathname = usePathname() ?? "";
   const queryClient = useQueryClient();
-  const currentUser = useCurrentUser({}, role === "koordinator");
+  const currentUser = useCurrentUser();
   const isGeneralCoordinator = role === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM";
+  const canViewRetail = currentUser.data?.canViewRetail === true;
   const canSeeOperationalFunds = isGeneralCoordinator || ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"].includes(role);
   const [switching, setSwitching] = useState(false);
   const [accessPanelOpen, setAccessPanelOpen] = useState(false);
@@ -164,6 +165,13 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
       .sort((a, b) => b.length - a.length)
       .find((path) => pathname === path || pathname.startsWith(`${path}/`));
     if (match === "/dashboard/dana-operasional" && nextRole === "koordinator") return isGeneralCoordinator;
+    if (match === "/dashboard/retail") {
+      if (["superadmin", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"].includes(nextRole)) return true;
+      if (nextRole === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM") return true;
+      return ["koordinator", "subkoor"].includes(nextRole) &&
+        currentUser.data?.role?.toLowerCase() !== "superadmin" &&
+        currentUser.data?.canManageRetail === true;
+    }
     return !match || allowedPath[match].includes(nextRole);
   };
   function switchRole(nextToken: string | null) {
@@ -183,7 +191,11 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
         <div className="sidebar-menu">
           {sections.map((section) => {
             const visibleItems = section.items.filter((item) =>
-              item.href === "/dashboard/dana-operasional" ? canSeeOperationalFunds : item.roles.includes(role),
+              item.href === "/dashboard/dana-operasional"
+                ? canSeeOperationalFunds
+                : item.href === "/dashboard/retail"
+                  ? canViewRetail
+                  : item.roles.includes(role),
             );
             if (!visibleItems.length) return null;
             return (

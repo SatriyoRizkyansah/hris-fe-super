@@ -138,14 +138,15 @@ export default function RetailClientPage() {
   const [error, setError] = useState("");
 
   const user = useCurrentUser();
-  const role = user.data?.role?.toLowerCase() ?? "";
-  const canCreateOrder = ["superadmin", "koordinator", "subkoor"].includes(role);
+  const canViewRetail = user.data?.canViewRetail === true;
+  const canCreateOrder = user.data?.canManageRetail === true;
   const invalidate = [apiQueryKeys.resource("retail")];
 
   const unitsQuery = use_query({
     tag: "retail",
     method: "retailUnits",
     params: {},
+    enabled: canViewRetail,
     queryFn: async () => requestHrisApi("/api/retail/units"),
   });
   const units = useMemo(() => listRows(unitsQuery.data), [unitsQuery.data]);
@@ -158,6 +159,7 @@ export default function RetailClientPage() {
     tag: "retail",
     method: "retailJobs",
     params: { search, serviceFilter, billingFilter, unitFilter, fiscalYearFilter },
+    enabled: canViewRetail,
     queryFn: async ({ search: query, serviceFilter: serviceStatus, billingFilter: invoiceStatus, unitFilter: unitId, fiscalYearFilter: year }) => {
       const params = new URLSearchParams({ limit: "100", page: "1" });
       if (query) params.set("query", query);
@@ -197,6 +199,7 @@ export default function RetailClientPage() {
     tag: "retail",
     method: "retailSummary",
     params: {},
+    enabled: canViewRetail,
     queryFn: async () => payload(await requestHrisApi("/api/retail/summary")),
   });
   const summary = (summaryQuery.data as Row | undefined) ?? {};
@@ -302,6 +305,9 @@ export default function RetailClientPage() {
       render: (row: Row) => <Button size="sm" variant="outline" render={<Link href={`/dashboard/retail/${row.id}`} />}><Eye size={14} /> Lihat detail</Button>,
     },
   ];
+
+  if (user.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memeriksa akses...</div>;
+  if (!canViewRetail) return <Alert variant="destructive" className="m-6"><AlertDescription>Akses Proyek Retail hanya tersedia untuk Superadmin, role Keuangan, Koordinator Umum, dan operator retail yang ditetapkan.</AlertDescription></Alert>;
 
   return <section className="hris-page space-y-6">
     <header className="flex flex-wrap items-center justify-between gap-4 !p-6 sm:!p-7">
