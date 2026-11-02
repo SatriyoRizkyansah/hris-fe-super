@@ -56,7 +56,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterRo.roControllerGetDetail(id);
+      return browserApi.masterRo.roGetDetailControllerGetDetail(id);
     },
   });
   const ledger = use_query({
@@ -65,7 +65,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterRo.roControllerGetLedger(id);
+      return browserApi.masterRo.roGetLedgerControllerGetLedger(id);
     },
   });
   const unitLookup = use_query({
@@ -74,7 +74,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 });
+      return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 });
     },
   });
   const ro = envelopeData<RoItemDto>(detail.data);
@@ -90,7 +90,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     method: "update",
     mutationFn: async (data: UpdateRoDto) => {
       setBrowserToken();
-      return browserApi.masterRo.roControllerUpdate(id, data);
+      return browserApi.masterRo.roUpdateControllerUpdate(id, data);
     },
     onSuccess: async () => {
       await refresh();
@@ -103,7 +103,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     method: "silpa",
     mutationFn: async () => {
       setBrowserToken();
-      return browserApi.masterRo.roControllerCarryoverSilpa(id);
+      return browserApi.masterRo.roCarryoverSilpaControllerCarryoverSilpa(id);
     },
     onSuccess: async () => {
       setConfirmSilpa(false);
@@ -124,7 +124,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         kredit: transactionDirection === "kredit" && amount ? Number(amount) : 0,
         keterangan: transaction.keterangan || undefined,
       };
-      return transactionId ? browserApi.masterRoTransaksi.roTransaksiControllerUpdate(id, transactionId, payload) : browserApi.masterRoTransaksi.roTransaksiControllerCreate(id, payload);
+      return transactionId ? browserApi.masterRoTransaksi.roTransaksiUpdateControllerUpdate(id, transactionId, payload) : browserApi.masterRoTransaksi.roTransaksiCreateControllerCreate(id, payload);
     },
     onSuccess: async () => {
       setTransactionOpen(false);
@@ -134,11 +134,11 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   });
   const createSpendRequest = use_mutation<unknown, Error, CreatePengajuanBelanjaDto>({
     tag: "keuanganPengajuanBelanja",
-    method: "pengajuanBelanjaControllerCreate",
+    method: "pengajuanBelanjaCreateControllerCreate",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja")],
     mutationFn: async (data) => {
       setBrowserToken();
-      return (await browserApi.keuanganPengajuanBelanja.pengajuanBelanjaControllerCreate(data, { format: "json" })).data;
+      return (await browserApi.keuanganPengajuanBelanja.pengajuanBelanjaCreateControllerCreate(data, { format: "json" })).data;
     },
     onSuccess: (response) => {
       setSpendRequestOpen(false);
@@ -156,7 +156,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     mutationFn: async () => {
       if (!deleteTransaction?.id) throw new Error("ID transaksi tidak tersedia.");
       setBrowserToken();
-      return browserApi.masterRoTransaksi.roTransaksiControllerRemove(String(deleteTransaction.id), id);
+      return browserApi.masterRoTransaksi.roTransaksiRemoveControllerRemove(String(deleteTransaction.id), id);
     },
     onSuccess: async () => {
       setDeleteTransaction(null);
@@ -170,7 +170,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       total_plafon: String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro.total_plafon ?? ""),
       no_kontrak: String(ro.no_kontrak ?? ""),
       nomor_job: String(ro.nomor_job ?? ""),
-      unit_kolaborasi_ids: (ro.unit_kolaborasi ?? []).map((unit) => unit.id),
+      unit_kolaborasi_ids: (ro.unit_kolaborasi as Array<{ id: string }> | undefined ?? []).map((unit) => unit.id),
       pj: String(ro.pj ?? ""),
       no_sk: String(ro.no_sk ?? ""),
       status_ro: (ro.status_ro as EditForm["status_ro"]) ?? "AKTIF",
@@ -389,7 +389,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         </p>
         <p>
           <span className="block text-xs text-muted-foreground">Unit kolaborasi RO</span>
-          {ro.unit_kolaborasi?.length ? ro.unit_kolaborasi.map((unit) => unit.nama_unit).join(", ") : "Tidak ada"}
+          {ro.unit_kolaborasi?.length ? (ro.unit_kolaborasi as Array<{ nama_unit?: string }>).map((unit) => unit.nama_unit).join(", ") : "Tidak ada"}
         </p>
         <p>
           <span className="block text-xs text-muted-foreground">SK</span>

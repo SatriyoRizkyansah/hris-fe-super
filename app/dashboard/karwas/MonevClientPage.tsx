@@ -440,11 +440,11 @@ export default function MonevClientPage() {
   const [selectedMonth, setSelectedMonth] = useState("");
   const report = use_query<any, Error, { tahun: number }>({
     tag: "dashboard-monev",
-    method: "dashboardControllerGetMonev",
+    method: "dashboardGetMonevControllerGetMonev",
     params: { tahun },
     queryFn: async ({ tahun: selectedYear }) => {
       setBrowserToken();
-      return unwrap(await apiData(browserApi.dashboard.dashboardControllerGetMonev({ tahun: selectedYear }, { format: "json" })));
+      return unwrap(await apiData(browserApi.dashboard.dashboardGetMonevControllerGetMonev({ tahun: selectedYear }, { format: "json" })));
     },
   });
   const data = (report.data ?? {}) as MonevPayload;

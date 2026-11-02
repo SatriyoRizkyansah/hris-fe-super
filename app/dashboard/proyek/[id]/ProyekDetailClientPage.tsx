@@ -55,7 +55,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetDetail(id);
+      return browserApi.masterProyek.proyekGetDetailControllerGetDetail(id);
     },
   });
   const ros = use_query({
@@ -64,7 +64,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterRo.roControllerGetData({ id_proyek: id, limit: 100, page: 1 });
+      return browserApi.masterRo.roGetDataControllerGetData({ id_proyek: id, limit: 100, page: 1 });
     },
   });
   const terms = use_query({
@@ -73,7 +73,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetTermin(id, { format: "json" });
+      return browserApi.masterProyek.proyekGetTerminControllerGetTermin(id, { format: "json" });
     },
   });
   const settings = use_query({
@@ -82,7 +82,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     params: undefined,
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterPengaturanMargin.pengaturanMarginControllerGetData({ format: "json" });
+      return browserApi.masterPengaturanMargin.pengaturanMarginGetDataControllerGetData({ format: "json" });
     },
   });
   const distribution = use_query({
@@ -91,7 +91,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetDistribusi(id, { format: "json" });
+      return browserApi.masterProyek.proyekGetDistribusiControllerGetDistribusi(id, { format: "json" });
     },
   });
   const units = use_query({
@@ -101,7 +101,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     enabled: Boolean(identity.unitKerjaId),
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ limit: 200 });
+      return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData({ limit: 200 });
     },
   });
   const project = envelopeData<ProyekItemDto>(detail.data);
@@ -141,8 +141,8 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       if (!workflow) throw new Error("Aksi workflow tidak dipilih.");
       if (!approved && !note.trim()) throw new Error("Catatan penolakan wajib diisi.");
       return workflow === "umum"
-        ? browserApi.masterProyek.proyekControllerValidasiUmum(id, { disetujui: approved, catatan: note.trim() || undefined })
-        : browserApi.masterProyek.proyekControllerValidasiPimpinan(id, { disetujui: approved, catatan: note.trim() || undefined });
+        ? browserApi.masterProyek.proyekValidasiUmumControllerValidasiUmum(id, { disetujui: approved, catatan: note.trim() || undefined })
+        : browserApi.masterProyek.proyekValidasiPimpinanControllerValidasiPimpinan(id, { disetujui: approved, catatan: note.trim() || undefined });
     },
     onSuccess: async () => {
       await invalidate();
@@ -202,7 +202,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     setRoLoading((items) => ({ ...items, [roId]: true }));
     try {
       setBrowserToken();
-      const response = await browserApi.masterRo.roControllerGetDetail(roId);
+      const response = await browserApi.masterRo.roGetDetailControllerGetDetail(roId);
       setRoDetails((items) => ({ ...items, [roId]: envelopeData<Row>(response) ?? {} }));
     } catch (error) {
       setRoDetails((items) => ({ ...items, [roId]: { error: apiErrorMessage(error) } }));

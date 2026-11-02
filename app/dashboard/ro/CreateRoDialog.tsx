@@ -54,7 +54,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterMak.masterMakControllerFindAll();
+      return browserApi.masterMak.masterMakFindAllControllerFindAll();
     },
   });
   const project = use_query({
@@ -63,7 +63,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetData({ limit: 200 });
+      return browserApi.masterProyek.proyekGetDataControllerGetData({ limit: 200 });
     },
   });
   const unit = use_query({
@@ -72,7 +72,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 });
+      return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 });
     },
   });
   const rekening = use_query({
@@ -81,7 +81,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterRekeningBank.masterRekeningControllerFindAll();
+      return browserApi.masterRekeningBank.masterRekeningFindAllControllerFindAll();
     },
   });
   const create = use_mutation({
@@ -89,7 +89,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
     method: "create",
     mutationFn: async (data: CreateRoDto) => {
       setBrowserToken();
-      return browserApi.masterRo.roControllerCreate(data);
+      return browserApi.masterRo.roCreateControllerCreate(data);
     },
     onSuccess: async () => {
       await onCreated();
@@ -187,7 +187,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
               id_unit_koordinator: nextParticipantIds.includes(state.id_unit_koordinator)
                 ? state.id_unit_koordinator
                 : nextParticipantIds[0] ?? "",
-              no_kontrak: nextProject?.no_kontrak ?? "",
+              no_kontrak: String(nextProject?.no_kontrak ?? ""),
             }));
             setCollaboratorIds([]);
             setCollaboratorCandidate("");
@@ -244,7 +244,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
           })}</div> : <span className="text-xs text-muted-foreground">Pilih jika RO ini dikerjakan bersama unit lain. Nomor Job yang sama menandai RO split.</span>}
         </div>
         {selectedProject?.no_kontrak ? (
-          <p className="rounded-md bg-muted/40 p-3 text-sm sm:col-span-2">Nomor kontrak bersama · {selectedProject.no_kontrak}</p>
+          <p className="rounded-md bg-muted/40 p-3 text-sm sm:col-span-2">Nomor kontrak bersama · {String(selectedProject.no_kontrak)}</p>
         ) : (
           <label className="grid gap-1 text-sm">
             No kontrak

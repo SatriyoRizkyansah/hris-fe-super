@@ -217,7 +217,7 @@ export default function PengajuanBelanjaPageClient() {
     : [];
   const listQuery = use_query({
     tag: "keuanganPengajuanBelanja",
-    method: "pengajuanBelanjaControllerList",
+    method: "pengajuanBelanjaListControllerList",
     params: {
       query: search || undefined,
       status: status === "__all" ? undefined : status,
@@ -242,11 +242,11 @@ export default function PengajuanBelanjaPageClient() {
   const rows = useMemo(() => listRows(listQuery.data), [listQuery.data]);
   const filterOptionsQuery = use_query({
     tag: "keuanganPengajuanBelanja",
-    method: "pengajuanBelanjaControllerFilterOptions",
+    method: "pengajuanBelanjaFilterOptionsControllerFilterOptions",
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaControllerFilterOptions({ format: "json" }));
+      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaFilterOptionsControllerFilterOptions({ format: "json" }));
     },
   });
   const filterOptionData = objectData(filterOptionsQuery.data);
@@ -295,12 +295,12 @@ export default function PengajuanBelanjaPageClient() {
   }, [filterOptionData.tahun_fiscal_list, filterRos]);
   const reviewContextQuery = use_query({
     tag: "keuanganPengajuanBelanjaReviewContext",
-    method: "pengajuanBelanjaControllerReviewContext",
+    method: "pengajuanBelanjaReviewContextControllerReviewContext",
     params: { id: String(reviewing?.id ?? "") },
     enabled: Boolean(reviewing && canReview),
     queryFn: async ({ id }) => {
       setBrowserToken();
-      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaControllerReviewContext(id, { format: "json" }));
+      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaReviewContextControllerReviewContext(id, { format: "json" }));
     },
   });
   const reviewContext = objectData(reviewContextQuery.data);
@@ -314,24 +314,24 @@ export default function PengajuanBelanjaPageClient() {
   const reviewLedger = Array.isArray(reviewContext.ro_ledger?.list) ? (reviewContext.ro_ledger.list as Row[]) : [];
   const projectsQuery = use_query({
     tag: "masterProyek",
-    method: "proyekControllerGetData",
+    method: "proyekGetDataControllerGetData",
     params: { limit: 200, page: 1 },
     enabled: open && canCreate,
     queryFn: async (params) => {
       setBrowserToken();
-      return apiData(browserApi.masterProyek.proyekControllerGetData(params, { format: "json" }));
+      return apiData(browserApi.masterProyek.proyekGetDataControllerGetData(params, { format: "json" }));
     },
   });
   const projects = listRows(projectsQuery.data) as ProjectRow[];
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const rosQuery = use_query({
     tag: "masterRo",
-    method: "roControllerGetData",
+    method: "roGetDataControllerGetData",
     params: { limit: 200, page: 1, id_proyek: selectedProjectId || undefined },
     enabled: open && canCreate && Boolean(selectedProjectId),
     queryFn: async (params) => {
       setBrowserToken();
-      return apiData(browserApi.masterRo.roControllerGetData(params, { format: "json" }));
+      return apiData(browserApi.masterRo.roGetDataControllerGetData(params, { format: "json" }));
     },
   });
   const ros = listRows(rosQuery.data);
@@ -356,11 +356,11 @@ export default function PengajuanBelanjaPageClient() {
   const hasRetailDetailDocuments = retailDetailDocuments.some((document) => typeof document.path === "string" && document.path.length > 0);
   const createMutation = use_mutation<unknown, Error, CreatePengajuanBelanjaDto>({
     tag: "keuanganPengajuanBelanja",
-    method: "pengajuanBelanjaControllerCreate",
+    method: "pengajuanBelanjaCreateControllerCreate",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja")],
     mutationFn: async (data) => {
       setBrowserToken();
-      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaControllerCreate(data, { format: "json" }));
+      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaCreateControllerCreate(data, { format: "json" }));
     },
     onSuccess: () => {
       setOpen(false);
@@ -370,11 +370,11 @@ export default function PengajuanBelanjaPageClient() {
   });
   const reviewMutation = use_mutation<unknown, Error, { id: string; data: ReviewPengajuanBelanjaDto }>({
     tag: "keuanganPengajuanBelanja",
-    method: "pengajuanBelanjaControllerReview",
+    method: "pengajuanBelanjaReviewControllerReview",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja")],
     mutationFn: async ({ id, data }) => {
       setBrowserToken();
-      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaControllerReview(id, data, { format: "json" }));
+      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaReviewControllerReview(id, data, { format: "json" }));
     },
     onSuccess: () => {
       setReviewing(null);
@@ -384,11 +384,11 @@ export default function PengajuanBelanjaPageClient() {
   });
   const payMutation = use_mutation<unknown, Error, { id: string; data: BayarPengajuanBelanjaDto }>({
     tag: "keuanganPengajuanBelanja",
-    method: "pengajuanBelanjaControllerBayar",
+    method: "pengajuanBelanjaBayarControllerBayar",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
     mutationFn: async ({ id, data }) => {
       setBrowserToken();
-      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaControllerBayar(id, data, { format: "json" }));
+      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaBayarControllerBayar(id, data, { format: "json" }));
     },
     onSuccess: () => {
       setPaying(null);

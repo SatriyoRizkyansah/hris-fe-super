@@ -29,11 +29,11 @@ export default function PegawaiPage() {
   const params = useMemo(() => ({ query: search || undefined, page, limit: 10, tipe_pegawai: tipe || undefined, status_aktif: status || undefined }) as any, [search, page, tipe, status]);
   const list = use_query({
     tag: "masterPegawai",
-    method: "pegawaiGetControllerGetData",
+    method: "pegawaiGetGetDataControllerGetData",
     params,
     queryFn: async (p) => {
       setBrowserToken();
-      return browserApi.masterPegawai.pegawaiGetControllerGetData(p) as any;
+      return browserApi.masterPegawai.pegawaiGetGetDataControllerGetData(p) as any;
     },
   });
   const payload: any = unwrap(list.data);
@@ -71,12 +71,12 @@ export default function PegawaiPage() {
   });
   const detail = use_query({
     tag: "masterPegawai",
-    method: "pegawaiGetControllerGetDetail",
+    method: "pegawaiGetGetDetailControllerGetDetail",
     params: selected?.id ?? "",
     enabled: Boolean(selected?.id),
     queryFn: async (id: string) => {
       setBrowserToken();
-      return browserApi.masterPegawai.pegawaiGetControllerGetDetail(id) as any;
+      return browserApi.masterPegawai.pegawaiGetGetDetailControllerGetDetail(id) as any;
     },
   });
   const openEdit = (row: any) => {

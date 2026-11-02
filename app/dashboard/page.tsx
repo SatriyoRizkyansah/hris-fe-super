@@ -60,7 +60,7 @@ export default function DashboardPage() {
 
   const stats = use_query({
     tag: "dashboard",
-    method: "dashboardControllerGetSuperadminDashboard",
+    method: "dashboardGetSuperadminDashboardControllerGetSuperadminDashboard",
     params: {},
     queryFn: async () => {
       setBrowserToken();
@@ -72,8 +72,8 @@ export default function DashboardPage() {
       const role = readSession(rawCookie)?.user?.role;
       const request =
         role === "koordinator"
-          ? browserApi.dashboard.dashboardControllerGetKoordinatorUnitDashboard(undefined, { format: "json" })
-          : browserApi.dashboard.dashboardControllerGetSuperadminDashboard(undefined, { format: "json" });
+          ? browserApi.dashboard.dashboardGetKoordinatorUnitDashboardControllerGetKoordinatorUnitDashboard(undefined, { format: "json" })
+          : browserApi.dashboard.dashboardGetSuperadminDashboardControllerGetSuperadminDashboard(undefined, { format: "json" });
       return request as any;
     },
   });

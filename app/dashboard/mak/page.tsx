@@ -5,10 +5,10 @@ export default function Page() {
       title="Master MAK"
       description="Daftar mata anggaran kegiatan."
       group="masterMak"
-      method="masterMakControllerFindAll"
+      method="masterMakFindAllControllerFindAll"
       requestStyle="params"
       create={{
-        method: "masterMakControllerCreate",
+        method: "masterMakCreateControllerCreate",
         fields: [
           { name: "kode_mak", label: "Kode MAK", required: true },
           { name: "nama_mak", label: "Nama MAK", required: true },

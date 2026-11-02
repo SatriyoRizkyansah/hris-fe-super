@@ -42,7 +42,7 @@ export default function DanaOperasionalDetailClientPage({ id }: { id: string }) 
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterDanaOperasional.danaOperasionalControllerGetDetail(id);
+      return browserApi.masterDanaOperasional.danaOperasionalGetDetailControllerGetDetail(id);
     },
   });
   const ledgerQuery = use_query({
@@ -51,7 +51,7 @@ export default function DanaOperasionalDetailClientPage({ id }: { id: string }) 
     params: { id },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterDanaOperasional.danaOperasionalControllerGetLedger(id);
+      return browserApi.masterDanaOperasional.danaOperasionalGetLedgerControllerGetLedger(id);
     },
   });
   const detail = envelopeData<Detail>(detailQuery.data);

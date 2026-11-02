@@ -150,11 +150,11 @@ export default function ProyekClientPage() {
     params: { search, tahun, koordinator, statusProyek, page, pageSize },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetData({
+      return browserApi.masterProyek.proyekGetDataControllerGetData({
         query: search || undefined,
         tahun_fiscal: tahun === "__all" ? undefined : Number(tahun),
         id_unit_koordinator: koordinator === "__all" ? undefined : koordinator,
-        status_proyek: statusProyek === "__all" ? undefined : statusProyek,
+        status_proyek: statusProyek === "__all" ? undefined : statusProyek as ProyekItemDto["status_proyek"],
         page,
         limit: pageSize,
       });
@@ -169,7 +169,7 @@ export default function ProyekClientPage() {
     params: { tipe: "KOORDINATOR" },
     queryFn: async () => {
       setBrowserToken();
-      return apiData(browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 }, { format: "json" }));
+      return apiData(browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 }, { format: "json" }));
     },
   });
   const makLookup = use_query({
@@ -178,7 +178,7 @@ export default function ProyekClientPage() {
     params: undefined,
     queryFn: async () => {
       setBrowserToken();
-      return apiData(browserApi.masterMak.masterMakControllerFindAll({ format: "json" }));
+      return apiData(browserApi.masterMak.masterMakFindAllControllerFindAll({ format: "json" }));
     },
   });
   const rekeningLookup = use_query({
@@ -187,7 +187,7 @@ export default function ProyekClientPage() {
     params: undefined,
     queryFn: async () => {
       setBrowserToken();
-      return apiData(browserApi.masterRekeningBank.masterRekeningControllerFindAll({ format: "json" }));
+      return apiData(browserApi.masterRekeningBank.masterRekeningFindAllControllerFindAll({ format: "json" }));
     },
   });
   const unitOptions = responseRows<UnitOption>(units.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
@@ -209,7 +209,7 @@ export default function ProyekClientPage() {
     mutationFn: async ({ projectId, stage, approved, note }: { projectId: string; stage: "umum" | "pimpinan"; approved: boolean; note?: string }) => {
       setBrowserToken();
       const payload = { disetujui: approved, catatan: note };
-      return stage === "umum" ? browserApi.masterProyek.proyekControllerValidasiUmum(projectId, payload) : browserApi.masterProyek.proyekControllerValidasiPimpinan(projectId, payload);
+      return stage === "umum" ? browserApi.masterProyek.proyekValidasiUmumControllerValidasiUmum(projectId, payload) : browserApi.masterProyek.proyekValidasiPimpinanControllerValidasiPimpinan(projectId, payload);
     },
     invalidateKeys: [["api", "masterProyek"]],
   });
@@ -251,7 +251,7 @@ export default function ProyekClientPage() {
     method: "create",
     mutationFn: async (payload: CreateProyekDto) => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerCreate(payload);
+      return browserApi.masterProyek.proyekCreateControllerCreate(payload);
     },
     invalidateKeys: [["api", "masterProyek"]],
   });

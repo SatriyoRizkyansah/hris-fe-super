@@ -14,11 +14,11 @@ export default function Page() {
     [tahun, setTahun] = useState(now.getFullYear());
   const query = use_query({
     tag: "alokasiGajiTa",
-    method: "alokasiRekapControllerGetRekap",
+    method: "alokasiRekapGetRekapControllerGetRekap",
     params: { periode_bulan: bulan, periode_tahun: tahun },
     queryFn: async (params) => {
       setBrowserToken();
-      return browserApi.alokasiGajiTa.alokasiRekapControllerGetRekap(params, { format: "json" }) as any;
+      return browserApi.alokasiGajiTa.alokasiRekapGetRekapControllerGetRekap(params, { format: "json" }) as any;
     },
   });
   const response = (query.data as any)?.data ?? query.data;

@@ -117,7 +117,7 @@ export function useDashboardStats(enabled = true) {
     params: {},
     queryFn: async (params) => {
       setBrowserToken();
-      return apiData(browserApi.dashboard.dashboardControllerGetSuperadminDashboard(undefined, { ...params, format: "json" }) as unknown as Promise<{ data: DashboardStats }>);
+      return apiData(browserApi.dashboard.dashboardGetSuperadminDashboardControllerGetSuperadminDashboard(undefined, { ...params, format: "json" }) as unknown as Promise<{ data: DashboardStats }>);
     },
     enabled,
   });

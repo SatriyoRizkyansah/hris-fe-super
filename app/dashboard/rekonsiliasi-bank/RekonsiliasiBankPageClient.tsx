@@ -32,7 +32,7 @@ export default function RekonsiliasiBankPageClient() {
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterRekeningBank.masterRekeningControllerFindAll({ format: "json" });
+      return browserApi.masterRekeningBank.masterRekeningFindAllControllerFindAll({ format: "json" });
     },
   });
   const accounts = envelopeRows<Row>(accountsQuery.data).filter((row) => row.status_aktif === "AKTIF" || row.status_aktif === true);
@@ -44,7 +44,7 @@ export default function RekonsiliasiBankPageClient() {
     enabled: open && Boolean(form.rekening_id) && Number(form.tahun_fiscal) >= 2000,
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.rekonsiliasiBank.rekonsiliasiBankControllerGetSaldoSistem({ rekening_id: form.rekening_id, tahun_fiscal: Number(form.tahun_fiscal) }, { format: "json" });
+      return browserApi.rekonsiliasiBank.rekonsiliasiBankGetSaldoSistemControllerGetSaldoSistem({ rekening_id: form.rekening_id, tahun_fiscal: Number(form.tahun_fiscal) }, { format: "json" });
     },
   });
   const saldo = envelopeData<Row>(saldoQuery.data);
@@ -57,7 +57,7 @@ export default function RekonsiliasiBankPageClient() {
     invalidateKeys: [apiQueryKeys.resource("rekonsiliasiBank")],
     mutationFn: async (data) => {
       setBrowserToken();
-      return browserApi.rekonsiliasiBank.rekonsiliasiBankControllerCreate(data, { format: "json" });
+      return browserApi.rekonsiliasiBank.rekonsiliasiBankCreateControllerCreate(data, { format: "json" });
     },
     onSuccess: () => {
       setOpen(false);
@@ -95,7 +95,7 @@ export default function RekonsiliasiBankPageClient() {
         title="Rekonsiliasi Bank"
         description="Riwayat rekonsiliasi bank."
         group="rekonsiliasiBank"
-        method="rekonsiliasiBankControllerFindAll"
+        method="rekonsiliasiBankFindAllControllerFindAll"
         requestStyle="none"
         columns={[
           { key: "tanggal_rekonsiliasi", header: "Tanggal" },

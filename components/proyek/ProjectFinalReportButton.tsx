@@ -29,13 +29,13 @@ export function ProjectFinalReportButton({ project, compact = false }: { project
 
     try {
       setBrowserToken();
-      const firstRosResponse = await browserApi.masterRo.roControllerGetData({ id_proyek: project.id, limit: 100, page: 1 });
+      const firstRosResponse = await browserApi.masterRo.roGetDataControllerGetData({ id_proyek: project.id, limit: 100, page: 1 });
       const firstRosEnvelope = unwrapEnvelope<Row[]>(firstRosResponse);
       const ros = Array.isArray(firstRosEnvelope.data) ? [...firstRosEnvelope.data] : [];
       const totalPages = Math.max(1, Number(firstRosEnvelope.pagination?.total_pages) || 1);
       if (totalPages > 1) {
         const remainingPages = await Promise.all(Array.from({ length: totalPages - 1 }, (_, index) =>
-          browserApi.masterRo.roControllerGetData({ id_proyek: project.id, limit: 100, page: index + 2 }),
+          browserApi.masterRo.roGetDataControllerGetData({ id_proyek: project.id, limit: 100, page: index + 2 }),
         ));
         remainingPages.forEach((response) => ros.push(...envelopeRows<Row>(response)));
       }
@@ -46,7 +46,7 @@ export function ProjectFinalReportButton({ project, compact = false }: { project
       const roDetails: Row[] = [];
       for (let index = 0; index < ros.length; index += 8) {
         const batch = ros.slice(index, index + 8);
-        const detailResponses = await Promise.all(batch.map((ro) => browserApi.masterRo.roControllerGetDetail(String(ro.id))));
+        const detailResponses = await Promise.all(batch.map((ro) => browserApi.masterRo.roGetDetailControllerGetDetail(String(ro.id))));
         roDetails.push(...detailResponses.map((response) => envelopeData<Row>(response) ?? {}));
       }
 

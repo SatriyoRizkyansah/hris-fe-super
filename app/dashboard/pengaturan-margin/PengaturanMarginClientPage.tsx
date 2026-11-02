@@ -49,7 +49,7 @@ export default function PengaturanMarginClientPage() {
     params: undefined,
     queryFn: async () => {
       setBrowserToken();
-      return apiData(browserApi.masterPengaturanMargin.pengaturanMarginControllerGetData({ format: "json" }));
+      return apiData(browserApi.masterPengaturanMargin.pengaturanMarginGetDataControllerGetData({ format: "json" }));
     },
   });
   const accounts = use_query({
@@ -58,7 +58,7 @@ export default function PengaturanMarginClientPage() {
     params: undefined,
     queryFn: async () => {
       setBrowserToken();
-      return apiData(browserApi.masterRekeningBank.masterRekeningControllerFindAll({ format: "json" }));
+      return apiData(browserApi.masterRekeningBank.masterRekeningFindAllControllerFindAll({ format: "json" }));
     },
   });
   const rows = responseRows<MarginRow>(settings.data).map((row) => drafts[row.id] ?? row);
@@ -70,7 +70,7 @@ export default function PengaturanMarginClientPage() {
     method: "update",
     mutationFn: async ({ id, row }: { id: string; row: MarginRow }) => {
       setBrowserToken();
-      return browserApi.masterPengaturanMargin.pengaturanMarginControllerUpdate(id, {
+      return browserApi.masterPengaturanMargin.pengaturanMarginUpdateControllerUpdate(id, {
         nama_kamar: String(row.nama_kamar ?? ""),
         rekening_id: String(row.rekening_id ?? "") || undefined,
       });

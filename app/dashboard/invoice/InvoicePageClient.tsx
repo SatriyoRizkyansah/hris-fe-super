@@ -19,11 +19,19 @@ import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
 import { formatRupiah } from "@/lib/hris/format";
-import type { BayarInvoiceDto, CreateInvoiceDto, CreateMutasiBankDto } from "@/lib/api/generated/api-generated";
+import type { BayarInvoiceDto, CreateInvoiceDto } from "@/lib/api/generated/api-generated";
 
 type Row = Record<string, any>;
 type InvoiceForm = { termin_id: string; retail_job_id: string; nomor_invoice: string; tanggal_jatuh_tempo: string };
 type ReceiptForm = { rekening_id: string; tanggal_transaksi: string; nominal: string; referensi_bank: string; nama_pengirim: string; keterangan: string };
+type CreateMutasiBankDto = {
+  rekening_id: string;
+  tanggal_transaksi: string;
+  nominal: number;
+  referensi_bank: string;
+  nama_pengirim?: string;
+  keterangan?: string;
+};
 const today = () => new Date().toISOString().slice(0, 10);
 const blankInvoice = (): InvoiceForm => ({ termin_id: "", retail_job_id: "", nomor_invoice: "", tanggal_jatuh_tempo: "" });
 const blankReceipt = (): ReceiptForm => ({ rekening_id: "", tanggal_transaksi: today(), nominal: "", referensi_bank: "", nama_pengirim: "", keterangan: "" });
@@ -92,11 +100,11 @@ export default function InvoicePageClient() {
   }, [canCreate]);
   const listQuery = use_query({
     tag: "keuanganInvoiceDanSettlement",
-    method: "invoiceControllerList",
+    method: "invoiceListControllerList",
     params: { query: search || undefined, status: status === "__all" ? undefined : status, limit: 100, page: 1 },
     queryFn: async (params) => {
       setBrowserToken();
-      return apiData(browserApi.keuanganInvoiceDanSettlement.invoiceControllerList(params, { format: "json" }));
+      return apiData(browserApi.keuanganInvoiceDanSettlement.invoiceListControllerList(params, { format: "json" }));
     },
   });
   const rows = useMemo(() => listRows(listQuery.data), [listQuery.data]);
@@ -119,12 +127,12 @@ export default function InvoicePageClient() {
   }, [canSettle, listQuery.isLoading, rows]);
   const terminQuery = use_query({
     tag: "masterProyek",
-    method: "proyekControllerGetTerminQueue",
+    method: "proyekGetTerminQueueControllerGetTerminQueue",
     params: { page: 1, limit: 100 },
     enabled: creating && canCreate,
     queryFn: async () => {
       setBrowserToken();
-      const endpoint = browserApi.masterProyek.proyekControllerGetTerminQueue as unknown as (params: { query: { page: number; limit: number }; format: "json" }) => Promise<{ data: unknown }>;
+      const endpoint = browserApi.masterProyek.proyekGetTerminQueueControllerGetTerminQueue as unknown as (params: { query: { page: number; limit: number }; format: "json" }) => Promise<{ data: unknown }>;
       return apiData(endpoint({ query: { page: 1, limit: 100 }, format: "json" }));
     },
   });
@@ -142,12 +150,12 @@ export default function InvoicePageClient() {
   const retailJobRows = listRows(retailJobsQuery.data);
   const accountsQuery = use_query({
     tag: "masterRekeningBank",
-    method: "masterRekeningControllerFindAll",
+    method: "masterRekeningFindAllControllerFindAll",
     params: undefined,
     enabled: Boolean(settling) && canSettle,
     queryFn: async () => {
       setBrowserToken();
-      return apiData(browserApi.masterRekeningBank.masterRekeningControllerFindAll({ format: "json" }));
+      return apiData(browserApi.masterRekeningBank.masterRekeningFindAllControllerFindAll({ format: "json" }));
     },
   });
   const accounts = listRows(accountsQuery.data).length
@@ -159,11 +167,11 @@ export default function InvoicePageClient() {
   const invalidate = [apiQueryKeys.resource("keuanganInvoiceDanSettlement"), apiQueryKeys.resource("retail")];
   const createMutation = use_mutation<unknown, Error, CreateInvoiceDto>({
     tag: "keuanganInvoiceDanSettlement",
-    method: "invoiceControllerCreateInvoice",
+    method: "invoiceCreateInvoiceControllerCreateInvoice",
     invalidateKeys: invalidate,
     mutationFn: async (data) => {
       setBrowserToken();
-      return apiData(browserApi.keuanganInvoiceDanSettlement.invoiceControllerCreateInvoice(data, { format: "json" }));
+      return apiData(browserApi.keuanganInvoiceDanSettlement.invoiceCreateInvoiceControllerCreateInvoice(data, { format: "json" }));
     },
     onSuccess: () => {
       setCreating(false);
@@ -187,7 +195,7 @@ export default function InvoicePageClient() {
       });
       const mutationId = String(payload(created).id ?? "");
       if (!mutationId) throw new Error("Server tidak mengembalikan ID mutasi bank.");
-      return apiData(browserApi.keuanganInvoiceDanSettlement.invoiceControllerBayar(invoiceId, { ...payment, mutasi_bank_id: mutationId }, { format: "json" }));
+      return apiData(browserApi.keuanganInvoiceDanSettlement.invoiceBayarControllerBayar(invoiceId, { ...payment, mutasi_bank_id: mutationId }, { format: "json" }));
     },
     onSuccess: () => {
       setSettling(null);

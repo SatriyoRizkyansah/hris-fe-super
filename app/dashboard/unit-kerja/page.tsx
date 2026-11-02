@@ -23,20 +23,20 @@ export default function UnitKerjaPage() {
   const params = useMemo(() => ({ query: search || undefined, page, limit: 10, tipe_unit: type || undefined }) as any, [search, page, type]);
   const list = use_query({
     tag: "masterUnitKerja",
-    method: "unitKerjaGetControllerGetData",
+    method: "unitKerjaGetGetDataControllerGetData",
     params,
     queryFn: async (p) => {
       setBrowserToken();
-      return browserApi.masterUnitKerja.unitKerjaGetControllerGetData(p) as any;
+      return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData(p) as any;
     },
   });
   const people = use_query({
     tag: "masterPegawai",
-    method: "pegawaiGetControllerGetData",
+    method: "pegawaiGetGetDataControllerGetData",
     params: { status_aktif: "AKTIF", limit: 200 } as any,
     queryFn: async (p) => {
       setBrowserToken();
-      return browserApi.masterPegawai.pegawaiGetControllerGetData(p) as any;
+      return browserApi.masterPegawai.pegawaiGetGetDataControllerGetData(p) as any;
     },
   });
   const keys = [apiQueryKeys.resource("masterUnitKerja")];

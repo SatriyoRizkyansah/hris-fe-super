@@ -26,11 +26,11 @@ const currentYear = new Date().getFullYear();
 export default function DanaOperasionalClientPage() {
   const query = use_query({
     tag: "masterDanaOperasional",
-    method: "danaOperasionalControllerGetData",
+    method: "danaOperasionalGetDataControllerGetData",
     params: { page: 1, limit: 500, tahun_fiscal: currentYear },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterDanaOperasional.danaOperasionalControllerGetData({ page: 1, limit: 500, tahun_fiscal: currentYear });
+      return browserApi.masterDanaOperasional.danaOperasionalGetDataControllerGetData({ page: 1, limit: 500, tahun_fiscal: currentYear });
     },
   });
   const rows = envelopeRows<DanaOperasionalItemDto & Record<string, unknown>>(query.data);

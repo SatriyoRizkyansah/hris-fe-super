@@ -101,7 +101,7 @@ export default function TerminQueuePage() {
     params: { search, status, year, page, pageSize },
     queryFn: async () => {
       setBrowserToken();
-      const endpoint = browserApi.masterProyek.proyekControllerGetTerminQueue as unknown as (params: { query: TerminQueueQuery; format: "json" }) => Promise<unknown>;
+      const endpoint = browserApi.masterProyek.proyekGetTerminQueueControllerGetTerminQueue as unknown as (params: { query: TerminQueueQuery; format: "json" }) => Promise<unknown>;
       return endpoint({
         query: {
           query: search || undefined,

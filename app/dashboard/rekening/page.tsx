@@ -5,10 +5,10 @@ export default function Page() {
       title="Rekening Bank"
       description="Daftar rekening bank terdaftar."
       group="masterRekeningBank"
-      method="masterRekeningControllerFindAll"
+      method="masterRekeningFindAllControllerFindAll"
       requestStyle="params"
       create={{
-        method: "masterRekeningControllerCreate",
+        method: "masterRekeningCreateControllerCreate",
         fields: [
           { name: "nama_bank", label: "Nama bank", required: true },
           { name: "nomor_rekening", label: "Nomor rekening", required: true },

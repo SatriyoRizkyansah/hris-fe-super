@@ -15,29 +15,29 @@ export default function ProfilPage() {
   const [page, setPage] = useState(1);
   const profile = use_query({
     tag: "myProfile",
-    method: "myProfileControllerGetProfile",
+    method: "myProfileGetProfileControllerGetProfile",
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.myProfile.myProfileControllerGetProfile() as any;
+      return browserApi.myProfile.myProfileGetProfileControllerGetProfile() as any;
     },
   });
   const skHistory = use_query({
     tag: "myProfile",
-    method: "myProfileControllerGetMySk",
+    method: "myProfileGetMySkControllerGetMySk",
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.myProfile.myProfileControllerGetMySk() as any;
+      return browserApi.myProfile.myProfileGetMySkControllerGetMySk() as any;
     },
   });
   const allocations = use_query({
     tag: "myProfile",
-    method: "myProfileControllerGetMyAlokasi",
+    method: "myProfileGetMyAlokasiControllerGetMyAlokasi",
     params: { page, limit: 10 },
     queryFn: async (p) => {
       setBrowserToken();
-      return browserApi.myProfile.myProfileControllerGetMyAlokasi(p) as any;
+      return browserApi.myProfile.myProfileGetMyAlokasiControllerGetMyAlokasi(p) as any;
     },
   });
   const info = body(profile.data) ?? {};

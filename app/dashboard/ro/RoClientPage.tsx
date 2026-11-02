@@ -37,7 +37,7 @@ export default function RoClientPage() {
     params: { search, project, unit, page, pageSize },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterRo.roControllerGetData({ query: search || undefined, id_proyek: project === "__all" ? undefined : project, id_unit_koordinator: unit === "__all" ? undefined : unit, page, limit: pageSize });
+      return browserApi.masterRo.roGetDataControllerGetData({ query: search || undefined, id_proyek: project === "__all" ? undefined : project, id_unit_koordinator: unit === "__all" ? undefined : unit, page, limit: pageSize });
     },
   });
   const projects = use_query({
@@ -46,7 +46,7 @@ export default function RoClientPage() {
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekControllerGetData({ limit: 200 });
+      return browserApi.masterProyek.proyekGetDataControllerGetData({ limit: 200 });
     },
   });
   const units = use_query({
@@ -55,7 +55,7 @@ export default function RoClientPage() {
     params: {},
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterUnitKerja.unitKerjaGetControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 });
+      return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 });
     },
   });
   const rows = envelopeRows<RoListItem>(list.data);
