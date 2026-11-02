@@ -187,9 +187,7 @@ export default function PengajuanBelanjaPageClient() {
         {
           title: "Pengajuan dikirim",
           state: retailDetailStatus ? "done" : "waiting",
-          description: retailDetailStatus
-            ? `${retailDetailRequest.pembuat?.nama ?? "Pemohon"} · ${formatDateTime(retailDetailRequest.diajukan_pada ?? retailDetailRequest.created_at)}`
-            : "Pengajuan belum dikirim.",
+          description: retailDetailStatus ? `${retailDetailRequest.pembuat?.nama ?? "Pemohon"} · ${formatDateTime(retailDetailRequest.diajukan_pada ?? retailDetailRequest.created_at)}` : "Pengajuan belum dikirim.",
         },
         {
           title: "Pemeriksaan KARWAS",
@@ -290,9 +288,7 @@ export default function PengajuanBelanjaPageClient() {
     [filterRos, projectFilter, coordinatorFilter, fiscalYearFilter],
   );
   const fiscalYearOptions = useMemo(() => {
-    const years = Array.isArray(filterOptionData.tahun_fiscal_list)
-      ? filterOptionData.tahun_fiscal_list.map(Number)
-      : filterRos.map((ro) => Number(ro.tahun_fiscal));
+    const years = Array.isArray(filterOptionData.tahun_fiscal_list) ? filterOptionData.tahun_fiscal_list.map(Number) : filterRos.map((ro) => Number(ro.tahun_fiscal));
     return Array.from(new Set(years.filter((year) => year > 0)))
       .sort((a, b) => b - a)
       .map((year) => ({ value: String(year), label: `TA ${year}` }));
@@ -354,9 +350,7 @@ export default function PengajuanBelanjaPageClient() {
         { label: "Surat permohonan layanan", path: retailDetailJob.file_permohonan },
         { label: "Tanda terima perconto", path: retailDetailJob.file_tanda_terima },
         { label: "Laporan hasil uji (LHU)", path: retailDetailJob.file_lhu },
-        ...(Array.isArray(retailDetailJob.dokumen)
-          ? retailDetailJob.dokumen.map((document: Row) => ({ label: document.nama_file ?? document.jenis ?? "Dokumen order retail", path: document.path_file }))
-          : []),
+        ...(Array.isArray(retailDetailJob.dokumen) ? retailDetailJob.dokumen.map((document: Row) => ({ label: document.nama_file ?? document.jenis ?? "Dokumen order retail", path: document.path_file })) : []),
       ]
     : [];
   const hasRetailDetailDocuments = retailDetailDocuments.some((document) => typeof document.path === "string" && document.path.length > 0);
@@ -415,19 +409,19 @@ export default function PengajuanBelanjaPageClient() {
     },
     onSuccess: (response, variables) => {
       const updated = objectData(response);
-      setRetailDetailRequest((current) => current ? {
-        ...current,
-        ...updated,
-        pemeriksa: updated.pemeriksa ?? { nama: user.data?.nama ?? "KARWAS" },
-      } : current);
+      setRetailDetailRequest((current) =>
+        current
+          ? {
+              ...current,
+              ...updated,
+              pemeriksa: updated.pemeriksa ?? { nama: user.data?.nama ?? "KARWAS" },
+            }
+          : current,
+      );
       setRetailReviewNote("");
       setRetailReviewError("");
-      const responseMessage = response && typeof response === "object" && "message" in response && typeof response.message === "string"
-        ? response.message
-        : "";
-      const fallbackMessage = variables.disetujui
-        ? "Pengajuan belanja retail disetujui dan saldo OPS_KANTOR direservasi."
-        : "Pengajuan belanja retail ditolak.";
+      const responseMessage = response && typeof response === "object" && "message" in response && typeof response.message === "string" ? response.message : "";
+      const fallbackMessage = variables.disetujui ? "Pengajuan belanja retail disetujui dan saldo OPS_KANTOR direservasi." : "Pengajuan belanja retail ditolak.";
       window.dispatchEvent(new CustomEvent("api:success", { detail: { message: responseMessage || fallbackMessage } }));
     },
     onError: (cause) => setRetailReviewError(apiErrorMessage(cause, "Review pengajuan retail gagal disimpan.")),
@@ -439,10 +433,8 @@ export default function PengajuanBelanjaPageClient() {
     mutationFn: async ({ id, form, file }) => uploadHrisFile(`/api/retail/pengajuan-belanja/${id}/bayar`, file, form),
     onSuccess: (response) => {
       const updated = objectData(response);
-      const responseMessage = response && typeof response === "object" && "message" in response && typeof response.message === "string"
-        ? response.message
-        : "";
-      setRetailDetailRequest((current) => current ? { ...current, ...updated } : current);
+      const responseMessage = response && typeof response === "object" && "message" in response && typeof response.message === "string" ? response.message : "";
+      setRetailDetailRequest((current) => (current ? { ...current, ...updated } : current));
       setRetailPaying(null);
       setRetailPayment(blankPayment());
       setRetailPaymentFile(null);
@@ -615,7 +607,16 @@ export default function PengajuanBelanjaPageClient() {
                 searchPlaceholder="Cari kegiatan / kuitansi…"
                 onSearchChange={setSearch}
                 filters={[
-                  { field: "jenis_sumber", label: "Asal Pengajuan", options: canViewRetail ? [{ value: "PROYEK", label: "Proyek" }, { value: "LAYANAN_RETAIL", label: "Proyek Retail" }] : [{ value: "PROYEK", label: "Proyek" }] },
+                  {
+                    field: "jenis_sumber",
+                    label: "Asal Pengajuan",
+                    options: canViewRetail
+                      ? [
+                          { value: "PROYEK", label: "Proyek" },
+                          { value: "LAYANAN_RETAIL", label: "Proyek Retail" },
+                        ]
+                      : [{ value: "PROYEK", label: "Proyek" }],
+                  },
                   { field: "status", label: "Status", options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })) },
                   { field: "koordinator", label: "Koordinator", options: coordinatorOptions },
                   { field: "proyek", label: "Proyek", options: filterProjectOptions },
@@ -648,26 +649,45 @@ export default function PengajuanBelanjaPageClient() {
                     key: "nomor_pengajuan",
                     header: "Nomor",
                     className: "min-w-[11rem]",
-                    render: (row) => <div><p className="font-medium">{row.nomor_pengajuan ?? "—"}</p><span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.jenis_sumber === "LAYANAN_RETAIL" ? "bg-violet-50 text-violet-700" : "bg-sky-50 text-sky-700"}`}>{row.jenis_sumber === "LAYANAN_RETAIL" ? "Proyek Retail" : "Proyek"}</span></div>,
+                    render: (row) => (
+                      <div>
+                        <p className="font-medium">{row.nomor_pengajuan ?? "—"}</p>
+                        <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.jenis_sumber === "LAYANAN_RETAIL" ? "bg-violet-50 text-violet-700" : "bg-sky-50 text-sky-700"}`}>
+                          {row.jenis_sumber === "LAYANAN_RETAIL" ? "Proyek Retail" : "Proyek"}
+                        </span>
+                      </div>
+                    ),
                   },
                   {
                     key: "nama_kegiatan",
                     header: "Kebutuhan",
                     className: "min-w-[13rem]",
-                    render: (row) => <div><p className="font-medium">{row.nama_kegiatan ?? "—"}</p>{row.keterangan && <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground">{row.keterangan}</p>}</div>,
+                    render: (row) => (
+                      <div>
+                        <p className="font-medium">{row.nama_kegiatan ?? "—"}</p>
+                        {row.keterangan && <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground">{row.keterangan}</p>}
+                      </div>
+                    ),
                   },
                   {
                     key: "context",
                     header: "Proyek / Order Retail",
                     className: "min-w-[16rem]",
-                    render: (row) => row.jenis_sumber === "LAYANAN_RETAIL" ? (
-                      <div>
-                        <span className="font-medium">{row.retail_job?.nomor_job ?? "Order Retail"} · {row.retail_job?.nama_pelanggan ?? "Klien belum tercatat"}</span>
-                        <span className="mt-0.5 block text-xs text-muted-foreground">{row.retail_job?.unit_pelaksana?.nama_unit ?? "Unit belum tercatat"} · {row.retail_job?.nomor_lhu ? `LHU ${row.retail_job.nomor_lhu}` : "LHU belum dicatat"}</span>
-                      </div>
-                    ) : row.ro ? (
+                    render: (row) =>
+                      row.jenis_sumber === "LAYANAN_RETAIL" ? (
                         <div>
-                          <span>{row.ro.proyek?.kode_proyek ?? ""} · {row.ro.proyek?.nama_proyek ?? "Proyek"}</span>
+                          <span className="font-medium">
+                            {row.retail_job?.nomor_job ?? "Order Retail"} · {row.retail_job?.nama_pelanggan ?? "Klien belum tercatat"}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {row.retail_job?.unit_pelaksana?.nama_unit ?? "Unit belum tercatat"} · {row.retail_job?.nomor_lhu ? `LHU ${row.retail_job.nomor_lhu}` : "LHU belum dicatat"}
+                          </span>
+                        </div>
+                      ) : row.ro ? (
+                        <div>
+                          <span>
+                            {row.ro.proyek?.kode_proyek ?? ""} · {row.ro.proyek?.nama_proyek ?? "Proyek"}
+                          </span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
                             {row.ro.kode_ro} · {row.ro.nama_ro} · {row.ro.unit_koordinator?.nama_unit ?? "—"}
                           </span>
@@ -680,9 +700,21 @@ export default function PengajuanBelanjaPageClient() {
                     key: "dana",
                     header: "Sumber Dana",
                     className: "min-w-[10rem]",
-                    render: (row) => row.jenis_sumber === "LAYANAN_RETAIL"
-                      ? <div><p className="font-medium">{row.dana?.kategori_kamar ?? "OPS_KANTOR"}</p><p className="text-xs text-muted-foreground">TA {row.dana?.tahun_fiscal ?? row.retail_job?.tahun_fiscal ?? "—"}</p></div>
-                      : <div><p className="font-medium">Kamar RO</p><p className="text-xs text-muted-foreground">{row.ro?.mak?.kode_mak ?? "MAK belum terhubung"}{row.pembayaran?.talangan ? " · talangan OPS_KANTOR" : ""}</p></div>,
+                    render: (row) =>
+                      row.jenis_sumber === "LAYANAN_RETAIL" ? (
+                        <div>
+                          <p className="font-medium">{row.dana?.kategori_kamar ?? "OPS_KANTOR"}</p>
+                          <p className="text-xs text-muted-foreground">TA {row.dana?.tahun_fiscal ?? row.retail_job?.tahun_fiscal ?? "—"}</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="font-medium">Kamar RO</p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.ro?.mak?.kode_mak ?? "MAK belum terhubung"}
+                            {row.pembayaran?.talangan ? " · talangan OPS_KANTOR" : ""}
+                          </p>
+                        </div>
+                      ),
                   },
                   { key: "tanggal", header: "Tanggal", render: (row) => (row.tanggal ? new Date(row.tanggal).toLocaleDateString("id-ID") : "—") },
                   { key: "jumlah", header: "Jumlah", render: (row) => formatRupiah(row.jumlah) },
@@ -695,11 +727,15 @@ export default function PengajuanBelanjaPageClient() {
                           render: (row: Row) => (
                             <div className="flex flex-wrap gap-2">
                               {row.jenis_sumber === "LAYANAN_RETAIL" && (
-                                <Button size="sm" variant="outline" onClick={() => {
-                                  setRetailDetailRequest(row);
-                                  setRetailReviewNote("");
-                                  setRetailReviewError("");
-                                }}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setRetailDetailRequest(row);
+                                    setRetailReviewNote("");
+                                    setRetailReviewError("");
+                                  }}
+                                >
                                   <Eye size={15} /> Detail Pengajuan
                                 </Button>
                               )}
@@ -880,13 +916,15 @@ export default function PengajuanBelanjaPageClient() {
               </>
             )}
             {canPay && retailDetailStatus === "DISETUJUI_KARWAS" && retailDetailRequest && (
-              <Button onClick={() => {
-                setRetailPaying(retailDetailRequest);
-                setRetailDetailRequest(null);
-                setRetailPayment(blankPayment());
-                setRetailPaymentFile(null);
-                setRetailPaymentError("");
-              }}>
+              <Button
+                onClick={() => {
+                  setRetailPaying(retailDetailRequest);
+                  setRetailDetailRequest(null);
+                  setRetailPayment(blankPayment());
+                  setRetailPaymentFile(null);
+                  setRetailPaymentError("");
+                }}
+              >
                 <CircleDollarSign size={15} /> Catat Pembayaran
               </Button>
             )}
@@ -934,9 +972,19 @@ export default function PengajuanBelanjaPageClient() {
             </ModalSection>
 
             <ModalSection title="Validasi KARWAS" description="Status pemeriksaan kebutuhan belanja dan reservasi saldo OPS_KANTOR.">
-              <div className={`rounded-lg border px-3.5 py-3 text-sm ${retailDetailRejected ? "border-red-200 bg-red-50 text-red-900" : retailDetailStatus === "DIAJUKAN" ? "border-amber-200 bg-amber-50 text-amber-950" : retailDetailCanceled ? "border-slate-200 bg-slate-50 text-slate-700" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
+              <div
+                className={`rounded-lg border px-3.5 py-3 text-sm ${retailDetailRejected ? "border-red-200 bg-red-50 text-red-900" : retailDetailStatus === "DIAJUKAN" ? "border-amber-200 bg-amber-50 text-amber-950" : retailDetailCanceled ? "border-slate-200 bg-slate-50 text-slate-700" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}
+              >
                 <p className="font-semibold">
-                  {retailDetailStatus === "DIAJUKAN" ? "Menunggu pemeriksaan KARWAS" : retailDetailRejected ? "Pengajuan ditolak KARWAS" : retailDetailCanceled ? "Pengajuan dibatalkan" : retailDetailPaid ? "Validasi selesai · pembayaran tercatat" : "Disetujui KARWAS · menunggu pembayaran Bendahara"}
+                  {retailDetailStatus === "DIAJUKAN"
+                    ? "Menunggu pemeriksaan KARWAS"
+                    : retailDetailRejected
+                      ? "Pengajuan ditolak KARWAS"
+                      : retailDetailCanceled
+                        ? "Pengajuan dibatalkan"
+                        : retailDetailPaid
+                          ? "Validasi selesai · pembayaran tercatat"
+                          : "Disetujui KARWAS · menunggu pembayaran Bendahara"}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed">
                   {retailDetailStatus === "DIAJUKAN"
@@ -963,7 +1011,11 @@ export default function PengajuanBelanjaPageClient() {
                       placeholder="Catatan pemeriksaan atau alasan penolakan"
                     />
                   </label>
-                  {retailReviewError && <p role="alert" className="text-sm text-destructive">{retailReviewError}</p>}
+                  {retailReviewError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {retailReviewError}
+                    </p>
+                  )}
                 </>
               )}
             </ModalSection>
@@ -990,7 +1042,9 @@ export default function PengajuanBelanjaPageClient() {
                       <div className="min-w-0 flex-1 rounded-lg border bg-white p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h3 className="text-sm font-semibold">{step.title}</h3>
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${step.state === "done" ? "bg-emerald-50 text-emerald-700" : step.state === "rejected" ? "bg-red-50 text-red-700" : step.state === "active" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${step.state === "done" ? "bg-emerald-50 text-emerald-700" : step.state === "rejected" ? "bg-red-50 text-red-700" : step.state === "active" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}
+                          >
                             {stateLabel}
                           </span>
                         </div>
@@ -1014,9 +1068,7 @@ export default function PengajuanBelanjaPageClient() {
               </ModalSection>
             )}
 
-            <ModalSection title="Dokumen pendukung">
-              {hasRetailDetailDocuments ? <DocumentLinks documents={retailDetailDocuments} /> : <p className="text-sm text-muted-foreground">Belum ada dokumen pendukung.</p>}
-            </ModalSection>
+            <ModalSection title="Dokumen pendukung">{hasRetailDetailDocuments ? <DocumentLinks documents={retailDetailDocuments} /> : <p className="text-sm text-muted-foreground">Belum ada dokumen pendukung.</p>}</ModalSection>
           </>
         )}
       </Modal>
@@ -1032,7 +1084,9 @@ export default function PengajuanBelanjaPageClient() {
         bodyClassName="space-y-4"
         footer={
           <>
-            <Button variant="outline" onClick={() => setRetailPaying(null)}>Batal</Button>
+            <Button variant="outline" onClick={() => setRetailPaying(null)}>
+              Batal
+            </Button>
             <Button disabled={retailPayMutation.isPending} onClick={payRetail}>
               {retailPayMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <CircleDollarSign size={15} />} Simpan Pembayaran
             </Button>
@@ -1042,33 +1096,41 @@ export default function PengajuanBelanjaPageClient() {
         {retailPaying && (
           <>
             <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-              <p className="font-medium">{String(retailPaying.retail_job?.nomor_job ?? "Order retail")} · {String(retailPaying.retail_job?.nama_pelanggan ?? "Klien")}</p>
+              <p className="font-medium">
+                {String(retailPaying.retail_job?.nomor_job ?? "Order retail")} · {String(retailPaying.retail_job?.nama_pelanggan ?? "Klien")}
+              </p>
               <p className="mt-1 text-muted-foreground">Pembayaran dicatat sebagai pengeluaran OPS_KANTOR.</p>
               <p className="mt-2 font-semibold tabular-nums">Nominal {formatRupiah(retailPaying.jumlah)}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">Nomor pembayaran *
+              <label className="grid gap-1 text-sm">
+                Nomor pembayaran *
                 <Input maxLength={100} value={retailPayment.nomor_pembayaran} onChange={(event) => setRetailPayment((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
               </label>
-              <label className="grid gap-1 text-sm">Tanggal bayar *
+              <label className="grid gap-1 text-sm">
+                Tanggal bayar *
                 <Input type="date" value={retailPayment.tanggal_bayar} onChange={(event) => setRetailPayment((current) => ({ ...current, tanggal_bayar: event.target.value }))} />
               </label>
               <div className="sm:col-span-2">
-                <DocumentUploadField
-                  label="Bukti pembayaran *"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  value={retailPaymentFile}
-                  onChange={setRetailPaymentFile}
-                  disabled={retailPayMutation.isPending}
-                  className="p-3 sm:p-3"
-                />
+                <DocumentUploadField label="Bukti pembayaran *" accept=".pdf,.jpg,.jpeg,.png" value={retailPaymentFile} onChange={setRetailPaymentFile} disabled={retailPayMutation.isPending} className="p-3 sm:p-3" />
                 <p className="mt-1 text-xs text-muted-foreground">Lampirkan bukti transfer atau dokumen pembayaran (PDF/JPG/PNG, maks. 10 MB).</p>
               </div>
-              <label className="grid gap-1 text-sm sm:col-span-2">Catatan
-                <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={retailPayment.catatan} onChange={(event) => setRetailPayment((current) => ({ ...current, catatan: event.target.value }))} placeholder="Catatan pembayaran (opsional)" />
+              <label className="grid gap-1 text-sm sm:col-span-2">
+                Catatan
+                <textarea
+                  className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  maxLength={500}
+                  value={retailPayment.catatan}
+                  onChange={(event) => setRetailPayment((current) => ({ ...current, catatan: event.target.value }))}
+                  placeholder="Catatan pembayaran (opsional)"
+                />
               </label>
             </div>
-            {retailPaymentError && <Alert variant="destructive"><AlertDescription>{retailPaymentError}</AlertDescription></Alert>}
+            {retailPaymentError && (
+              <Alert variant="destructive">
+                <AlertDescription>{retailPaymentError}</AlertDescription>
+              </Alert>
+            )}
           </>
         )}
       </Modal>
@@ -1134,9 +1196,7 @@ export default function PengajuanBelanjaPageClient() {
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
                       <p className="text-xs font-medium text-emerald-800">RO terpilih</p>
                       <p className="mt-0.5 font-semibold text-emerald-950">{String(selectedRo.nama_ro ?? "RO")}</p>
-                      <p className="mt-0.5 text-xs text-emerald-800">
-                        {[roAccountingReference(selectedRo), `Sisa saldo ${formatRupiah(selectedRo.sisa_saldo ?? selectedRo.total_plafon)}`].filter(Boolean).join(" · ")}
-                      </p>
+                      <p className="mt-0.5 text-xs text-emerald-800">{[roAccountingReference(selectedRo), `Sisa saldo ${formatRupiah(selectedRo.sisa_saldo ?? selectedRo.total_plafon)}`].filter(Boolean).join(" · ")}</p>
                     </div>
                   )}
                   {rosQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar RO…</p>}

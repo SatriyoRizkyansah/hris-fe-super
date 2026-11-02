@@ -9,24 +9,9 @@ import { apiQueryKeys } from "@/lib/api/query-keys";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/table/DataTable";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 const unwrap = (value: any) => value?.data ?? value;
-function Tree({ node, depth = 0 }: { node: any; depth?: number }) {
-  if (!node) return null;
-  return (
-    <div className="border-b py-2" style={{ paddingLeft: depth * 22 }}>
-      <span className="font-medium">{node.nama_unit ?? "—"}</span>
-      <span className="ml-2 text-sm text-muted-foreground">
-        {node.kode_unit ?? ""} · {node.tipe_unit ?? ""} · {node.status_aktif ?? ""}
-      </span>
-      {node.kepala_unit_nama && <span className="ml-2 text-xs text-muted-foreground">Kepala: {node.kepala_unit_nama}</span>}
-      {(node.children ?? []).map((child: any) => (
-        <Tree key={child.id} node={child} depth={depth + 1} />
-      ))}
-    </div>
-  );
-}
 
 export default function UnitKerjaPage() {
   const [search, setSearch] = useState("");
@@ -43,15 +28,6 @@ export default function UnitKerjaPage() {
     queryFn: async (p) => {
       setBrowserToken();
       return browserApi.masterUnitKerja.unitKerjaGetControllerGetData(p) as any;
-    },
-  });
-  const treeQuery = use_query({
-    tag: "masterUnitKerja",
-    method: "unitKerjaGetControllerGetTree",
-    params: {},
-    queryFn: async () => {
-      setBrowserToken();
-      return browserApi.masterUnitKerja.unitKerjaGetControllerGetTree() as any;
     },
   });
   const people = use_query({
@@ -98,11 +74,6 @@ export default function UnitKerjaPage() {
   const pagination = payload.pagination ?? {};
   const units = rows.filter((row: any) => row.tipe_unit === "KOORDINATOR" && row.id !== selected?.id);
   const employees = unwrap(people.data)?.data ?? [];
-  const tree = unwrap(treeQuery.data)?.data ?? unwrap(treeQuery.data);
-  const refresh = () => {
-    void list.refetch();
-    void treeQuery.refetch();
-  };
   const openEdit = (row: any) => {
     setSelected(row);
     setForm({ kode_unit: row.kode_unit ?? "", nama_unit: row.nama_unit ?? "", tipe_unit: row.tipe_unit ?? "KOORDINATOR", id_parent_unit: row.parent_unit_id ?? "", id_kepala_unit: row.id_kepala_unit ?? "", deskripsi: row.deskripsi ?? "" });
@@ -134,12 +105,6 @@ export default function UnitKerjaPage() {
           Tambah Unit
         </Button>
       </header>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Struktur Organisasi</CardTitle>
-        </CardHeader>
-        <CardContent>{treeQuery.isLoading ? <p role="status">Memuat struktur organisasi…</p> : tree ? <Tree node={tree} /> : <p className="text-sm text-muted-foreground">Belum ada data unit kerja.</p>}</CardContent>
-      </Card>
       <Card>
         <CardContent className="space-y-4">
           {list.isLoading ? (

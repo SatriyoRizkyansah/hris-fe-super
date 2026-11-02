@@ -5,7 +5,26 @@ import { usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeftRight, Check, Gauge, PanelLeftClose, PanelLeftOpen, UsersRound, Building2, UserCircle, BriefcaseBusiness, Wallet, Landmark, FileText, Banknote, ChartNoAxesCombined, Settings, UserCog, ClipboardCheck, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Check,
+  Gauge,
+  PanelLeftClose,
+  PanelLeftOpen,
+  UsersRound,
+  Building2,
+  UserCircle,
+  BriefcaseBusiness,
+  Wallet,
+  Landmark,
+  FileText,
+  Banknote,
+  ChartNoAxesCombined,
+  Settings,
+  UserCog,
+  ClipboardCheck,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/legacy-button";
 import { LoadingCard } from "@/components/loading";
 import { selectSessionRole, type RoleAccess } from "@/lib/auth";
@@ -101,15 +120,15 @@ const homeForRole = (value: string) =>
     ? "/dashboard/proyek"
     : value === "keu_karwas"
       ? "/dashboard/karwas"
-    : value === "keu_billing"
-      ? "/dashboard/termin"
-      : value === "keuangan"
-        ? "/dashboard/invoice"
-        : value === "keu_bendahara"
-          ? "/dashboard/pengajuan-belanja"
-          : ["subkoor", "spi", "karyawan"].includes(value)
-            ? "/dashboard/profil"
-            : "/dashboard";
+      : value === "keu_billing"
+        ? "/dashboard/termin"
+        : value === "keuangan"
+          ? "/dashboard/invoice"
+          : value === "keu_bendahara"
+            ? "/dashboard/pengajuan-belanja"
+            : ["subkoor", "spi", "karyawan"].includes(value)
+              ? "/dashboard/profil"
+              : "/dashboard";
 
 export default function Sidebar({ collapsed, open, onToggle, role = "", accesses = [], activeToken = "" }: Props) {
   const pathname = usePathname() ?? "";
@@ -132,9 +151,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
       const mobile = window.matchMedia("(max-width: 1023.98px)").matches;
       const anchor = accessButtonRef.current?.getBoundingClientRect();
       const panelWidth = Math.min(320, window.innerWidth - 24);
-      const left = mobile || !anchor
-        ? 12
-        : Math.max(12, Math.min(anchor.right + 12, window.innerWidth - panelWidth - 12));
+      const left = mobile || !anchor ? 12 : Math.max(12, Math.min(anchor.right + 12, window.innerWidth - panelWidth - 12));
       setAccessPanelPosition({ left, mobile });
     };
     updatePanelPosition();
@@ -168,9 +185,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
     if (match === "/dashboard/retail") {
       if (["superadmin", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"].includes(nextRole)) return true;
       if (nextRole === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM") return true;
-      return ["koordinator", "subkoor"].includes(nextRole) &&
-        currentUser.data?.role?.toLowerCase() !== "superadmin" &&
-        currentUser.data?.canManageRetail === true;
+      return ["koordinator", "subkoor"].includes(nextRole) && currentUser.data?.role?.toLowerCase() !== "superadmin" && currentUser.data?.canManageRetail === true;
     }
     return !match || allowedPath[match].includes(nextRole);
   };
@@ -190,22 +205,14 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
       <nav className="sidebar" aria-label="Navigasi template">
         <div className="sidebar-menu">
           {sections.map((section) => {
-            const visibleItems = section.items.filter((item) =>
-              item.href === "/dashboard/dana-operasional"
-                ? canSeeOperationalFunds
-                : item.href === "/dashboard/retail"
-                  ? canViewRetail
-                  : item.roles.includes(role),
-            );
+            const visibleItems = section.items.filter((item) => (item.href === "/dashboard/dana-operasional" ? canSeeOperationalFunds : item.href === "/dashboard/retail" ? canViewRetail : item.roles.includes(role)));
             if (!visibleItems.length) return null;
             return (
               <section key={section.title}>
                 <p className="sidebar-title">{section.title}</p>
                 <ul className="nav">
                   {visibleItems.map(({ href, label, icon: Icon }) => {
-                    const active = href === "/dashboard" || href === "/dashboard/karwas" || href === "/dashboard/alokasi-gaji"
-                      ? pathname === href
-                      : pathname === href || pathname.startsWith(`${href}/`);
+                    const active = href === "/dashboard" || href === "/dashboard/karwas" || href === "/dashboard/alokasi-gaji" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
                     return (
                       <li key={href}>
                         <Link
@@ -213,10 +220,14 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
                           className="nav-link"
                           aria-current={active ? "page" : undefined}
                           title={collapsed ? label : undefined}
-                          onClick={href === "/dashboard/dana-operasional" ? (event) => {
-                            event.preventDefault();
-                            window.location.assign(href);
-                          } : undefined}
+                          onClick={
+                            href === "/dashboard/dana-operasional"
+                              ? (event) => {
+                                  event.preventDefault();
+                                  window.location.assign(href);
+                                }
+                              : undefined
+                          }
                         >
                           <Icon size={20} aria-hidden="true" />
                           <span className="nav-label">{label}</span>
@@ -244,7 +255,9 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
                 onClick={() => setAccessPanelOpen((isOpen) => !isOpen)}
                 disabled={switching}
               >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-black text-[#ffe466] shadow-sm"><ArrowLeftRight size={16} /></span>
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-black text-[#ffe466] shadow-sm">
+                  <ArrowLeftRight size={16} />
+                </span>
                 {!collapsed && (
                   <span className="min-w-0 flex-1 py-0.5">
                     <span className="block truncate text-sm font-bold leading-5 text-black">{roleLabels[currentAccess?.role ?? role] ?? currentAccess?.role ?? role}</span>
@@ -268,47 +281,53 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
           </Button>
         </div>
       </nav>
-      {accessPanelOpen && typeof document !== "undefined" && createPortal(
-        <section
-          ref={accessCardRef}
-          id="sidebar-access-panel"
-          className={`fixed ${accessPanelPosition.mobile ? "right-3 w-auto" : "w-72 sm:w-80"} max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl`}
-          style={{ left: accessPanelPosition.left, bottom: 12, zIndex: 2147483000 }}
-          aria-label="Semua hak akses"
-        >
-          <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Pilih akses</p>
-              <p className="mt-0.5 text-xs text-slate-500">Pilih role untuk mengganti hak akses aktif.</p>
+      {accessPanelOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <section
+            ref={accessCardRef}
+            id="sidebar-access-panel"
+            className={`fixed ${accessPanelPosition.mobile ? "right-3 w-auto" : "w-72 sm:w-80"} max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl`}
+            style={{ left: accessPanelPosition.left, bottom: 12, zIndex: 2147483000 }}
+            aria-label="Semua hak akses"
+          >
+            <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Pilih akses</p>
+                <p className="mt-0.5 text-xs text-slate-500">Pilih role untuk mengganti hak akses aktif.</p>
+              </div>
+              <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Tutup pilihan akses" onClick={() => setAccessPanelOpen(false)}>
+                <X size={16} />
+              </button>
+            </header>
+            <div className="max-h-[min(65vh,28rem)] space-y-1 overflow-y-auto p-2">
+              {roleOptions.map((access, index) => {
+                const duplicateRole = roleOptions.filter((item) => item.role === access.role).length > 1;
+                const active = access.token === currentAccess?.token;
+                return (
+                  <button
+                    key={access.token}
+                    type="button"
+                    disabled={switching}
+                    aria-current={active ? "true" : undefined}
+                    onClick={() => switchRole(access.token)}
+                    className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors disabled:opacity-60 ${active ? "bg-amber-50 text-slate-950" : "hover:bg-slate-50"}`}
+                  >
+                    <span className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${active ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-600"}`}>
+                      <ArrowLeftRight size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">{roleLabels[access.role] ?? access.role}</span>
+                      {duplicateRole && <span className="block truncate text-xs text-slate-500">{access.akses || `Akses ${index + 1}`}</span>}
+                    </span>
+                    {active && <Check size={17} className="shrink-0 text-amber-700" />}
+                  </button>
+                );
+              })}
             </div>
-            <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Tutup pilihan akses" onClick={() => setAccessPanelOpen(false)}><X size={16} /></button>
-          </header>
-          <div className="max-h-[min(65vh,28rem)] space-y-1 overflow-y-auto p-2">
-            {roleOptions.map((access, index) => {
-              const duplicateRole = roleOptions.filter((item) => item.role === access.role).length > 1;
-              const active = access.token === currentAccess?.token;
-              return (
-                <button
-                  key={access.token}
-                  type="button"
-                  disabled={switching}
-                  aria-current={active ? "true" : undefined}
-                  onClick={() => switchRole(access.token)}
-                  className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors disabled:opacity-60 ${active ? "bg-amber-50 text-slate-950" : "hover:bg-slate-50"}`}
-                >
-                  <span className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${active ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-600"}`}><ArrowLeftRight size={16} /></span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{roleLabels[access.role] ?? access.role}</span>
-                    {duplicateRole && <span className="block truncate text-xs text-slate-500">{access.akses || `Akses ${index + 1}`}</span>}
-                  </span>
-                  {active && <Check size={17} className="shrink-0 text-amber-700" />}
-                </button>
-              );
-            })}
-          </div>
-        </section>,
-        document.body,
-      )}
+          </section>,
+          document.body,
+        )}
     </aside>
   );
 }
