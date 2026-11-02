@@ -1,0 +1,30 @@
+import type { RoInputDto, TerminInputDto } from "@/lib/api/generated/api-generated";
+
+export type ProjectForm = {
+  kode_proyek: string;
+  nama_proyek: string;
+  tahun_fiscal: string;
+  mulai_proyek: string;
+  estimasi_selesai_proyek: string;
+  mulai_sk: string;
+  berakhir_sk: string;
+  sumber_pendanaan: string;
+  nama_client: string;
+  no_kontrak: string;
+  pj_1: string;
+  pj_2: string;
+  nilai_kontrak: string;
+  total_direct_cost: string;
+  total_margin: string;
+};
+
+export type RoDraft = Omit<RoInputDto, "nomor_job"> & {
+  key: string;
+  plafonText: string;
+  detailMode: "detail" | "later";
+  no_kontrak: string;
+  pj: string;
+};
+
+export type JobDraft = { key: string; nomor_job: string; ros: RoDraft[] };
+export type TerminDraft = TerminInputDto & { key: string; persentaseText: string };

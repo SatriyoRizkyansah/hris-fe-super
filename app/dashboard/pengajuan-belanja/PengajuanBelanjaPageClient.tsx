@@ -1,20 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Banknote, Check, Circle, CircleAlert, CircleCheck, CircleDollarSign, CircleX, ClipboardList, Clock3, Eye, FileText, LoaderCircle, Plus, ShieldCheck, WalletCards, X } from "lucide-react";
+import { CircleDollarSign, ClipboardList, Eye, LoaderCircle, Plus, ShieldCheck, WalletCards } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
-import { Modal, ModalDetailGrid, ModalDetailItem, ModalSection } from "@/components/modal/Modal";
+import { Modal } from "@/components/modal/Modal";
 import { DataTable } from "@/components/table";
 import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
-import { DocumentLinks } from "@/components/common/DocumentLinks";
-import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { WorkflowDiagram, type WorkflowAction, type WorkflowStage } from "@/components/common/WorkflowDiagram";
+import { PurchaseRequestDetailModals } from "@/components/pengajuan-belanja/PurchaseRequestDetailModals";
+import { PurchaseRequestReviewModal } from "@/components/pengajuan-belanja/PurchaseRequestReviewModal";
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken, useCurrentUser } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
@@ -526,6 +526,14 @@ export default function PengajuanBelanjaPageClient() {
     }
   }
 
+  function startRetailPayment(request: Row) {
+    setRetailPaying(request);
+    setRetailDetailRequest(null);
+    setRetailPayment(blankPayment());
+    setRetailPaymentFile(null);
+    setRetailPaymentError("");
+  }
+
   function showPurchaseQueue(nextStatus = "__all") {
     setSearch("");
     setStatus(nextStatus);
@@ -780,299 +788,34 @@ export default function PengajuanBelanjaPageClient() {
           )}
         </CardContent>
       </Card>
-      <Modal
-        open={Boolean(detailRequest)}
-        onClose={() => setDetailRequest(null)}
-        title="Detail Pengajuan Belanja"
-        description={detailRequest ? `${String(detailRequest.nomor_pengajuan ?? "")} · ${String(detailRequest.nama_kegiatan ?? "")}` : undefined}
-        size="lg"
-        bodyClassName="space-y-4 bg-slate-50/60"
-        footer={
-          <Button variant="outline" onClick={() => setDetailRequest(null)}>
-            Tutup
-          </Button>
-        }
-      >
-        {detailRequest && (
-          <>
-            <ModalSection title="Rincian pengajuan">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-                <p className="text-sm text-muted-foreground">Status saat ini</p>
-                <StatusBadge status={statusTone(detailStatus)}>{statusLabels[detailStatus] ?? detailStatus}</StatusBadge>
-              </div>
-              <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
-                {[
-                  ["Pemohon", detailRequest.pembuat?.nama ?? "—"],
-                  ["Tanggal pengajuan", formatDateTime(detailRequest.diajukan_pada ?? detailRequest.created_at)],
-                  ["Nama kegiatan", detailRequest.nama_kegiatan ?? "—"],
-                  ["Nominal", formatRupiah(detailRequest.jumlah)],
-                  ["Proyek", `${detailRequest.ro?.proyek?.kode_proyek ?? "—"} · ${detailRequest.ro?.proyek?.nama_proyek ?? "—"}`],
-                  ["RO", `${detailRequest.ro?.kode_ro ?? "—"} · ${detailRequest.ro?.nama_ro ?? "—"}`],
-                  ["Koordinator", detailRequest.ro?.unit_koordinator?.nama_unit ?? "—"],
-                  ["MAK", `${detailRequest.ro?.mak?.kode_mak ?? "—"} · ${detailRequest.ro?.mak?.nama_mak ?? "—"}`],
-                  ["Nomor kuitansi", detailRequest.no_kuitansi || "Belum dicantumkan"],
-                  ["Keterangan", detailRequest.keterangan || "Tidak ada keterangan tambahan.", "sm:col-span-2"],
-                ].map(([label, value, className]) => (
-                  <div key={String(label)} className={`min-w-0 py-3 sm:border-b ${className ?? ""}`}>
-                    <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-                    <dd className={`mt-1 break-words text-sm ${label === "Nominal" ? "font-semibold tabular-nums text-foreground" : "text-foreground"}`}>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <div className="mt-3">
-                <DocumentLinks
-                  documents={[
-                    { label: "Bukti kuitansi", path: detailRequest.file_bukti },
-                    { label: "RAB RO", path: detailRequest.ro?.file_rab },
-                  ]}
-                />
-              </div>
-            </ModalSection>
-
-            <ModalSection title="Progress pengajuan" description="Checklist tahapan dari pengajuan sampai pembayaran oleh Bendahara.">
-              <ol className="space-y-0">
-                {detailSteps.map((step, index) => {
-                  const StepIcon = step.state === "done" ? CircleCheck : step.state === "rejected" ? CircleX : step.state === "active" ? Clock3 : Circle;
-                  const iconClass =
-                    step.state === "done"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : step.state === "rejected"
-                        ? "border-red-200 bg-red-50 text-red-700"
-                        : step.state === "active"
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-slate-200 bg-white text-slate-400";
-                  const stateLabel = step.state === "done" ? "Selesai" : step.state === "rejected" ? "Ditolak" : step.state === "active" ? "Sedang diproses" : step.state === "skipped" ? "Tidak dilanjutkan" : "Menunggu";
-                  return (
-                    <li key={step.title} className="relative flex gap-3 pb-5 last:pb-0">
-                      {index < detailSteps.length - 1 && <span className="absolute left-4 top-8 bottom-0 w-px bg-border" aria-hidden="true" />}
-                      <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border ${iconClass}`}>
-                        <StepIcon size={16} />
-                      </span>
-                      <div className="min-w-0 flex-1 rounded-lg border bg-white p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-sm font-semibold">{step.title}</h3>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${step.state === "done" ? "bg-emerald-50 text-emerald-700" : step.state === "rejected" ? "bg-red-50 text-red-700" : step.state === "active" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}
-                          >
-                            {stateLabel}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.description}</p>
-                        {index === 1 && detailRequest.catatan_pemeriksa && (
-                          <p className="mt-2 rounded-md bg-muted/50 px-2.5 py-2 text-xs">
-                            <strong>Catatan KARWAS:</strong> {String(detailRequest.catatan_pemeriksa)}
-                          </p>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-            </ModalSection>
-
-            {detailRequest.pembayaran && (
-              <ModalSection title="Rincian pembayaran" description="Alokasi dana operasional yang dicatat Bendahara.">
-                <ModalDetailGrid>
-                  <ModalDetailItem label="Nomor pembayaran" value={detailRequest.pembayaran.nomor_pembayaran} />
-                  <ModalDetailItem label="Dibayar oleh" value={detailRequest.pembayaran.pembayar?.nama ?? "Bendahara"} />
-                  <ModalDetailItem label="Tanggal bayar" value={formatDateTime(detailRequest.pembayaran.tanggal_bayar)} />
-                  <ModalDetailItem label="Total dibayar" value={formatRupiah(detailRequest.pembayaran.nominal)} />
-                </ModalDetailGrid>
-                {Array.isArray(detailRequest.pembayaran.alokasi_list) && detailRequest.pembayaran.alokasi_list.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {detailRequest.pembayaran.alokasi_list.map((allocation: Row) => (
-                      <div key={String(allocation.id)} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
-                        <span>
-                          {String(allocation.dana_operasional?.kategori_kamar ?? "Dana operasional").replaceAll("_", " ")} · {String(allocation.dana_operasional?.unit_koordinator?.nama_unit ?? "Unit")}
-                        </span>
-                        <strong className="tabular-nums">{formatRupiah(allocation.nominal)}</strong>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {detailRequest.pembayaran.catatan && <p className="mt-3 text-xs text-muted-foreground">Catatan Bendahara: {String(detailRequest.pembayaran.catatan)}</p>}
-              </ModalSection>
-            )}
-          </>
-        )}
-      </Modal>
-      <Modal
-        open={Boolean(retailDetailRequest)}
-        onClose={() => setRetailDetailRequest(null)}
-        title="Detail Pengajuan Belanja Retail"
-        description={retailDetailRequest ? `${String(retailDetailRequest.nomor_pengajuan ?? "")} · ${String(retailDetailRequest.nama_kegiatan ?? "")}` : undefined}
-        size="lg"
-        bodyClassName="space-y-4 bg-slate-50/60"
-        footer={
-          <>
-            {canReview && retailDetailStatus === "DIAJUKAN" && (
-              <>
-                <Button variant="destructive" disabled={retailReviewMutation.isPending} onClick={() => reviewRetail(false)}>
-                  {retailReviewMutation.isPending && <LoaderCircle className="animate-spin" size={15} />} Tolak
-                </Button>
-                <Button disabled={retailReviewMutation.isPending} onClick={() => reviewRetail(true)}>
-                  {retailReviewMutation.isPending && <LoaderCircle className="animate-spin" size={15} />} Setujui &amp; Reservasi OPS_KANTOR
-                </Button>
-              </>
-            )}
-            {canPay && retailDetailStatus === "DISETUJUI_KARWAS" && retailDetailRequest && (
-              <Button
-                onClick={() => {
-                  setRetailPaying(retailDetailRequest);
-                  setRetailDetailRequest(null);
-                  setRetailPayment(blankPayment());
-                  setRetailPaymentFile(null);
-                  setRetailPaymentError("");
-                }}
-              >
-                <CircleDollarSign size={15} /> Catat Pembayaran
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setRetailDetailRequest(null)}>
-              Tutup
-            </Button>
-          </>
-        }
-      >
-        {retailDetailRequest && (
-          <>
-            <ModalSection title="Rincian pengajuan">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-                <p className="text-sm text-muted-foreground">Status saat ini</p>
-                <StatusBadge status={statusTone(retailDetailStatus)}>{statusLabels[retailDetailStatus] ?? retailDetailStatus}</StatusBadge>
-              </div>
-              <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
-                {[
-                  ["Nomor pengajuan", retailDetailRequest.nomor_pengajuan ?? "—"],
-                  ["Diajukan oleh", retailDetailRequest.pembuat?.nama ?? "—"],
-                  ["Tanggal pengajuan", formatDateTime(retailDetailRequest.diajukan_pada ?? retailDetailRequest.created_at)],
-                  ["Tanggal kebutuhan", formatDateTime(retailDetailRequest.tanggal)],
-                  ["Barang / kebutuhan", retailDetailRequest.nama_kegiatan ?? "—"],
-                  ["Nominal pengajuan", formatRupiah(retailDetailRequest.jumlah)],
-                  ["Order retail", `${retailDetailJob.nomor_job ?? "—"} · ${retailDetailJob.nama_pelanggan ?? "Klien belum tercatat"}`],
-                  ["Unit pelaksana", retailDetailJob.unit_pelaksana?.nama_unit ?? "—"],
-                  ["Tanda terima perconto", retailDetailJob.nomor_tanda_terima_perconto ?? "Belum dicatat"],
-                  ["Nomor LHU", retailDetailJob.nomor_lhu ?? "Belum dicatat"],
-                  ["Sumber dana", `${retailDetailRequest.dana?.kategori_kamar ?? "OPS_KANTOR"} · TA ${retailDetailRequest.dana?.tahun_fiscal ?? retailDetailJob.tahun_fiscal ?? "—"}`],
-                  ["Saldo OPS_KANTOR tersedia", formatRupiah(retailDetailRequest.saldo_ops_tersedia)],
-                  ["Nomor kuitansi", retailDetailRequest.no_kuitansi || "Belum dicantumkan"],
-                  ["Keterangan", retailDetailRequest.keterangan || "Tidak ada keterangan tambahan.", "sm:col-span-2"],
-                ].map(([label, value, className]) => (
-                  <div key={String(label)} className={`min-w-0 py-3 sm:border-b ${className ?? ""}`}>
-                    <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-                    <dd className={`mt-1 break-words text-sm ${label === "Nominal pengajuan" || label === "Saldo OPS_KANTOR tersedia" ? "font-semibold tabular-nums text-foreground" : "text-foreground"}`}>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              {retailDetailRequest.catatan_pemeriksa && (
-                <p className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed">
-                  <strong>Catatan KARWAS:</strong> {String(retailDetailRequest.catatan_pemeriksa)}
-                </p>
-              )}
-            </ModalSection>
-
-            <ModalSection title="Validasi KARWAS" description="Status pemeriksaan kebutuhan belanja dan reservasi saldo OPS_KANTOR.">
-              <div
-                className={`rounded-lg border px-3.5 py-3 text-sm ${retailDetailRejected ? "border-red-200 bg-red-50 text-red-900" : retailDetailStatus === "DIAJUKAN" ? "border-amber-200 bg-amber-50 text-amber-950" : retailDetailCanceled ? "border-slate-200 bg-slate-50 text-slate-700" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}
-              >
-                <p className="font-semibold">
-                  {retailDetailStatus === "DIAJUKAN"
-                    ? "Menunggu pemeriksaan KARWAS"
-                    : retailDetailRejected
-                      ? "Pengajuan ditolak KARWAS"
-                      : retailDetailCanceled
-                        ? "Pengajuan dibatalkan"
-                        : retailDetailPaid
-                          ? "Validasi selesai · pembayaran tercatat"
-                          : "Disetujui KARWAS · menunggu pembayaran Bendahara"}
-                </p>
-                <p className="mt-1 text-xs leading-relaxed">
-                  {retailDetailStatus === "DIAJUKAN"
-                    ? "Bendahara dapat memproses pembayaran setelah KARWAS menyetujui pengajuan dan mereservasi saldo OPS_KANTOR."
-                    : retailDetailRejected
-                      ? `Ditolak${retailDetailRequest.pemeriksa?.nama ? ` oleh ${retailDetailRequest.pemeriksa.nama}` : ""} pada ${formatDateTime(retailDetailRequest.diperiksa_pada)}.`
-                      : retailDetailCanceled
-                        ? "Pengajuan ini tidak diteruskan ke proses pembayaran."
-                        : retailDetailPaid
-                          ? `Disetujui${retailDetailRequest.pemeriksa?.nama ? ` oleh ${retailDetailRequest.pemeriksa.nama}` : " oleh KARWAS"} pada ${formatDateTime(retailDetailRequest.diperiksa_pada)}.`
-                          : `Disetujui${retailDetailRequest.pemeriksa?.nama ? ` oleh ${retailDetailRequest.pemeriksa.nama}` : " oleh KARWAS"} pada ${formatDateTime(retailDetailRequest.diperiksa_pada)}. Bendahara dapat melanjutkan pencatatan pembayaran.`}
-                </p>
-              </div>
-              {canReview && retailDetailStatus === "DIAJUKAN" && (
-                <>
-                  <label className="grid gap-1.5 text-sm">
-                    Catatan pemeriksa
-                    <span className="text-xs text-muted-foreground">Opsional saat menyetujui, wajib diisi jika menolak.</span>
-                    <textarea
-                      className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      maxLength={500}
-                      value={retailReviewNote}
-                      onChange={(event) => setRetailReviewNote(event.target.value)}
-                      placeholder="Catatan pemeriksaan atau alasan penolakan"
-                    />
-                  </label>
-                  {retailReviewError && (
-                    <p role="alert" className="text-sm text-destructive">
-                      {retailReviewError}
-                    </p>
-                  )}
-                </>
-              )}
-            </ModalSection>
-
-            <ModalSection title="Progress pengajuan" description="Tahapan pemeriksaan dan pembayaran pengajuan belanja retail.">
-              <ol className="space-y-0">
-                {retailDetailSteps.map((step, index) => {
-                  const StepIcon = step.state === "done" ? CircleCheck : step.state === "rejected" ? CircleX : step.state === "active" ? Clock3 : Circle;
-                  const iconClass =
-                    step.state === "done"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : step.state === "rejected"
-                        ? "border-red-200 bg-red-50 text-red-700"
-                        : step.state === "active"
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-slate-200 bg-white text-slate-400";
-                  const stateLabel = step.state === "done" ? "Selesai" : step.state === "rejected" ? "Ditolak" : step.state === "active" ? "Sedang diproses" : step.state === "skipped" ? "Tidak dilanjutkan" : "Menunggu";
-                  return (
-                    <li key={step.title} className="relative flex gap-3 pb-5 last:pb-0">
-                      {index < retailDetailSteps.length - 1 && <span className="absolute left-4 top-8 bottom-0 w-px bg-border" aria-hidden="true" />}
-                      <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border ${iconClass}`}>
-                        <StepIcon size={16} />
-                      </span>
-                      <div className="min-w-0 flex-1 rounded-lg border bg-white p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-sm font-semibold">{step.title}</h3>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${step.state === "done" ? "bg-emerald-50 text-emerald-700" : step.state === "rejected" ? "bg-red-50 text-red-700" : step.state === "active" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}
-                          >
-                            {stateLabel}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.description}</p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-            </ModalSection>
-
-            {retailDetailPaid && (
-              <ModalSection title="Rincian pembayaran" description="Pembayaran pengajuan dicatat sebagai pengeluaran OPS_KANTOR.">
-                <ModalDetailGrid>
-                  <ModalDetailItem label="Nomor pembayaran" value={retailDetailRequest.nomor_pembayaran ?? "—"} />
-                  <ModalDetailItem label="Dibayar oleh" value={retailDetailRequest.pembayar?.nama ?? "Bendahara"} />
-                  <ModalDetailItem label="Tanggal bayar" value={formatDateTime(retailDetailRequest.tanggal_bayar)} />
-                  <ModalDetailItem label="Nominal dibayar" value={formatRupiah(retailDetailRequest.jumlah)} />
-                </ModalDetailGrid>
-                {retailDetailRequest.catatan_pembayaran && <p className="mt-3 text-xs text-muted-foreground">Catatan Bendahara: {String(retailDetailRequest.catatan_pembayaran)}</p>}
-              </ModalSection>
-            )}
-
-            <ModalSection title="Dokumen pendukung">{hasRetailDetailDocuments ? <DocumentLinks documents={retailDetailDocuments} /> : <p className="text-sm text-muted-foreground">Belum ada dokumen pendukung.</p>}</ModalSection>
-          </>
-        )}
-      </Modal>
-      <Modal
+      <PurchaseRequestDetailModals
+        detailRequest={detailRequest}
+        setDetailRequest={setDetailRequest}
+        detailStatus={detailStatus}
+        detailSteps={detailSteps}
+        retailDetailRequest={retailDetailRequest}
+        setRetailDetailRequest={setRetailDetailRequest}
+        retailDetailStatus={retailDetailStatus}
+        retailDetailRejected={retailDetailRejected}
+        retailDetailCanceled={retailDetailCanceled}
+        retailDetailPaid={retailDetailPaid}
+        retailDetailApproved={retailDetailApproved}
+        retailDetailSteps={retailDetailSteps}
+        retailDetailJob={retailDetailJob}
+        retailDetailDocuments={retailDetailDocuments}
+        hasRetailDetailDocuments={hasRetailDetailDocuments}
+        canReview={canReview}
+        canPay={canPay}
+        retailReviewPending={retailReviewMutation.isPending}
+        reviewRetail={reviewRetail}
+        retailReviewNote={retailReviewNote}
+        setRetailReviewNote={setRetailReviewNote}
+        retailReviewError={retailReviewError}
+        onStartRetailPayment={startRetailPayment}
+        formatDateTime={formatDateTime}
+        statusLabels={statusLabels}
+        statusTone={statusTone}
+      />      <Modal
         open={Boolean(retailPaying)}
         onClose={() => {
           setRetailPaying(null);
@@ -1230,319 +973,24 @@ export default function PengajuanBelanjaPageClient() {
           )}
         </div>
       </Modal>
-      <Modal
-        open={Boolean(reviewing)}
-        onClose={() => setReviewing(null)}
-        title="Review Pengajuan"
-        description={reviewing ? `${String(reviewRequest.nomor_pengajuan ?? reviewing.nomor_pengajuan ?? "")} · ${String(reviewRequest.nama_kegiatan ?? reviewing.nama_kegiatan)}` : "Review pengajuan belanja."}
-        size="xl"
-        bodyClassName="space-y-4 bg-slate-50/60"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setReviewing(null)}>
-              Batal
-            </Button>
-            <Button variant="outline" disabled={reviewMutation.isPending} onClick={() => review(false)}>
-              <X size={16} /> Tolak
-            </Button>
-            <Button
-              disabled={reviewMutation.isPending || reviewContextQuery.isLoading || reviewContextQuery.isError || !reviewChecks.ro_reguler || !reviewChecks.proyek_disetujui || !reviewChecks.pagu_mencukupi}
-              onClick={() => review(true)}
-            >
-              {reviewMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Check size={16} />} Reservasi Pagu
-            </Button>
-          </>
-        }
-      >
-        {reviewContextQuery.isLoading && (
-          <Card>
-            <CardContent className="flex items-center gap-3 p-5 text-sm text-muted-foreground">
-              <LoaderCircle size={18} className="animate-spin" /> Memuat data RO, proyek, dan arus kas…
-            </CardContent>
-          </Card>
-        )}
-        {reviewContextQuery.isError && (
-          <Alert variant="destructive">
-            <AlertDescription>{apiErrorMessage(reviewContextQuery.error, "Gagal memuat konteks keuangan untuk review.")}</AlertDescription>
-          </Alert>
-        )}
-        {!reviewContextQuery.isLoading && !reviewContextQuery.isError && (
-          <>
-            <ModalSection title="Rincian pengajuan" description="Periksa kegiatan, pemohon, dokumen, dan sumber anggaran sebelum memberi keputusan.">
-              <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
-                {[
-                  ["Nomor pengajuan", reviewRequest.nomor_pengajuan ?? "—"],
-                  ["Diajukan oleh", reviewRequest.pembuat?.nama ?? "—"],
-                  ["Kegiatan", reviewRequest.nama_kegiatan ?? "—"],
-                  ["Nilai pengajuan", formatRupiah(reviewRequest.jumlah)],
-                  ["Tanggal transaksi", reviewRequest.tanggal ? new Date(reviewRequest.tanggal).toLocaleDateString("id-ID") : "—"],
-                  ["No. kuitansi", reviewRequest.no_kuitansi || "Belum dicantumkan"],
-                  ["Status reservasi", reviewRequest.reservasi?.status ?? "Belum direservasi"],
-                  ["Unit koordinator", reviewRequest.ro?.unit_koordinator?.nama_unit ?? "—"],
-                  ["MAK", `${reviewRequest.ro?.mak?.kode_mak ?? "—"} · ${reviewRequest.ro?.mak?.nama_mak ?? "Belum terhubung"}`],
-                  ["Keterangan pemohon", reviewRequest.keterangan || "Tidak ada keterangan tambahan.", "sm:col-span-2"],
-                ].map(([label, value, className]) => (
-                  <div key={String(label)} className={`min-w-0 py-3 sm:border-b ${className ?? ""}`}>
-                    <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-                    <dd className={`mt-1 break-words text-sm ${label === "Nilai pengajuan" ? "font-semibold tabular-nums" : ""}`}>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <div className="mt-3">
-                <DocumentLinks
-                  documents={[
-                    { label: "Bukti kuitansi", path: reviewRequest.file_bukti },
-                    { label: "RAB RO", path: reviewRequest.ro?.file_rab },
-                    { label: "RAB proyek", path: reviewProject.file_rab },
-                    { label: "SK proyek", path: reviewProject.file_sk },
-                  ]}
-                />
-              </div>
-            </ModalSection>
-
-            <ModalSection title="Kondisi RO yang diajukan" description="Pagu menunjukkan hak belanja. Posisi kas menunjukkan penerimaan kas dikurangi realisasi; keduanya bukan angka yang sama.">
-              <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hak belanja RO</p>
-                <MoneyFlow
-                  items={[
-                    { label: "Pagu disetujui", amount: reviewRoBalance.pagu_disetujui },
-                    { label: "Realisasi", amount: reviewRoBalance.realisasi, operator: "−", tone: "text-rose-700" },
-                    { label: "Komitmen aktif", amount: reviewRoBalance.komitmen_aktif, operator: "−", tone: "text-amber-700" },
-                    { label: "Sisa hak belanja", amount: reviewRoBalance.sisa_dapat_direservasi, operator: "=", tone: "text-emerald-700" },
-                  ]}
-                />
-                <MoneyFlow
-                  items={[
-                    { label: "Sisa hak belanja", amount: reviewRoBalance.sisa_dapat_direservasi },
-                    { label: "Pengajuan ini", amount: reviewRequest.jumlah, operator: "−", tone: "text-amber-700" },
-                    { label: "Sisa setelah pengajuan", amount: reviewChecks.sisa_setelah_reservasi, operator: "=", tone: Number(reviewChecks.sisa_setelah_reservasi) < 0 ? "text-rose-700" : "text-emerald-700" },
-                  ]}
-                />
-                <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Arus kas RO</p>
-                <MoneyFlow
-                  items={[
-                    { label: "Penerimaan kas", amount: reviewRoBalance.penerimaan_kas, tone: "text-sky-700" },
-                    { label: "Realisasi", amount: reviewRoBalance.realisasi, operator: "−", tone: "text-rose-700" },
-                    { label: "Posisi kas", amount: reviewRoBalance.posisi_kas, operator: "=", tone: Number(reviewRoBalance.posisi_kas) < 0 ? "text-rose-700" : "text-foreground" },
-                  ]}
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-sm">
-                  <span className="text-muted-foreground">Talangan belum lunas</span>
-                  <strong className="tabular-nums text-orange-700">{formatRupiah(reviewRoBalance.saldo_talangan)}</strong>
-                </div>
-                <p className="text-xs text-muted-foreground">Pengajuan yang masih menunggu review belum dihitung sebagai komitmen pagu.</p>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                <span className={`rounded-full px-2.5 py-1 font-medium ${reviewChecks.ro_reguler ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{reviewChecks.ro_reguler ? "RO reguler" : "Bukan RO reguler"}</span>
-                <span className={`rounded-full px-2.5 py-1 font-medium ${reviewChecks.proyek_disetujui ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                  {reviewChecks.proyek_disetujui ? "Proyek disetujui Pimpinan" : "Proyek belum disetujui Pimpinan"}
-                </span>
-                <span className={`rounded-full px-2.5 py-1 font-medium ${reviewChecks.pagu_mencukupi ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                  {reviewChecks.pagu_mencukupi ? "Pagu cukup" : "Pagu tidak mencukupi"}
-                </span>
-              </div>
-              {(!reviewChecks.ro_reguler || !reviewChecks.proyek_disetujui || !reviewChecks.pagu_mencukupi) && (
-                <Alert variant="destructive" className="mt-3">
-                  <CircleAlert size={16} />
-                  <AlertDescription>Pengajuan belum memenuhi syarat reservasi pagu. Tombol persetujuan dinonaktifkan; KARWAS tetap dapat menolak dengan menyertakan catatan.</AlertDescription>
-                </Alert>
-              )}
-            </ModalSection>
-
-            {reviewProject.id && (
-              <ModalSection
-                title={`Ringkasan proyek · ${String(reviewProject.kode_proyek ?? "")}`}
-                description={`${String(reviewProject.nama_proyek ?? "Proyek")}${reviewProject.nama_client ? ` · ${String(reviewProject.nama_client)}` : ""} · TA ${String(reviewProject.tahun_fiscal ?? "—")} · Status ${String(reviewProject.status_proyek ?? "—").replaceAll("_", " ")}`}
-              >
-                <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
-                  {[
-                    ["Nilai kontrak", reviewProject.nilai_kontrak],
-                    ["Direct Cost", reviewProject.total_direct_cost],
-                  ].map(([label, amount]) => (
-                    <div key={String(label)} className="flex items-center justify-between gap-4 py-3 sm:border-b">
-                      <dt className="text-sm text-muted-foreground">{label}</dt>
-                      <dd className="text-sm font-semibold tabular-nums">{formatRupiah(amount)}</dd>
-                    </div>
-                  ))}
-                </dl>
-                <div className="mt-3 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Penagihan proyek</p>
-                  <MoneyFlow
-                    items={[
-                      { label: "Tagihan terbit", amount: reviewCashFlow.nilai_tagihan_terbit },
-                      { label: "Penerimaan terverifikasi", amount: reviewCashFlow.penerimaan_terverifikasi, operator: "−", tone: "text-sky-700" },
-                      { label: "Sisa tagihan", amount: reviewCashFlow.sisa_tagihan, operator: "=", tone: "text-amber-700" },
-                    ]}
-                  />
-                </div>
-                <dl className="mt-3 grid grid-cols-1 divide-y border-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
-                  {[
-                    ["Belanja terealisasi", reviewCashFlow.realisasi, "text-rose-700"],
-                    ["Komitmen RO aktif", reviewCashFlow.komitmen, "text-amber-700"],
-                    ["Pengajuan menunggu review", reviewCashFlow.pengajuan_menunggu, "text-slate-700"],
-                    ["Sisa hak belanja seluruh RO", reviewCashFlow.sisa_hak_belanja, "text-emerald-700"],
-                    ["Talangan proyek belum lunas", reviewCashFlow.saldo_talangan, "text-orange-700"],
-                  ].map(([label, amount, tone]) => (
-                    <div key={String(label)} className="flex items-center justify-between gap-4 py-3 sm:border-b">
-                      <dt className="text-sm text-muted-foreground">{label}</dt>
-                      <dd className={`text-sm font-semibold tabular-nums ${tone}`}>{formatRupiah(amount)}</dd>
-                    </div>
-                  ))}
-                </dl>
-                <div className="mt-4 overflow-hidden rounded-lg border bg-white">
-                  <div className="flex items-center gap-2 border-b px-3 py-2.5 text-sm font-semibold">
-                    <Banknote size={16} className="text-primary" /> Posisi pagu dan komitmen per RO
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[52rem] text-left text-xs">
-                      <thead className="bg-muted/50 text-muted-foreground">
-                        <tr>
-                          <th className="p-2.5">RO / Unit</th>
-                          <th className="p-2.5">MAK</th>
-                          <th className="p-2.5 text-right">Pagu</th>
-                          <th className="p-2.5 text-right">Realisasi</th>
-                          <th className="p-2.5 text-right">Komitmen</th>
-                          <th className="p-2.5 text-right">Sisa hak</th>
-                          <th className="p-2.5 text-right">Pengajuan menunggu</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reviewProjectRos.map((ro) => {
-                          const isCurrent = String(ro.id) === String(reviewRequest.ro_id);
-                          return (
-                            <tr key={String(ro.id)} className={`border-t ${isCurrent ? "bg-amber-50/70" : ""}`}>
-                              <td className="p-2.5">
-                                <span className="font-semibold">
-                                  {String(ro.kode_ro)} · {String(ro.nama_ro)}
-                                </span>
-                                <span className="mt-0.5 block text-muted-foreground">
-                                  {String(ro.nama_unit_koordinator ?? "Unit tidak diketahui")}
-                                  {isCurrent ? " · RO pengajuan ini" : ""}
-                                </span>
-                              </td>
-                              <td className="p-2.5">
-                                {String(ro.mak?.kode_mak ?? "—")} · {String(ro.mak?.nama_mak ?? "—")}
-                              </td>
-                              <td className="p-2.5 text-right tabular-nums">{formatRupiah(ro.balance?.pagu_disetujui)}</td>
-                              <td className="p-2.5 text-right tabular-nums">{formatRupiah(ro.balance?.realisasi)}</td>
-                              <td className="p-2.5 text-right tabular-nums">{formatRupiah(ro.balance?.komitmen_aktif)}</td>
-                              <td className="p-2.5 text-right font-semibold tabular-nums">{formatRupiah(ro.balance?.sisa_dapat_direservasi)}</td>
-                              <td className="p-2.5 text-right tabular-nums">{formatRupiah(ro.pengajuan_menunggu?.reduce((sum: number, item: Row) => sum + Number(item.jumlah ?? 0), 0))}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="border-t px-3 py-2 text-xs text-muted-foreground">Pengajuan yang masih menunggu review belum dihitung sebagai komitmen pagu.</p>
-                </div>
-                <div className="mt-4 overflow-hidden rounded-lg border bg-white">
-                  <div className="flex items-center gap-2 border-b px-3 py-2.5 text-sm font-semibold">
-                    <FileText size={16} className="text-primary" /> Status termin dan penerimaan invoice
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[36rem] text-left text-xs">
-                      <thead className="bg-muted/50 text-muted-foreground">
-                        <tr>
-                          <th className="p-2.5">Termin</th>
-                          <th className="p-2.5">Invoice / status</th>
-                          <th className="p-2.5 text-right">Nilai termin</th>
-                          <th className="p-2.5 text-right">Dibayar</th>
-                          <th className="p-2.5 text-right">Sisa invoice</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reviewTerms.map((term) => {
-                          const invoice = term.invoice as Row | null;
-                          const paid = Number(invoice?.nominal_dibayar ?? 0);
-                          return (
-                            <tr key={String(term.id)} className="border-t">
-                              <td className="p-2.5">
-                                Termin {String(term.nomor_termin)} · {String(term.status).replaceAll("_", " ")}
-                              </td>
-                              <td className="p-2.5">
-                                {invoice ? (
-                                  <>
-                                    {String(invoice.nomor_invoice)}
-                                    <span className="mt-0.5 block text-muted-foreground">{String(invoice.status).replaceAll("_", " ")}</span>
-                                  </>
-                                ) : (
-                                  "Belum ada invoice"
-                                )}
-                              </td>
-                              <td className="p-2.5 text-right tabular-nums">{formatRupiah(term.nilai_termin)}</td>
-                              <td className="p-2.5 text-right tabular-nums">{formatRupiah(paid)}</td>
-                              <td className="p-2.5 text-right tabular-nums">{formatRupiah(invoice ? Math.max(0, Number(invoice.nominal ?? 0) - paid) : 0)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </ModalSection>
-            )}
-
-            <ModalSection title="Riwayat arus kas RO" description="Mutasi terbaru pada ledger RO ini; debit adalah dana masuk dan kredit adalah realisasi/pengeluaran.">
-              <div className="overflow-x-auto rounded-lg border bg-white">
-                <table className="w-full min-w-[38rem] text-left text-xs">
-                  <thead className="bg-muted/50 text-muted-foreground">
-                    <tr>
-                      <th className="p-2.5">Tanggal</th>
-                      <th className="p-2.5">Transaksi</th>
-                      <th className="p-2.5 text-right">Dana masuk</th>
-                      <th className="p-2.5 text-right">Realisasi</th>
-                      <th className="p-2.5 text-right">Saldo ledger</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reviewLedger
-                      .slice(-10)
-                      .reverse()
-                      .map((transaction, index) => (
-                        <tr key={String(transaction.id ?? index)} className="border-t">
-                          <td className="whitespace-nowrap p-2.5">{transaction.tanggal ? new Date(transaction.tanggal).toLocaleDateString("id-ID") : "—"}</td>
-                          <td className="p-2.5">
-                            <span className="font-medium">{String(transaction.nama_kegiatan ?? "Mutasi RO")}</span>
-                            <span className="mt-0.5 block text-muted-foreground">
-                              {String(transaction.jenis_transaksi ?? "").replaceAll("_", " ")}
-                              {transaction.keterangan ? ` · ${String(transaction.keterangan)}` : ""}
-                            </span>
-                          </td>
-                          <td className="p-2.5 text-right tabular-nums">{Number(transaction.debit) ? formatRupiah(transaction.debit) : "—"}</td>
-                          <td className="p-2.5 text-right tabular-nums">{Number(transaction.kredit) ? formatRupiah(transaction.kredit) : "—"}</td>
-                          <td className="p-2.5 text-right tabular-nums">{formatRupiah(transaction.saldo)}</td>
-                        </tr>
-                      ))}
-                    {!reviewLedger.length && (
-                      <tr>
-                        <td className="p-4 text-center text-muted-foreground" colSpan={5}>
-                          Belum ada transaksi kas pada ledger RO.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </ModalSection>
-          </>
-        )}
-        <label className="grid gap-1 text-sm">
-          Catatan pemeriksa
-          <textarea
-            className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm"
-            maxLength={500}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Tuliskan alasan penolakan atau catatan pemeriksaan (opsional saat menyetujui)"
-          />
-        </label>
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-      </Modal>
+      <PurchaseRequestReviewModal
+        reviewing={reviewing}
+        setReviewing={setReviewing}
+        reviewRequest={reviewRequest}
+        reviewProject={reviewProject}
+        reviewRoBalance={reviewRoBalance}
+        reviewCashFlow={reviewCashFlow}
+        reviewChecks={reviewChecks}
+        reviewProjectRos={reviewProjectRos}
+        reviewTerms={reviewTerms}
+        reviewLedger={reviewLedger}
+        reviewContextQuery={reviewContextQuery}
+        reviewMutation={reviewMutation}
+        review={review}
+        note={note}
+        setNote={setNote}
+        error={error}
+      />
       <Modal
         open={Boolean(paying)}
         onClose={() => setPaying(null)}
