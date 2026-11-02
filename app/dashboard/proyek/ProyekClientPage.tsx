@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Check, Eye, LoaderCircle, Plus, Trash2, FilePenLine, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Modal } from "@/components/modal/Modal";
@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { DataTable } from "@/components/table/DataTable";
 import { ProjectFinalReportButton } from "@/components/proyek/ProjectFinalReportButton";
+import { ProjectWorkflowDiagram, type ProjectWorkflowAction } from "@/components/proyek/ProjectWorkflowDiagram";
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -50,6 +51,14 @@ type MakOption = LookupRow & { kode_mak?: string; nama_mak?: string; tipe_akun?:
 type LegacyRoDraft = RoDraft & { nomor_job?: string };
 type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; jobs?: JobDraft[]; ros?: LegacyRoDraft[]; terms: TerminDraft[]; unitPengusulId?: string; unitKolaborasiIds?: string[] };
 const DRAFTS_STORAGE_KEY = "lemigas:proyek:drafts:v1";
+const PROJECT_STATUS_FILTERS = [
+  { label: "Menunggu validasi Koordinator Umum", value: "MENUNGGU_VALIDASI_UMUM" },
+  { label: "Menunggu notulen", value: "MENUNGGU_NOTULEN" },
+  { label: "Menunggu persetujuan Pimpinan", value: "MENUNGGU_VALIDASI_PIMPINAN" },
+  { label: "Disetujui Pimpinan", value: "DISETUJUI_PIMPINAN" },
+  { label: "Ditolak Koordinator Umum", value: "DITOLAK_UMUM" },
+  { label: "Ditolak Pimpinan", value: "DITOLAK_PIMPINAN" },
+];
 const currentYear = new Date().getFullYear();
 const normalizeUnitId = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("en-US");
 const blankForm = (): ProjectForm => ({
@@ -149,6 +158,7 @@ export default function ProyekClientPage() {
   const [search, setSearch] = useState("");
   const [tahun, setTahun] = useState("__all");
   const [koordinator, setKoordinator] = useState("__all");
+  const [statusProyek, setStatusProyek] = useState("__all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [open, setOpen] = useState(false);
@@ -183,13 +193,14 @@ export default function ProyekClientPage() {
   const list = use_query({
     tag: "masterProyek",
     method: "list",
-    params: { search, tahun, koordinator, page, pageSize },
+    params: { search, tahun, koordinator, statusProyek, page, pageSize },
     queryFn: async () => {
       setBrowserToken();
       return browserApi.masterProyek.proyekControllerGetData({
         query: search || undefined,
         tahun_fiscal: tahun === "__all" ? undefined : Number(tahun),
         id_unit_koordinator: koordinator === "__all" ? undefined : koordinator,
+        status_proyek: statusProyek === "__all" ? undefined : statusProyek,
         page,
         limit: pageSize,
       });
@@ -248,6 +259,38 @@ export default function ProyekClientPage() {
     },
     invalidateKeys: [["api", "masterProyek"]],
   });
+
+  function showProjectQueue(status: string) {
+    setSearch("");
+    setKoordinator("__all");
+    setStatusProyek(status);
+    setPage(1);
+    window.requestAnimationFrame(() => document.getElementById("project-list")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  const workflowActions: ProjectWorkflowAction[] = [
+    {
+      label: canCreate ? "Ajukan proyek" : "Lihat daftar proyek",
+      onClick: () => {
+        if (!canCreate) return showProjectQueue("__all");
+        resetForm();
+        setOpen(true);
+      },
+    },
+    {
+      label: isUmumValidator ? "Tinjau antrean" : "Lihat antrean",
+      onClick: () => showProjectQueue("MENUNGGU_VALIDASI_UMUM"),
+    },
+    {
+      label: "Lengkapi notulen",
+      onClick: () => showProjectQueue("MENUNGGU_NOTULEN"),
+    },
+    {
+      label: isPimpinanValidator ? "Tinjau persetujuan" : "Lihat antrean",
+      onClick: () => showProjectQueue("MENUNGGU_VALIDASI_PIMPINAN"),
+    },
+    { label: "Buka daftar RO", href: "/dashboard/ro" },
+  ];
 
   const create = use_mutation({
     tag: "masterProyek",
@@ -534,23 +577,7 @@ export default function ProyekClientPage() {
           </Button>
         )}
       </header>
-      <Card>
-        <CardHeader>
-          <CardTitle>Tahapan persetujuan proyek</CardTitle>
-          <CardDescription>Proyek diproses secara berurutan. Rencana Operasional (RO) aktif setelah persetujuan pimpinan.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ol className="grid gap-2 sm:grid-cols-4">
-            {["Pengajuan proyek", "Validasi Koordinator Umum", "Unggah notulen", "Persetujuan pimpinan"].map((step, index) => (
-              <li key={step} className="flex items-center gap-3 rounded-lg bg-muted/40 p-3 text-sm">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{index + 1}</span>
-                <span className="font-medium leading-snug">{step}</span>
-              </li>
-            ))}
-          </ol>
-          <p className="border-t pt-3 text-sm text-muted-foreground">Setelah disetujui pimpinan, RO aktif dan proses keuangan per termin dapat dilanjutkan.</p>
-        </CardContent>
-      </Card>
+      <ProjectWorkflowDiagram actions={workflowActions} />
       {localDrafts.length > 0 && (
         <Card>
           <CardContent className="space-y-3">
@@ -581,7 +608,7 @@ export default function ProyekClientPage() {
           </CardContent>
         </Card>
       )}
-      <Card>
+      <Card id="project-list" className="scroll-mt-6">
         <CardContent className="pt-4">
           {list.error && (
             <Alert variant="destructive" className="mb-4">
@@ -704,11 +731,13 @@ export default function ProyekClientPage() {
             filters={[
               { field: "tahun", label: "Tahun Fiscal", options: years.map((value) => ({ label: value, value })) },
               { field: "koordinator", label: "Koordinator", options: unitComboboxOptions },
+              { field: "status_proyek", label: "Status Proyek", options: PROJECT_STATUS_FILTERS },
             ]}
-            filterValues={{ tahun, koordinator }}
+            filterValues={{ tahun, koordinator, status_proyek: statusProyek }}
             onFilterChange={(field, value) => {
               if (field === "tahun") setTahun(value);
               if (field === "koordinator") setKoordinator(value);
+              if (field === "status_proyek") setStatusProyek(value);
               setPage(1);
             }}
             pagination={{

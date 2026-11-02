@@ -1482,6 +1482,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         tahun_fiscal?: number;
         /** Filter proyek berdasarkan unit koordinator RO */
         id_unit_koordinator?: string;
+        /** Filter proyek berdasarkan status proses */
+        status_proyek?: string;
       },
       params: RequestParams = {},
     ) =>
