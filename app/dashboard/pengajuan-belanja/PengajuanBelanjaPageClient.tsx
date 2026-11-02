@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, Banknote, Check, Circle, CircleAlert, CircleCheck, CircleDollarSign, CircleX, ClipboardList, Clock3, Eye, FileText, LoaderCircle, Plus, ShieldCheck, WalletCards, X } from "lucide-react";
+import { Banknote, Check, Circle, CircleAlert, CircleCheck, CircleDollarSign, CircleX, ClipboardList, Clock3, Eye, FileText, LoaderCircle, Plus, ShieldCheck, WalletCards, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Modal, ModalDetailGrid, ModalDetailItem, ModalSection } from "@/components/modal/Modal";
@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { DocumentLinks } from "@/components/common/DocumentLinks";
 import { MoneyFlow } from "@/components/common/MoneyFlow";
+import { WorkflowDiagram, type WorkflowAction, type WorkflowStage } from "@/components/common/WorkflowDiagram";
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken, useCurrentUser } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
@@ -73,6 +74,36 @@ const statusTone = (status?: string): "ok" | "warn" | "danger" | "neutral" => {
   if (status === "DITOLAK_KARWAS" || status === "DIBATALKAN") return "danger";
   return "neutral";
 };
+
+const purchaseWorkflowStages: WorkflowStage[] = [
+  {
+    title: "Ajukan belanja",
+    owner: "KOORDINATOR / SUBKOOR",
+    icon: ClipboardList,
+    color: "sky",
+    summary: "Kirim kebutuhan dari RO proyek atau order layanan retail.",
+    result: "Pengajuan tercatat",
+    next: "Pengajuan masuk ke antrean KARWAS. Sumber dana mengikuti jenisnya: pagu RO untuk proyek atau OPS_KANTOR untuk retail.",
+  },
+  {
+    title: "Review & reservasi",
+    owner: "KEU_KARWAS",
+    icon: ShieldCheck,
+    color: "violet",
+    summary: "Periksa kebutuhan, dokumen, dan kecukupan pagu atau saldo.",
+    result: "Disetujui atau ditolak",
+    next: "Jika disetujui, dana direservasi dan pengajuan diteruskan ke Bendahara. Jika ditolak, proses dihentikan dengan catatan pemeriksa.",
+  },
+  {
+    title: "Pembayaran",
+    owner: "KEU_BENDAHARA",
+    icon: WalletCards,
+    color: "emerald",
+    summary: "Catat nomor, tanggal, nominal, dan bukti pembayaran.",
+    result: "Pembayaran tercatat",
+    next: "Pembayaran dicatat ke ledger sumber dana terkait dan pengajuan ditandai selesai.",
+  },
+];
 
 export default function PengajuanBelanjaPageClient() {
   const [open, setOpen] = useState(false);
@@ -502,6 +533,33 @@ export default function PengajuanBelanjaPageClient() {
     }
   }
 
+  function showPurchaseQueue(nextStatus = "__all") {
+    setSearch("");
+    setStatus(nextStatus);
+    setSourceFilter("__all");
+    setProjectFilter("__all");
+    setCoordinatorFilter("__all");
+    setRoFilter("__all");
+    setFiscalYearFilter("__all");
+    setUnitPelaksanaFilter("__all");
+    window.requestAnimationFrame(() => document.getElementById("pengajuan-belanja-list")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  const purchaseWorkflowActions: WorkflowAction[] = [
+    {
+      label: canCreate ? "Ajukan belanja" : "Lihat pengajuan",
+      onClick: () => {
+        if (!canCreate) return showPurchaseQueue();
+        setForm(blankForm());
+        setSelectedProjectId("");
+        setError("");
+        setOpen(true);
+      },
+    },
+    { label: "Lihat antrean KARWAS", onClick: () => showPurchaseQueue("DIAJUKAN") },
+    { label: "Lihat siap dibayar", onClick: () => showPurchaseQueue("DISETUJUI_KARWAS") },
+  ];
+
   return (
     <section className="hris-page space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -522,53 +580,14 @@ export default function PengajuanBelanjaPageClient() {
           </Button>
         )}
       </header>
-      <Card className="overflow-hidden border-slate-200 bg-gradient-to-br from-white via-white to-amber-50/70">
-        <CardHeader className="gap-1 px-5 pt-6 pb-4 sm:px-6">
-          <CardTitle className="text-base">Alur Pengajuan Belanja</CardTitle>
-          <CardDescription>Pengajuan diproses bertahap sampai pembayaran tercatat di ledger.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 px-5 pt-0 pb-5 sm:px-6 sm:pb-6">
-          <ol className="grid items-stretch gap-3 md:grid-cols-3">
-            <li className="relative flex h-full gap-3 rounded-xl border border-slate-200 bg-white/90 p-4 md:mr-1">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
-                <ClipboardList size={19} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Tahap 1</p>
-                <p className="mt-1 font-semibold">Diajukan</p>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Koordinator atau Subkoordinator mengirim kebutuhan belanja dari RO proyek atau order layanan retail.</p>
-              </div>
-              <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden size-5 -translate-y-1/2 text-slate-400 md:block" />
-            </li>
-            <li className="relative flex h-full gap-3 rounded-xl border border-slate-200 bg-white/90 p-4 md:mx-1">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
-                <ShieldCheck size={19} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Tahap 2</p>
-                <p className="mt-1 font-semibold">Direview KARWAS</p>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">KARWAS memeriksa pagu RO proyek atau ketersediaan OPS_KANTOR untuk retail.</p>
-              </div>
-              <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden size-5 -translate-y-1/2 text-slate-400 md:block" />
-            </li>
-            <li className="flex h-full gap-3 rounded-xl border border-slate-200 bg-white/90 p-4 md:ml-1">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                <WalletCards size={19} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Tahap 3</p>
-                <p className="mt-1 font-semibold">Dibayar Bendahara</p>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Bendahara mencatat pembayaran ke sumber dana yang sesuai dengan jenis pengajuan.</p>
-              </div>
-            </li>
-          </ol>
-          <p className="flex items-start gap-2 border-t border-slate-200 pt-3 text-xs leading-relaxed text-muted-foreground">
-            <CircleCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
-            Pengajuan proyek memerlukan proyek yang disetujui Pimpinan dan pagu RO yang cukup. Pengajuan retail menggunakan saldo OPS_KANTOR.
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
+      <WorkflowDiagram
+        title="Alur Pengajuan Belanja"
+        description="Pilih tahap untuk memahami proses dan penanggung jawab, atau gunakan tombol untuk membuka antrean terkait."
+        stages={purchaseWorkflowStages}
+        actions={purchaseWorkflowActions}
+        footerNote="Proyek memakai pagu RO yang disetujui Pimpinan; Proyek Retail memakai saldo OPS_KANTOR. Persetujuan KARWAS mereservasi sumber dana sebelum Bendahara mencatat pembayaran."
+      />
+      <Card id="pengajuan-belanja-list" className="scroll-mt-6">
         <CardContent className="pt-4">
           {listQuery.isLoading && (
             <p role="status" className="py-8 text-center text-sm text-muted-foreground">

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/table/DataTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { readSession, SESSION_COOKIE } from "@/lib/auth";
+import { useCurrentUser } from "@/lib/api/hooks";
 
 const unwrap = (v: any) => v?.data ?? v;
 
@@ -23,17 +23,8 @@ export default function PegawaiPage() {
   const [selected, setSelected] = useState<any>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ nip_nik: "", nama: "", tipe_pegawai: "TA", ta_kategori: "BIASA", jabatan: "", email: "", telepon: "", tanggal_mulai: "" });
-  const session =
-    typeof document !== "undefined"
-      ? readSession(
-          document.cookie
-            .split(";")
-            .map((x) => x.trim())
-            .find((x) => x.startsWith(`${SESSION_COOKIE}=`))
-            ?.slice(SESSION_COOKIE.length + 1),
-        )
-      : null;
-  const role = session?.user.role ?? "";
+  const currentUser = useCurrentUser();
+  const role = currentUser.data?.role?.toLowerCase() ?? "";
   const canEdit = role === "superadmin";
   const params = useMemo(() => ({ query: search || undefined, page, limit: 10, tipe_pegawai: tipe || undefined, status_aktif: status || undefined }) as any, [search, page, tipe, status]);
   const list = use_query({

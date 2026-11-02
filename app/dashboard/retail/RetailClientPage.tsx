@@ -4,11 +4,13 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CircleDollarSign,
-  ClipboardList,
   Eye,
+  FileUp,
   FileText,
   LoaderCircle,
+  PackageCheck,
   Plus,
+  Printer,
   Trash2,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -20,6 +22,7 @@ import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { Modal } from "@/components/modal/Modal";
 import { DataTable } from "@/components/table";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { WorkflowDiagram, type WorkflowAction, type WorkflowStage } from "@/components/common/WorkflowDiagram";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { use_query } from "@/lib/api/use_query";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -45,6 +48,14 @@ type OrderForm = {
   detail_perconto: string;
   rincian_layanan: SampleItemForm[];
 };
+
+const retailWorkflowStages: WorkflowStage[] = [
+  { title: "Terima sampel", owner: "SUBKOOR / PILT", icon: PackageCheck, color: "sky", summary: "Catat klien, tanda terima, dan rincian sampel yang diuji.", result: "PENGUJIAN", next: "Order tercatat saat sampel diterima dan proses pengujian dimulai." },
+  { title: "Input LHU", owner: "SUBKOOR / PILT", icon: FileUp, color: "violet", summary: "Lengkapi nomor dan dokumen LHU setelah pengujian selesai.", result: "SIAP_DITAGIH", next: "Setelah LHU disimpan, order masuk antrean Billing untuk dibuatkan invoice." },
+  { title: "Terbitkan invoice", owner: "KEU_BILLING", icon: FileText, color: "amber", summary: "Terbitkan tagihan kepada klien berdasarkan nilai layanan.", result: "INVOICE_DITERBITKAN", next: "Invoice menjadi piutang sampai penerimaan pembayaran dicatat Bendahara." },
+  { title: "Catat penerimaan", owner: "KEU_BENDAHARA", icon: CircleDollarSign, color: "indigo", summary: "Cocokkan mutasi bank dan catat pembayaran, termasuk pembayaran bertahap.", result: "LUNAS", next: "Pembayaran dapat dicatat bertahap; LHU dapat diserahterimakan setelah invoice lunas." },
+  { title: "Serah terima LHU", owner: "SUBKOOR / PILT", icon: Printer, color: "emerald", summary: "Unggah bukti serah terima dan catat penerima dokumen LHU.", result: "SELESAI", next: "Akses serah terima terbuka setelah pembayaran lunas dan order dapat ditandai selesai." },
+];
 
 const blankSampleItem = (): SampleItemForm => ({
   nama_layanan: "",
@@ -190,6 +201,31 @@ export default function RetailClientPage() {
   });
   const summary = (summaryQuery.data as Row | undefined) ?? {};
 
+  function showRetailQueue(serviceStatus = "__all", invoiceStatus = "__all") {
+    setSearch("");
+    setServiceFilter(serviceStatus);
+    setBillingFilter(invoiceStatus);
+    setUnitFilter("__all");
+    setFiscalYearFilter("__all");
+    window.requestAnimationFrame(() => document.getElementById("retail-order-list")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  const workflowActions: WorkflowAction[] = [
+    {
+      label: canCreateOrder ? "Input Sampel" : "Lihat order",
+      onClick: () => {
+        if (!canCreateOrder) return showRetailQueue();
+        setOrderForm(blankOrder());
+        setOrderOpen(true);
+        setError("");
+      },
+    },
+    { label: "Lihat order diuji", onClick: () => showRetailQueue("PENGUJIAN") },
+    { label: "Lihat siap ditagih", onClick: () => showRetailQueue("SIAP_DITAGIH") },
+    { label: "Lihat tagihan", onClick: () => showRetailQueue("INVOICE_DITERBITKAN", "DITERBITKAN") },
+    { label: "Lihat tagihan lunas", onClick: () => showRetailQueue("__all", "LUNAS") },
+  ];
+
   const createOrderMutation = use_mutation<unknown, Error, OrderForm>({
     tag: "retail",
     method: "createRetailOrder",
@@ -276,35 +312,13 @@ export default function RetailClientPage() {
       {canCreateOrder && <Button onClick={() => { setOrderForm(blankOrder()); setOrderOpen(true); setError(""); }}><Plus size={16} /> Input Sampel</Button>}
     </header>
 
-    <section className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
-      <div className="mb-5">
-        <h2 className="font-semibold">Alur Layanan Retail</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Urutan proses dan peran penanggung jawab setiap tahap.</p>
-      </div>
-      <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {[
-          ["1", "Terima sampel", "SUBKOOR / PILT", "Catat tanda terima. Status mulai Dalam Pengujian."],
-          ["2", "Input LHU", "SUBKOOR / PILT", "Catat nomor dan file LHU setelah uji selesai."],
-          ["3", "Terbitkan invoice", "KEU_BILLING", "Invoice diterbitkan sebagai piutang klien."],
-          ["4", "Catat penerimaan", "KEU_BENDAHARA", "Cocokkan mutasi bank sampai tagihan lunas."],
-          ["5", "Cetak / serah LHU", "SETELAH LUNAS", "Akses LHU dibuka setelah pembayaran lunas."],
-        ].map(([number, title, roleLabel, detail], index) => <li key={number} className="relative min-w-0">
-          <div className="flex items-start gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">{number}</span>
-            <div className="min-w-0 pt-0.5">
-              <p className="text-sm font-semibold">{title}</p>
-              <p className="mt-1 text-[11px] font-semibold tracking-wide text-primary">{roleLabel}</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</p>
-            </div>
-          </div>
-          {index < 4 && <span aria-hidden="true" className="absolute right-0 top-3 hidden h-px w-4 bg-border lg:block" />}
-        </li>)}
-      </ol>
-      <div className="mt-5 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 sm:flex-row sm:items-center">
-        <ClipboardList className="size-4 shrink-0 text-amber-700" />
-        <p className="text-sm leading-relaxed text-amber-950"><strong>Belanja bahan (opsional):</strong> diajukan dari detail order saat pengujian, ditinjau KARWAS, lalu dibayar Bendahara dari OPS_KANTOR.</p>
-      </div>
-    </section>
+    <WorkflowDiagram
+      title="Alur Layanan Retail"
+      description="Pilih tahap untuk melihat status dan penanggung jawab, atau gunakan tombol untuk membuka order yang perlu diproses."
+      stages={retailWorkflowStages}
+      actions={workflowActions}
+      footerNote="Belanja bahan bersifat opsional: ajukan dari detail order saat pengujian; KARWAS meninjau dan mencadangkan OPS_KANTOR, lalu Bendahara mencatat pembayarannya."
+    />
 
     <div className="grid gap-3 sm:grid-cols-3">
       {[
@@ -314,7 +328,7 @@ export default function RetailClientPage() {
       ].map(({ label, value, icon: Icon, accent }) => <Card key={label}><CardContent className="flex min-h-[108px] items-center justify-between gap-4 !p-5 sm:!p-6"><div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="mt-2 break-words text-xl font-semibold tracking-tight tabular-nums">{formatRupiah(Number(value ?? 0))}</p></div><span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${accent}`}><Icon size={19} /></span></CardContent></Card>)}
     </div>
 
-    <Card>
+    <Card id="retail-order-list" className="scroll-mt-6">
       <CardContent className="!space-y-4 !p-5 sm:!p-6">
         <div><h2 className="font-semibold">Daftar Order Layanan Retail</h2><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Buka detail order untuk melihat progres, mencatat LHU, dan mengajukan belanja bahan bila diperlukan.</p></div>
         {jobsQuery.isError && <Alert variant="destructive"><AlertDescription>{apiErrorMessage(jobsQuery.error, "Gagal memuat order retail.")}</AlertDescription></Alert>}
