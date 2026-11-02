@@ -530,10 +530,10 @@ export default function MonevClientPage() {
         </CardContent>
       </Card>
 
-      <nav className="flex gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5" aria-label="Halaman Monev">
+      <nav className="grid w-full grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-white p-1.5 sm:grid-cols-4" aria-label="Halaman Monev">
         {sections.map(({ href, label, icon: Icon }) => {
           const selected = href === activePath;
-          return <Link key={href} href={href} aria-current={selected ? "page" : undefined} className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${selected ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon size={16} />{label}</Link>;
+          return <Link key={href} href={href} aria-current={selected ? "page" : undefined} className={`inline-flex min-h-10 min-w-0 w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-center text-sm font-medium leading-4 transition-colors sm:whitespace-nowrap ${selected ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="shrink-0" size={16} /><span>{label}</span></Link>;
         })}
       </nav>
 
