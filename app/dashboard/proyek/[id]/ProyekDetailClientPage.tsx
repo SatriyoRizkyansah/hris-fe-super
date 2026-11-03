@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Check, LoaderCircle, Upload } from "lucide-react";
+import { ArrowLeft, Check, Clock3, FileClock, LoaderCircle, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,15 +18,42 @@ import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeData, envelopeRows, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
+import { apiErrorMessage, envelopeData, envelopeRows, requestHrisApi, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
 
 type Workflow = "umum" | "pimpinan" | "notulen" | null;
 type Row = Record<string, unknown>;
+type ProjectExtensionRow = {
+  id: string;
+  berakhir_sk_sebelumnya: string;
+  berakhir_sk_baru: string;
+  alasan: string;
+  file_dokumen: string;
+  status: string;
+  diajukan_pada: string;
+  diajukan_oleh?: { nama?: string } | null;
+  diperiksa_pada?: string | null;
+  diperiksa_oleh?: { nama?: string } | null;
+  catatan_pemeriksa?: string | null;
+};
+type ProjectDetail = ProyekItemDto & { perpanjangan_list?: ProjectExtensionRow[] };
 const text = (value: unknown, fallback = "—") => (value === null || value === undefined || value === "" ? fallback : String(value));
 const financeOf = (row: Row): Row => (row.balance && typeof row.balance === "object" ? (row.balance as Row) : {});
+const dateKey = (value: unknown) => String(value ?? "").slice(0, 10);
+const statusIsApproved = (value?: string) => value === "DISETUJUI_PIMPINAN";
+
+function jakartaToday() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (name: string) => parts.find((item) => item.type === name)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
 
 function Card({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -49,6 +76,15 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const [expandedRos, setExpandedRos] = useState<Record<string, boolean>>({});
   const [roDetails, setRoDetails] = useState<Record<string, Row>>({});
   const [roLoading, setRoLoading] = useState<Record<string, boolean>>({});
+  const [extensionOpen, setExtensionOpen] = useState(false);
+  const [extensionEndDate, setExtensionEndDate] = useState("");
+  const [extensionReason, setExtensionReason] = useState("");
+  const [extensionFile, setExtensionFile] = useState<File | null>(null);
+  const [extensionError, setExtensionError] = useState("");
+  const [reviewingExtension, setReviewingExtension] = useState<ProjectExtensionRow | null>(null);
+  const [extensionApproved, setExtensionApproved] = useState(true);
+  const [extensionReviewNote, setExtensionReviewNote] = useState("");
+  const [extensionReviewError, setExtensionReviewError] = useState("");
 
   const detail = use_query({
     tag: "masterProyek",
@@ -105,7 +141,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData({ limit: 200 });
     },
   });
-  const project = envelopeData<ProyekItemDto>(detail.data);
+  const project = envelopeData<ProjectDetail>(detail.data);
   const roRows = envelopeRows<Row>(ros.data);
   const hasRestrictedRos = roRows.some((row) => row.can_access_detail === false);
   const roGroups = useMemo(() => {
@@ -126,6 +162,13 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const currentUnit = envelopeRows<Row>(units.data).find((unit) => String(unit.id) === identity.unitKerjaId);
   const isUmum = identity.role === "superadmin" || (identity.role === "koordinator" && String(currentUnit?.kode_unit ?? coordinatorCode) === "ORG-UMUM");
   const isSubmitter = identity.role === "superadmin" || (identity.role === "koordinator" && identity.userId === String(project?.diajukan_oleh_id ?? ""));
+  const isKarwas = identity.role === "keu_karwas" || identity.role === "superadmin";
+  const extensionRows = project?.perpanjangan_list ?? [];
+  const pendingExtension = extensionRows.find((item) => item.status === "DIAJUKAN");
+  const projectEndDate = dateKey(project?.berakhir_sk);
+  const extensionOpenForSubmission = Boolean(
+    isSubmitter && statusIsApproved(project?.status_proyek) && projectEndDate && jakartaToday() <= projectEndDate,
+  );
 
   const invalidate = async (): Promise<void> => {
     await Promise.all([detail.refetch(), ros.refetch(), terms.refetch(), distribution.refetch()]);
@@ -150,6 +193,42 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       setWorkflow(null);
     },
   });
+  const extensionMutation = use_mutation<unknown, Error, { endDate: string; reason: string; file: File }>({
+    tag: "masterProyek",
+    method: "extension-create",
+    mutationFn: async ({ endDate, reason, file: document }) => {
+      setBrowserToken();
+      return uploadHrisFile(`/api/proyek/${id}/perpanjangan`, document, {
+        berakhir_sk_baru: endDate,
+        alasan: reason,
+      });
+    },
+    onSuccess: async () => {
+      await invalidate();
+      setExtensionOpen(false);
+      setExtensionEndDate("");
+      setExtensionReason("");
+      setExtensionFile(null);
+      setExtensionError("");
+    },
+  });
+  const extensionReviewMutation = use_mutation<unknown, Error, { extensionId: string; approved: boolean; note: string }>({
+    tag: "masterProyek",
+    method: "extension-review",
+    mutationFn: async ({ extensionId, approved: decision, note: reviewNote }) => {
+      setBrowserToken();
+      return requestHrisApi(`/api/proyek/${id}/perpanjangan/${extensionId}/review`, {
+        method: "PATCH",
+        body: JSON.stringify({ disetujui: decision, catatan: reviewNote.trim() || undefined }),
+      });
+    },
+    onSuccess: async () => {
+      await invalidate();
+      setReviewingExtension(null);
+      setExtensionReviewNote("");
+      setExtensionReviewError("");
+    },
+  });
   function openWorkflow(action: Exclude<Workflow, null>) {
     setWorkflow(action);
     setApproved(true);
@@ -163,6 +242,43 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       await workflowMutation.mutateAsync();
     } catch (error) {
       setActionError(apiErrorMessage(error));
+    }
+  }
+  async function submitExtension() {
+    setExtensionError("");
+    if (!extensionFile) {
+      setExtensionError("Lampirkan dokumen pendukung perpanjangan SK.");
+      return;
+    }
+    if (!extensionEndDate || extensionEndDate <= projectEndDate) {
+      setExtensionError("Tanggal akhir SK baru harus setelah tanggal akhir SK saat ini.");
+      return;
+    }
+    if (extensionReason.trim().length < 10) {
+      setExtensionError("Jelaskan alasan perpanjangan minimal 10 karakter.");
+      return;
+    }
+    try {
+      await extensionMutation.mutateAsync({ endDate: extensionEndDate, reason: extensionReason.trim(), file: extensionFile });
+    } catch (error) {
+      setExtensionError(apiErrorMessage(error));
+    }
+  }
+  async function submitExtensionReview() {
+    if (!reviewingExtension) return;
+    setExtensionReviewError("");
+    if (!extensionApproved && !extensionReviewNote.trim()) {
+      setExtensionReviewError("Catatan pemeriksa wajib diisi saat menolak pengajuan.");
+      return;
+    }
+    try {
+      await extensionReviewMutation.mutateAsync({
+        extensionId: reviewingExtension.id,
+        approved: extensionApproved,
+        note: extensionReviewNote,
+      });
+    } catch (error) {
+      setExtensionReviewError(apiErrorMessage(error));
     }
   }
   if (detail.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memuat proyek...</div>;
@@ -235,6 +351,11 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {extensionOpenForSubmission && !pendingExtension && (
+            <Button variant="outline" onClick={() => { setExtensionError(""); setExtensionOpen(true); }}>
+              <FileClock size={16} /> Ajukan Perpanjangan SK
+            </Button>
+          )}
           <ProjectFinalReportButton project={project} />
           <StatusBadge status={projectStatusTone(status)}>{humanizeStatus(status)}</StatusBadge>
         </div>
@@ -301,6 +422,65 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           <p className="mt-4 text-xs text-muted-foreground">Setelah proyek disetujui, Billing menerbitkan invoice dan Bendahara mencatat pembayaran setelah dana masuk.</p>
         </div>
       </div>
+      <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-5 py-4">
+          <div>
+            <h2 className="font-semibold">Perpanjangan masa SK</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Perubahan jadwal SK diajukan sebelum tanggal akhir dan berlaku setelah disetujui KARWAS. Nilai kontrak dan alokasi RO tidak berubah.</p>
+          </div>
+          {pendingExtension && <StatusBadge status="warn">Menunggu pemeriksaan KARWAS</StatusBadge>}
+        </div>
+        <div className="space-y-3 p-5">
+          {!extensionRows.length ? (
+            <p className="text-sm text-muted-foreground">
+              {extensionOpenForSubmission
+                ? "Belum ada pengajuan perpanjangan. Ajukan sebelum masa SK berakhir jika proyek memerlukan tambahan waktu."
+                : projectEndDate && jakartaToday() > projectEndDate
+                  ? "Masa SK sudah berakhir dan pengajuan perpanjangan baru tidak dapat dibuat."
+                  : "Belum ada riwayat perpanjangan masa SK."}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[48rem] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="p-3">Tanggal akhir SK</th>
+                    <th className="p-3">Alasan</th>
+                    <th className="p-3">Pengajuan</th>
+                    <th className="p-3">Status / pemeriksaan</th>
+                    {isKarwas && <th className="p-3 text-right">Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {extensionRows.map((item) => (
+                    <tr key={item.id} className="border-b last:border-0 align-top">
+                      <td className="p-3">
+                        <span className="text-muted-foreground">{formatDate(item.berakhir_sk_sebelumnya)}</span>
+                        <span className="mx-2 text-muted-foreground">→</span>
+                        <span className="font-medium">{formatDate(item.berakhir_sk_baru)}</span>
+                        <div className="mt-1 text-xs"><DocumentLinks documents={[{ label: "Dokumen pendukung", path: item.file_dokumen }]} /></div>
+                      </td>
+                      <td className="max-w-sm whitespace-normal p-3">{item.alasan}</td>
+                      <td className="p-3">
+                        <div>{text(item.diajukan_oleh?.nama)}</div>
+                        <div className="text-xs text-muted-foreground">{formatDate(item.diajukan_pada)}</div>
+                      </td>
+                      <td className="p-3">
+                        <StatusBadge status={item.status === "DISETUJUI_KARWAS" ? "ok" : item.status === "DITOLAK_KARWAS" ? "danger" : "warn"}>{humanizeStatus(item.status)}</StatusBadge>
+                        {item.diperiksa_oleh && <div className="mt-1 text-xs text-muted-foreground">{item.diperiksa_oleh.nama} · {formatDate(item.diperiksa_pada)}</div>}
+                        {item.catatan_pemeriksa && <div className="mt-1 max-w-xs whitespace-normal text-xs text-muted-foreground">{item.catatan_pemeriksa}</div>}
+                      </td>
+                      {isKarwas && <td className="p-3 text-right">{item.status === "DIAJUKAN" && <Button size="sm" onClick={() => { setReviewingExtension(item); setExtensionApproved(true); setExtensionReviewNote(""); setExtensionReviewError(""); }}>Tinjau</Button>}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {pendingExtension && isSubmitter && <p className="text-xs text-muted-foreground">Pengajuan perpanjangan sedang diperiksa. Pengajuan baru dapat dibuat setelah pemeriksaan ini selesai.</p>}
+          {!extensionOpenForSubmission && isSubmitter && projectEndDate && jakartaToday() > projectEndDate && <p className="flex items-center gap-2 text-xs text-amber-700"><Clock3 size={14} /> Masa SK telah berakhir; perpanjangan tidak dapat diajukan setelah tanggal tersebut.</p>}
+        </div>
+      </section>
       <ProjectFinancialSections
         summary={{ contract, directCost, margin, marginDistributed, roPlan, approvedRoBudget, roUsed, roCommitments, roCashReceived, roCashPosition, roRemainingRight, usedPercent, marginPercent }}
         termRows={termRows}
@@ -442,6 +622,75 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             </Button>
             <Button disabled={workflowMutation.isPending} onClick={submitWorkflow}>
               {workflowMutation.isPending && <LoaderCircle className="animate-spin" size={16} />} Proses
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={extensionOpen} onOpenChange={(value) => !value && setExtensionOpen(false)}>
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Ajukan Perpanjangan Masa SK</DialogTitle>
+            <DialogDescription>Ajukan sebelum tanggal akhir SK saat ini. Persetujuan hanya mengubah tanggal akhir SK, tanpa mengubah nilai kontrak atau alokasi RO.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-muted/40 p-3 text-sm">
+              <p className="font-medium">{project.nama_proyek}</p>
+              <p className="text-muted-foreground">Akhir SK saat ini: {formatDate(projectEndDate)}</p>
+            </div>
+            <label className="grid gap-1.5 text-sm font-medium">
+              Tanggal akhir SK yang baru
+              <Input type="date" min={projectEndDate} value={extensionEndDate} onChange={(event) => setExtensionEndDate(event.target.value)} />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              Alasan perpanjangan
+              <textarea rows={4} maxLength={1000} value={extensionReason} onChange={(event) => setExtensionReason(event.target.value)} placeholder="Jelaskan alasan dan pekerjaan yang masih perlu diselesaikan." className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/40" />
+              <span className="text-xs font-normal text-muted-foreground">{extensionReason.length}/1000 karakter</span>
+            </label>
+            <DocumentUploadField label="Dokumen pendukung perpanjangan (PDF)" accept=".pdf" value={extensionFile} onChange={setExtensionFile} />
+            {extensionError && <Alert variant="destructive"><AlertDescription>{extensionError}</AlertDescription></Alert>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={extensionMutation.isPending} onClick={() => setExtensionOpen(false)}>Batal</Button>
+            <Button disabled={extensionMutation.isPending} onClick={() => void submitExtension()}>
+              {extensionMutation.isPending && <LoaderCircle className="animate-spin" size={16} />} Kirim ke KARWAS
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={reviewingExtension !== null} onOpenChange={(value) => !value && setReviewingExtension(null)}>
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Tinjau Perpanjangan Masa SK</DialogTitle>
+            <DialogDescription>Periksa alasan dan dokumen. Jika disetujui, tanggal akhir SK proyek akan diperbarui.</DialogDescription>
+          </DialogHeader>
+          {reviewingExtension && <div className="space-y-4">
+            <div className="rounded-lg border p-3 text-sm">
+              <p className="font-medium">{project.nama_proyek}</p>
+              <p className="mt-1 text-muted-foreground">{formatDate(reviewingExtension.berakhir_sk_sebelumnya)} → <span className="font-semibold text-foreground">{formatDate(reviewingExtension.berakhir_sk_baru)}</span></p>
+              <p className="mt-3 whitespace-pre-wrap">{reviewingExtension.alasan}</p>
+              <div className="mt-3"><DocumentLinks documents={[{ label: "Dokumen pendukung perpanjangan", path: reviewingExtension.file_dokumen }]} /></div>
+            </div>
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">Keputusan KARWAS</legend>
+              <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${extensionApproved ? "border-primary bg-primary/5" : ""}`}>
+                <input type="radio" name="project-extension-decision" checked={extensionApproved} onChange={() => setExtensionApproved(true)} className="mt-1 accent-primary" />
+                <span><span className="block text-sm font-medium">Setujui</span><span className="block text-xs text-muted-foreground">Perbarui tanggal akhir SK proyek.</span></span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${!extensionApproved ? "border-destructive bg-destructive/5" : ""}`}>
+                <input type="radio" name="project-extension-decision" checked={!extensionApproved} onChange={() => setExtensionApproved(false)} className="mt-1 accent-destructive" />
+                <span><span className="block text-sm font-medium">Tolak</span><span className="block text-xs text-muted-foreground">Tanggal akhir SK tetap seperti saat ini.</span></span>
+              </label>
+            </fieldset>
+            <label className="grid gap-1.5 text-sm font-medium">
+              Catatan pemeriksa{!extensionApproved && <span className="text-destructive"> (wajib saat menolak)</span>}
+              <textarea rows={3} value={extensionReviewNote} onChange={(event) => setExtensionReviewNote(event.target.value)} placeholder={extensionApproved ? "Catatan tambahan (opsional)" : "Tuliskan alasan penolakan"} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/40" />
+            </label>
+            {extensionReviewError && <Alert variant="destructive"><AlertDescription>{extensionReviewError}</AlertDescription></Alert>}
+          </div>}
+          <DialogFooter>
+            <Button variant="outline" disabled={extensionReviewMutation.isPending} onClick={() => setReviewingExtension(null)}>Batal</Button>
+            <Button disabled={extensionReviewMutation.isPending} onClick={() => void submitExtensionReview()}>
+              {extensionReviewMutation.isPending && <LoaderCircle className="animate-spin" size={16} />} Proses keputusan
             </Button>
           </DialogFooter>
         </DialogContent>
