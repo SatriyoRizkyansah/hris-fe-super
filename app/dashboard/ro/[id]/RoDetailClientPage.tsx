@@ -12,6 +12,7 @@ import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { EmptyData } from "@/components/loading/EmptyData";
 import { DataTable } from "@/components/table";
 import { RoDetailModals } from "@/components/ro/RoDetailModals";
+import { RoLedgerDetailModal } from "@/components/ro/RoLedgerDetailModal";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -47,6 +48,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   const [transaction, setTransaction] = useState<TransactionForm>(emptyTransaction);
   const [transactionDirection, setTransactionDirection] = useState<TransactionDirection>("kredit");
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [ledgerDetailRow, setLedgerDetailRow] = useState<AnyRow | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [deleteTransaction, setDeleteTransaction] = useState<AnyRow | null>(null);
@@ -465,6 +467,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
                 { key: "debit", header: "Debit", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? "—" : Number(row.debit) ? formatRupiah(row.debit) : "—" },
                 { key: "kredit", header: "Kredit", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? "—" : Number(row.kredit) ? formatRupiah(row.kredit) : "—" },
                 { key: "saldo", header: "Saldo", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? <span className="text-xs text-muted-foreground">Belum dibukukan</span> : formatRupiah(row.saldo) },
+                { key: "rincian", header: "Rincian", render: (row: AnyRow) => <Button size="sm" variant="outline" onClick={() => setLedgerDetailRow(row)}><Eye size={14} /> Detail</Button> },
                 {
                   key: "aksi",
                   header: "Aksi",
@@ -550,7 +553,14 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         submitSpendRequest={submitSpendRequest}
         spendRequestError={spendRequestError}
         remainingRight={remainingRight}
-      />      <AlertDialog open={Boolean(deleteTransaction)} onOpenChange={(open) => !open && setDeleteTransaction(null)}>
+      />
+      <RoLedgerDetailModal
+        row={ledgerDetailRow}
+        onClose={() => setLedgerDetailRow(null)}
+        roName={String(ro.nama_ro ?? ro.kode_ro ?? "RO")}
+        projectName={String(ro.nama_proyek ?? "—")}
+      />
+      <AlertDialog open={Boolean(deleteTransaction)} onOpenChange={(open) => !open && setDeleteTransaction(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus transaksi?</AlertDialogTitle>
