@@ -11,6 +11,7 @@ import { DataTable } from "@/components/table/DataTable";
 import { Modal } from "@/components/modal/Modal";
 import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import { LoadingState } from "@/components/loading/LoadingState";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { getApiErrorMessage } from "@/lib/api/errors";
 import { Button } from "@/components/ui/Button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -286,14 +287,7 @@ export default function MasterDataPage({ kind, formColumns = 1, modalSize = "md"
       {query.isPending ? (
         <LoadingState />
       ) : query.isError ? (
-        <Alert variant="destructive">
-          <AlertDescription className="flex flex-wrap items-center gap-2">
-            {getApiErrorMessage(query.error)}{" "}
-            <Button type="button" variant="link" size="sm" onClick={() => void query.refetch()}>
-              Coba lagi
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <EmptyData label={`Data ${cfg.title.toLowerCase()} belum dapat dimuat.`} action={<Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Coba lagi</Button>} />
       ) : (
         <DataTable
           columns={columns}

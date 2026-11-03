@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { ChevronDown, ExternalLink } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { MoneyFlow } from "@/components/common/MoneyFlow";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
 
@@ -111,9 +111,7 @@ export function ProjectRoSection({ roGroups, roRows, project, roDetails, roLoadi
                       {roLoading[roId] ? (
                         <p className="text-sm text-muted-foreground">Memuat detail RO...</p>
                       ) : detailRow?.error ? (
-                        <Alert variant="destructive">
-                          <AlertDescription>{String(detailRow.error)}</AlertDescription>
-                        </Alert>
+                        <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Rincian RO belum dapat dimuat." />
                       ) : (
                         <>
                           <div className="grid gap-4 xl:grid-cols-2">

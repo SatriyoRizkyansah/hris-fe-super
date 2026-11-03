@@ -21,6 +21,7 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { Modal } from "@/components/modal/Modal";
 import { DataTable } from "@/components/table";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { WorkflowDiagram, type WorkflowAction, type WorkflowStage } from "@/components/common/WorkflowDiagram";
 import { apiQueryKeys } from "@/lib/api/query-keys";
@@ -337,8 +338,7 @@ export default function RetailClientPage() {
     <Card id="retail-order-list" className="scroll-mt-6">
       <CardContent className="!space-y-4 !p-5 sm:!p-6">
         <div><h2 className="font-semibold">Daftar Order Layanan Retail</h2><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Buka detail order untuk melihat progres, mencatat LHU, dan mengajukan belanja bahan bila diperlukan.</p></div>
-        {jobsQuery.isError && <Alert variant="destructive"><AlertDescription>{apiErrorMessage(jobsQuery.error, "Gagal memuat order retail.")}</AlertDescription></Alert>}
-        <DataTable
+        {jobsQuery.isError ? <EmptyData label="Daftar order retail belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void jobsQuery.refetch()}>Coba lagi</Button>} /> : <DataTable
           rows={jobs}
           rowKey={(row, index) => String(row.id ?? index)}
           remoteSearch
@@ -360,7 +360,7 @@ export default function RetailClientPage() {
           }}
           emptyMessage={jobsQuery.isLoading ? "Memuat order retail..." : "Belum ada order layanan retail."}
           columns={orderColumns}
-        />
+        />}
       </CardContent>
     </Card>
 
@@ -381,7 +381,7 @@ export default function RetailClientPage() {
             onValueChange={(value) => setOrderForm((current) => ({ ...current, unit_pelaksana_id: value }))}
             label="Pilih unit pelaksana"
           />
-          {unitsQuery.isError && <span className="text-xs text-destructive">{apiErrorMessage(unitsQuery.error, "Gagal memuat unit pelaksana.")}</span>}
+          {unitsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar unit pelaksana belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void unitsQuery.refetch()}>Coba lagi</Button>} />}
         </label>
         <label className="grid gap-1 text-sm">Nama klien *<Input maxLength={200} value={orderForm.nama_pelanggan} onChange={(event) => setOrderForm((current) => ({ ...current, nama_pelanggan: event.target.value }))} placeholder="Nama pelanggan atau instansi" /></label>
         <label className="grid gap-1 text-sm">Nomor tanda terima perconto *<Input maxLength={100} value={orderForm.nomor_tanda_terima_perconto} onChange={(event) => setOrderForm((current) => ({ ...current, nomor_tanda_terima_perconto: event.target.value }))} placeholder="Nomor tanda terima sampel" /></label>

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/table/DataTable";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyData } from "@/components/loading/EmptyData";
 
 const unwrap = (value: any) => value?.data ?? value;
 
@@ -110,7 +111,7 @@ export default function UnitKerjaPage() {
           {list.isLoading ? (
             <p role="status">Memuat unit kerja…</p>
           ) : list.isError ? (
-            <p role="alert">Gagal memuat unit kerja.</p>
+            <EmptyData label="Data unit kerja belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void list.refetch()}>Coba lagi</Button>} />
           ) : (
             <DataTable
               columns={[

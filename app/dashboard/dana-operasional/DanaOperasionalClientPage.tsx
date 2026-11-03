@@ -7,10 +7,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/table/DataTable";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeRows } from "@/lib/hris/api";
+import { envelopeRows } from "@/lib/hris/api";
 import { formatRupiah } from "@/lib/hris/format";
 import type { DanaOperasionalItemDto } from "@/lib/api/generated/api-generated";
 
@@ -58,12 +59,10 @@ export default function DanaOperasionalClientPage() {
         <AlertTitle>Dasar peraturan</AlertTitle>
         <AlertDescription>Penggunaan saldo awal dan alokasi margin mengacu pada Surat Keputusan Pemimpin BLU No. 40.K/KAU.01/DPM/2026 tanggal 2 Juni 2026 tentang Penggunaan Saldo Awal dan Alokasi Margin.</AlertDescription>
       </Alert>
-      {query.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Gagal memuat dana operasional</AlertTitle>
-          <AlertDescription>{apiErrorMessage(query.error)}</AlertDescription>
-        </Alert>
-      )}
+      {query.isError ? (
+        <EmptyData label="Data dana operasional belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Coba lagi</Button>} />
+      ) : (
+        <>
       <div className="operational-summary-grid grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {summary.map((item) => (
           <Card key={item.key} className={item.style}>
@@ -119,6 +118,8 @@ export default function DanaOperasionalClientPage() {
           />
         </CardContent>
       </Card>
+        </>
+      )}
     </section>
   );
 }

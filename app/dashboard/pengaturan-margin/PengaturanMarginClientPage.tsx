@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, LoaderCircle, Save, WalletCards } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { browserApi } from "@/lib/api/browser-client";
@@ -137,19 +138,9 @@ export default function PengaturanMarginClientPage() {
           {!totalOk && <p className="col-span-full -mt-2 text-xs font-medium text-rose-700">{total > 100 ? `Melebihi batas sebesar ${formatPct(total - 100)}.` : `Masih kurang ${formatPct(100 - total)}.`}</p>}
         </CardContent>
       </Card>
-      {settings.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Gagal memuat pengaturan</AlertTitle>
-          <AlertDescription>{apiErrorMessage(settings.error)}</AlertDescription>
-        </Alert>
-      )}
-      {accounts.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Gagal memuat rekening bank</AlertTitle>
-          <AlertDescription>{apiErrorMessage(accounts.error)}</AlertDescription>
-        </Alert>
-      )}
-      {settings.isLoading ? (
+      {settings.isError ? (
+        <EmptyData label="Pengaturan margin belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void settings.refetch()}>Coba lagi</Button>} />
+      ) : settings.isLoading ? (
         <p className="rounded-xl border bg-background p-6 text-sm text-muted-foreground">Memuat pembagian kamar…</p>
       ) : (
         <div className="margin-settings-grid grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -212,6 +203,7 @@ export default function PengaturanMarginClientPage() {
           ))}
         </div>
       )}
+      {accounts.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar rekening bank belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void accounts.refetch()}>Coba lagi</Button>} />}
     </section>
   );
 }

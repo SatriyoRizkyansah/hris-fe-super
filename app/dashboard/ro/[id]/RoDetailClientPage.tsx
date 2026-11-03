@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { MoneyFlow } from "@/components/common/MoneyFlow";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { DataTable } from "@/components/table";
 import { RoDetailModals } from "@/components/ro/RoDetailModals";
 import { browserApi } from "@/lib/api/browser-client";
@@ -291,10 +292,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   if (!ro)
     return (
       <div className="space-y-4 p-6">
-        <Alert variant="destructive">
-          <AlertTitle>RO tidak ditemukan</AlertTitle>
-          <AlertDescription>{detail.error ? apiErrorMessage(detail.error) : "Data RO tidak tersedia."}</AlertDescription>
-        </Alert>
+        <EmptyData label="Detail RO belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void detail.refetch()}>Coba lagi</Button>} />
         <Button variant="outline" render={<Link href="/dashboard/ro" />}>
           <ArrowLeft size={16} /> Kembali
         </Button>

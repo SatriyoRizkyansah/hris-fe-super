@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/modal/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DataTable } from "@/components/table";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeRows, requestHrisApi, unwrapEnvelope } from "@/lib/hris/api";
+import { envelopeRows, requestHrisApi, unwrapEnvelope } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
 
 type TerminRow = {
@@ -188,13 +189,7 @@ export default function TerminQueuePage() {
 
           {source === SOURCES.PROJECT ? (
             <div id="panel-termin-proyek" role="tabpanel" aria-labelledby="tab-termin-proyek">
-              {request.error && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertTitle>Gagal memuat termin proyek</AlertTitle>
-                  <AlertDescription>{apiErrorMessage(request.error)}</AlertDescription>
-                </Alert>
-              )}
-              <DataTable<TerminRow>
+              {request.isError ? <EmptyData label="Daftar termin proyek belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void request.refetch()}>Coba lagi</Button>} /> : <DataTable<TerminRow>
                 rows={projectRows}
                 rowKey={(row) => row.id}
                 groupBy={(row) => row.proyek?.id ?? `unknown-${row.id}`}
@@ -297,24 +292,13 @@ export default function TerminQueuePage() {
                     },
                   },
                 ]}
-              />
+              />}
             </div>
           ) : (
             <div id="panel-tagihan-retail" role="tabpanel" aria-labelledby="tab-tagihan-retail">
-              {retailQuery.error && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertTitle>Gagal memuat tagihan retail</AlertTitle>
-                  <AlertDescription>{apiErrorMessage(retailQuery.error)}</AlertDescription>
-                </Alert>
-              )}
-              {unitsQuery.error && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertTitle>Gagal memuat unit pelaksana</AlertTitle>
-                  <AlertDescription>{apiErrorMessage(unitsQuery.error)}</AlertDescription>
-                </Alert>
-              )}
+              {unitsQuery.isError && <EmptyData className="mb-3 min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar unit pelaksana belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void unitsQuery.refetch()}>Coba lagi</Button>} />}
               <p className="mb-3 text-sm text-muted-foreground">Order retail tampil setelah LHU dicatat dan unit mengonfirmasi status siap ditagih.</p>
-              <DataTable<RetailBillingRow>
+              {retailQuery.isError ? <EmptyData label="Daftar tagihan retail belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void retailQuery.refetch()}>Coba lagi</Button>} /> : <DataTable<RetailBillingRow>
                 title="Tagihan layanan retail"
                 rows={retailRows}
                 rowKey={(row) => row.id}
@@ -403,7 +387,7 @@ export default function TerminQueuePage() {
                     ),
                   },
                 ]}
-              />
+              />}
             </div>
           )}
         </div>

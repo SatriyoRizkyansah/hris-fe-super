@@ -14,6 +14,7 @@ import { Plus } from "lucide-react";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { useCurrentUser } from "@/lib/api/hooks";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getApiErrorMessage } from "@/lib/api/errors";
 
@@ -135,9 +136,7 @@ export function HrisResourcePage({ title, description, group, method, requestSty
             </p>
           ) : null}
           {result.isError ? (
-            <p role="alert" className="py-8 text-center text-sm text-destructive">
-              {getApiErrorMessage(result.error) || "Gagal memuat data. Periksa koneksi API dan hak akses."}
-            </p>
+            <EmptyData label={`${title} belum dapat dimuat.`} action={<Button type="button" variant="outline" size="sm" onClick={() => void result.refetch()}>Coba lagi</Button>} />
           ) : null}
           {!result.isLoading && !result.isError ? (
             <DataTable

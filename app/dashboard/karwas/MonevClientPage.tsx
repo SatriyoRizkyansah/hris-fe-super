@@ -11,6 +11,8 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
+import { EmptyData } from "@/components/loading/EmptyData";
+import { Button } from "@/components/ui/Button";
 import { formatDate, formatRupiah, humanizeStatus } from "@/lib/hris/format";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
@@ -538,7 +540,7 @@ export default function MonevClientPage() {
       </nav>
 
       {report.isLoading && <Card><CardContent className="p-6 text-sm text-muted-foreground">Memuat laporan Monev TA {tahun}…</CardContent></Card>}
-      {report.error && <Card className="border-rose-200"><CardContent className="p-5 text-sm text-rose-800">{report.error.message || "Data Monev gagal dimuat."}</CardContent></Card>}
+      {report.error && <EmptyData label="Laporan Monev belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void report.refetch()}>Coba lagi</Button>} />}
       {!report.isLoading && !report.error && hasData && <>
         {isUnit && <Card className="border-sky-200 bg-sky-50/60 shadow-none"><CardContent className="p-4 text-sm leading-6 text-sky-950">Pendapatan proyek belum dibagi ke unit pemilik atau kolaborator. Karena itu halaman ini menampilkan pagu, realisasi, komitmen dan sisa hak RO; angka ini tidak dipakai untuk memberi label unit untung atau rugi.</CardContent></Card>}
         {isProject && <Card className="border-amber-200 bg-amber-50/60 shadow-none"><CardContent className="p-4 text-sm leading-6 text-amber-950">Margin rencana mengikuti nilai kontrak dan direct cost pada proyek. Margin ini bukan laba aktual. Kas bersih tercatat memakai penerimaan tervalidasi dikurangi pengeluaran ledger pada TA {tahun}.</CardContent></Card>}

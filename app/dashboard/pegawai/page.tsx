@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/table/DataTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrentUser } from "@/lib/api/hooks";
+import { EmptyData } from "@/components/loading/EmptyData";
 
 const unwrap = (v: any) => v?.data ?? v;
 
@@ -128,9 +129,7 @@ export default function PegawaiPage() {
               Memuat data pegawai…
             </p>
           ) : list.isError ? (
-            <p role="alert" className="py-8 text-center text-sm text-destructive">
-              Data gagal dimuat. Periksa koneksi API.
-            </p>
+            <EmptyData label="Data pegawai belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void list.refetch()}>Coba lagi</Button>} />
           ) : (
             <DataTable
               columns={[

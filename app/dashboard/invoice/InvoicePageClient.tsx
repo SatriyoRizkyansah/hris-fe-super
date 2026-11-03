@@ -12,6 +12,7 @@ import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DataTable } from "@/components/table";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken, useCurrentUser } from "@/lib/api/hooks";
 import { apiQueryKeys } from "@/lib/api/query-keys";
@@ -278,7 +279,7 @@ export default function InvoicePageClient() {
       <Card>
         <CardContent className="pt-4">
           {listQuery.isLoading && <p className="py-8 text-center text-sm text-muted-foreground">Memuat invoice…</p>}
-          {listQuery.isError && <p className="py-8 text-center text-sm text-destructive">{apiErrorMessage(listQuery.error, "Gagal memuat invoice.")}</p>}
+          {listQuery.isError && <EmptyData label="Daftar invoice belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void listQuery.refetch()}>Coba lagi</Button>} />}
           {!listQuery.isLoading && !listQuery.isError && (
             <DataTable
               rows={rows}
@@ -352,7 +353,7 @@ export default function InvoicePageClient() {
                 <option value="">Pilih job retail</option>
                 {retailJobRows.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.nomor_job)} · {String(item.nama_pelanggan)} · LHU {String(item.nomor_lhu ?? "—")} · {formatRupiah(item.nilai_layanan)}</option>)}
               </select>
-              {retailJobsQuery.isError && <p className="text-xs text-destructive">{apiErrorMessage(retailJobsQuery.error, "Gagal memuat job retail siap ditagih.")}</p>}
+              {retailJobsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar job retail belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void retailJobsQuery.refetch()}>Coba lagi</Button>} />}
             </>
           ) : (
             <>
@@ -371,11 +372,7 @@ export default function InvoicePageClient() {
           Tanggal jatuh tempo
           <Input type="date" value={invoiceForm.tanggal_jatuh_tempo} onChange={(event) => setInvoiceForm((current) => ({ ...current, tanggal_jatuh_tempo: event.target.value }))} />
         </label>
-        {terminQuery.isError && (
-          <Alert variant="destructive">
-            <AlertDescription>{apiErrorMessage(terminQuery.error, "Gagal memuat termin.")}</AlertDescription>
-          </Alert>
-        )}
+        {terminQuery.isError && invoiceSource === "project" && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar termin belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void terminQuery.refetch()}>Coba lagi</Button>} />}
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -561,11 +558,7 @@ export default function InvoicePageClient() {
           />
           <p className="mt-1.5 text-xs text-muted-foreground">Unggah bukti transfer masuk atau cuplikan mutasi rekening agar pembayaran dapat diverifikasi. Format PDF, JPG, atau PNG; maksimal 10 MB.</p>
         </div>
-        {accountsQuery.isError && (
-          <Alert variant="destructive">
-            <AlertDescription>{apiErrorMessage(accountsQuery.error, "Gagal memuat rekening.")}</AlertDescription>
-          </Alert>
-        )}
+        {accountsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar rekening belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void accountsQuery.refetch()}>Coba lagi</Button>} />}
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>

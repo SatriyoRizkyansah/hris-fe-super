@@ -6,9 +6,8 @@ import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
 import { DataTable } from "@/components/table/DataTable";
 import { LoadingState } from "@/components/loading/LoadingState";
-import { getApiErrorMessage } from "@/lib/api/errors";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { Button } from "@/components/ui/Button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/common/PageHeader";
 
 type Row = { id: string; [key: string]: any };
@@ -51,14 +50,7 @@ export default function EntityListPage({ title, description, tag, method, queryA
       {query.isPending ? (
         <LoadingState />
       ) : query.isError ? (
-        <Alert variant="destructive">
-          <AlertDescription className="flex flex-wrap items-center gap-2">
-            {getApiErrorMessage(query.error)}{" "}
-            <Button type="button" variant="link" size="sm" onClick={() => void query.refetch()}>
-              Coba lagi
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <EmptyData label={`Data ${title.toLowerCase()} belum dapat dimuat.`} action={<Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Coba lagi</Button>} />
       ) : (
         <DataTable
           columns={columns}

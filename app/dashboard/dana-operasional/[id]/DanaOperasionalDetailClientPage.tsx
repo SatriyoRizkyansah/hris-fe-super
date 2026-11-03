@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Wallet } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/table/DataTable";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeData } from "@/lib/hris/api";
+import { envelopeData } from "@/lib/hris/api";
 import { formatDate, formatRupiah } from "@/lib/hris/format";
 import type { DanaOperasionalItemDto } from "@/lib/api/generated/api-generated";
 
@@ -121,10 +121,7 @@ export default function DanaOperasionalDetailClientPage({ id }: { id: string }) 
   if (!detail)
     return (
       <section className="hris-page space-y-4">
-        <Alert variant="destructive">
-          <AlertTitle>Dana operasional tidak ditemukan</AlertTitle>
-          <AlertDescription>{detailQuery.error ? apiErrorMessage(detailQuery.error) : "Data detail tidak tersedia."}</AlertDescription>
-        </Alert>
+        <EmptyData label="Detail dana operasional belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void detailQuery.refetch()}>Coba lagi</Button>} />
         <Button variant="outline" render={<Link href="/dashboard/dana-operasional" />}>
           <ArrowLeft size={16} /> Kembali
         </Button>
@@ -145,19 +142,6 @@ export default function DanaOperasionalDetailClientPage({ id }: { id: string }) 
         </div>
         <div className="rounded-full border px-3 py-1 text-sm font-semibold">{categoryLabels[String(detail.kategori_kamar)] ?? text(detail.kategori_kamar)}</div>
       </header>
-      {detailQuery.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Gagal memuat detail</AlertTitle>
-          <AlertDescription>{apiErrorMessage(detailQuery.error)}</AlertDescription>
-        </Alert>
-      )}
-      {ledgerQuery.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Gagal memuat ledger</AlertTitle>
-          <AlertDescription>{apiErrorMessage(ledgerQuery.error)}</AlertDescription>
-        </Alert>
-      )}
-
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardContent className="p-5" style={{ padding: 20 }}>
@@ -235,7 +219,7 @@ export default function DanaOperasionalDetailClientPage({ id }: { id: string }) 
 
       <Card>
         <CardContent className="p-5" style={{ padding: 20 }}>
-          <DataTable
+          {ledgerQuery.isError ? <EmptyData label="Riwayat transaksi belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void ledgerQuery.refetch()}>Coba lagi</Button>} /> : <DataTable
             title="Ledger Transaksi"
             columns={ledgerColumns}
             rows={transactions}
@@ -244,7 +228,7 @@ export default function DanaOperasionalDetailClientPage({ id }: { id: string }) 
             rowsPerPageOptions={[10, 25, 50]}
             emptyMessage="Belum ada transaksi pada dana ini."
             searchPlaceholder="Cari transaksi…"
-          />
+          />}
         </CardContent>
       </Card>
       <Card>

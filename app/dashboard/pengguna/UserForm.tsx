@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { useUserRoles, useUserWrite, userError, type UserRecord, type UserCommand } from "./user-api";
 import type { CreateUserDto } from "@/lib/api/generated/api-generated";
 
@@ -131,14 +132,7 @@ export default function UserForm({ user, canManage, onClose, onSaved }: { user?:
                 ))}
                 {roles.isPending && <span className="text-sm text-muted-foreground">Memuat role…</span>}
               </fieldset>
-              {roles.isError ? (
-                <div role="alert">
-                  {userError(roles.error)}{" "}
-                  <Button type="button" variant="link" disabled={roles.isFetching} onClick={() => void roles.refetch()}>
-                    Muat ulang role
-                  </Button>
-                </div>
-              ) : null}
+              {roles.isError ? <EmptyData className="min-h-0 border-0 p-2 [&_.empty-pyramid]:hidden" label="Daftar peran belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" disabled={roles.isFetching} onClick={() => void roles.refetch()}>Coba lagi</Button>} /> : null}
               {roles.isSuccess && !roles.data.data.length ? <p role="alert">Backend belum menyediakan role. Penyimpanan diblokir.</p> : null}
             </div>
             {isVendorRole ? (
@@ -159,14 +153,7 @@ export default function UserForm({ user, canManage, onClose, onSaved }: { user?:
                     </option>
                   ))}
                 </select>
-                {vendors.isError ? (
-                  <p role="alert">
-                    {userError(vendors.error)}{" "}
-                    <Button type="button" variant="link" onClick={() => void vendors.refetch()}>
-                      Muat ulang vendor
-                    </Button>
-                  </p>
-                ) : null}
+                {vendors.isError ? <EmptyData className="min-h-0 border-0 p-2 [&_.empty-pyramid]:hidden" label="Daftar vendor belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void vendors.refetch()}>Coba lagi</Button>} /> : null}
                 {vendors.isSuccess && !vendors.data.data.length ? <p role="alert">Belum ada vendor. Buat vendor terlebih dahulu.</p> : null}
               </div>
             ) : null}

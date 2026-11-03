@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentLinks } from "@/components/common/DocumentLinks";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { ProjectFinalReportButton } from "@/components/proyek/ProjectFinalReportButton";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { ProjectFinancialSections } from "@/components/proyek/ProjectFinancialSections";
 import { ProjectRoSection } from "@/components/proyek/ProjectRoSection";
 import { browserApi } from "@/lib/api/browser-client";
@@ -168,10 +169,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   if (!project)
     return (
       <div className="space-y-4 p-6">
-        <Alert variant="destructive">
-          <AlertTitle>Proyek tidak ditemukan</AlertTitle>
-          <AlertDescription>{detail.error ? apiErrorMessage(detail.error) : "Data proyek tidak tersedia."}</AlertDescription>
-        </Alert>
+        <EmptyData label="Detail proyek belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void detail.refetch()}>Coba lagi</Button>} />
         <Button variant="outline" render={<Link href="/dashboard/proyek" />}>
           <ArrowLeft size={16} /> Kembali
         </Button>
@@ -241,11 +239,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           <StatusBadge status={projectStatusTone(status)}>{humanizeStatus(status)}</StatusBadge>
         </div>
       </header>
-      {detail.error && (
-        <Alert variant="destructive">
-          <AlertDescription>{apiErrorMessage(detail.error)}</AlertDescription>
-        </Alert>
-      )}
       <div className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

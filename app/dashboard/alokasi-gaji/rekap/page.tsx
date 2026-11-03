@@ -5,6 +5,8 @@ import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
 import { DataTable } from "@/components/table";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyData } from "@/components/loading/EmptyData";
+import { Button } from "@/components/ui/Button";
 export default function Page() {
   const now = new Date();
   const [page, setPage] = useState(1),
@@ -38,7 +40,7 @@ export default function Page() {
           {query.isLoading ? (
             <p role="status">Memuat rekap…</p>
           ) : query.isError ? (
-            <p role="alert">{query.error instanceof Error ? query.error.message : "Gagal memuat rekap."}</p>
+            <EmptyData label="Rekap alokasi gaji belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Coba lagi</Button>} />
           ) : (
             <DataTable
               rows={rows}

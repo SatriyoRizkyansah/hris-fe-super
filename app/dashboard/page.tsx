@@ -22,6 +22,8 @@ import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken, useCurrentUser } from "@/lib/api/hooks";
 import { readSession, SESSION_COOKIE } from "@/lib/auth";
 import { use_query } from "@/lib/api/use_query";
+import { EmptyData } from "@/components/loading/EmptyData";
+import { Button } from "@/components/ui/Button";
 
 const unwrap = (value: any) => value?.data?.data ?? value?.data ?? value;
 const money = (value: unknown) =>
@@ -193,11 +195,14 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {stats.isError && (
-        <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Ringkasan keuangan belum dapat dimuat. Periksa akses akun dan koneksi API.
-        </p>
-      )}
+      {stats.isError ? (
+        <EmptyData
+          label="Ringkasan keuangan belum dapat dimuat. Coba lagi beberapa saat."
+          action={<Button type="button" variant="outline" size="sm" onClick={() => void stats.refetch()}>Coba lagi</Button>}
+          className="min-h-72"
+        />
+      ) : (
+        <>
 
       <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         {figures.map(({ label, value, detail, icon: Icon, tone }) => (
@@ -394,6 +399,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+        </>
+      )}
     </section>
   );
 }

@@ -4,12 +4,12 @@ import type { Dispatch, SetStateAction } from "react";
 import { Banknote, Check, CircleAlert, CircleDollarSign, FileText, LoaderCircle, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Modal, ModalDetailGrid, ModalDetailItem, ModalSection } from "@/components/modal/Modal";
 import { DocumentLinks } from "@/components/common/DocumentLinks";
 import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { formatRupiah } from "@/lib/hris/format";
-import { apiErrorMessage } from "@/lib/hris/api";
 
 type Row = Record<string, any>;
 type Props = {
@@ -23,7 +23,7 @@ type Props = {
   reviewProjectRos: Row[];
   reviewTerms: Row[];
   reviewLedger: Row[];
-  reviewContextQuery: { isLoading: boolean; isError: boolean; error: unknown };
+  reviewContextQuery: { isLoading: boolean; isError: boolean; refetch: () => unknown };
   reviewMutation: { isPending: boolean };
   review: (approved: boolean) => void;
   note: string;
@@ -68,11 +68,7 @@ export function PurchaseRequestReviewModal({
             </CardContent>
           </Card>
         )}
-        {reviewContextQuery.isError && (
-          <Alert variant="destructive">
-            <AlertDescription>{apiErrorMessage(reviewContextQuery.error, "Gagal memuat konteks keuangan untuk review.")}</AlertDescription>
-          </Alert>
-        )}
+        {reviewContextQuery.isError && <EmptyData label="Konteks keuangan untuk review belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void reviewContextQuery.refetch()}>Coba lagi</Button>} />}
         {!reviewContextQuery.isLoading && !reviewContextQuery.isError && (
           <>
             <ModalSection title="Rincian pengajuan" description="Periksa kegiatan, pemohon, dokumen, dan sumber anggaran sebelum memberi keputusan.">

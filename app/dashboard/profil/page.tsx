@@ -6,6 +6,7 @@ import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/Button";
+import { EmptyData } from "@/components/loading/EmptyData";
 
 const body = (value: any) => value?.data?.data ?? value?.data ?? value;
 const money = (value: unknown) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value ?? 0));
@@ -73,12 +74,9 @@ export default function ProfilPage() {
           Muat ulang
         </Button>
       </header>
-      {profile.isError && (
-        <p role="alert" className="rounded-md border border-destructive/40 p-4 text-sm text-destructive">
-          {profile.error instanceof Error ? profile.error.message : "Gagal memuat data profil."}
-        </p>
-      )}
-      {profile.isLoading ? (
+      {profile.isError ? (
+        <EmptyData label="Data profil belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void profile.refetch()}>Coba lagi</Button>} />
+      ) : profile.isLoading ? (
         <p role="status">Memuat profil…</p>
       ) : (
         <div className="space-y-4">
@@ -138,7 +136,7 @@ export default function ProfilPage() {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {skHistory.isError ? (
-            <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Riwayat SK tidak dapat dimuat saat ini.</p>
+            <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Riwayat SK belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void skHistory.refetch()}>Coba lagi</Button>} />
           ) : !employee ? (
             <p className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">Riwayat SK belum tersedia karena akun ini belum tertaut ke data pegawai.</p>
           ) : skHistory.isLoading ? (
@@ -178,7 +176,7 @@ export default function ProfilPage() {
         </CardHeader>
         <CardContent className="space-y-4 overflow-x-auto">
           {allocations.isError ? (
-            <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Riwayat alokasi gaji tidak dapat dimuat saat ini.</p>
+            <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Riwayat alokasi gaji belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void allocations.refetch()}>Coba lagi</Button>} />
           ) : !employee ? (
             <p className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">Riwayat alokasi gaji belum tersedia karena akun ini belum tertaut ke data pegawai.</p>
           ) : allocations.isLoading ? (

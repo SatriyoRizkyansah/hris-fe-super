@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Modal } from "@/components/modal/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DataTable } from "@/components/table/DataTable";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { ProjectFinalReportButton } from "@/components/proyek/ProjectFinalReportButton";
 import { ProjectApplicationModal } from "@/components/proyek/ProjectApplicationModal";
 import { ProjectWorkflowDiagram, type ProjectWorkflowAction } from "@/components/proyek/ProjectWorkflowDiagram";
@@ -567,13 +568,7 @@ export default function ProyekClientPage() {
       )}
       <Card id="project-list" className="scroll-mt-6">
         <CardContent className="pt-4">
-          {list.error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertTitle>Gagal memuat proyek</AlertTitle>
-              <AlertDescription>{apiErrorMessage(list.error)}</AlertDescription>
-            </Alert>
-          )}
-          <DataTable
+          {list.isError ? <EmptyData label="Daftar proyek belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void list.refetch()}>Coba lagi</Button>} /> : <DataTable
             columns={[
               {
                 key: "kode",
@@ -709,7 +704,7 @@ export default function ProyekClientPage() {
               },
             }}
             emptyMessage={list.isLoading ? "Memuat proyek..." : "Belum ada proyek."}
-          />
+          />}
         </CardContent>
       </Card>
       <Modal

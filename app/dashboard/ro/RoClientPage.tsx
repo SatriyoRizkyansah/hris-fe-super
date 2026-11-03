@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Eye } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DataTableFilters } from "@/components/table/DataTableFilters";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeRows, unwrapEnvelope } from "@/lib/hris/api";
+import { envelopeRows, unwrapEnvelope } from "@/lib/hris/api";
 import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 
 import type { ProyekItemDto, RoItemDto } from "@/lib/api/generated/api-generated";
@@ -160,12 +160,9 @@ export default function RoClientPage() {
       </header>
       <Card>
         <CardContent className="!pt-4">
-          {list.error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{apiErrorMessage(list.error)}</AlertDescription>
-            </Alert>
-          )}
-          <div className="space-y-4">
+          {list.isError ? (
+            <EmptyData label="Daftar RO belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void list.refetch()}>Coba lagi</Button>} />
+          ) : <div className="space-y-4">
             <div className="space-y-3">
               <div className="flex justify-end">
                 <input
@@ -283,7 +280,7 @@ export default function RoClientPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div>}
         </CardContent>
       </Card>
     </section>

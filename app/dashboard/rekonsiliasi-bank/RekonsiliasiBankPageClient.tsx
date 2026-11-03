@@ -7,6 +7,7 @@ import { Modal } from "@/components/modal/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
@@ -155,7 +156,7 @@ export default function RekonsiliasiBankPageClient() {
                 </option>
               ))}
             </select>
-            {accountsQuery.isError && <span className="text-xs text-destructive">{apiErrorMessage(accountsQuery.error, "Gagal memuat rekening bank.")}</span>}
+            {accountsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar rekening belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void accountsQuery.refetch()}>Coba lagi</Button>} />}
             {!accountsQuery.isLoading && !accountsQuery.isError && accounts.length === 0 && <span className="text-xs text-amber-700">Belum ada rekening aktif. Tambahkan rekening lebih dulu.</span>}
           </label>
           <label className="grid gap-1 text-sm">
@@ -176,7 +177,7 @@ export default function RekonsiliasiBankPageClient() {
           <div className="rounded-lg border bg-muted/30 p-3 sm:col-span-2">
             <p className="text-xs text-muted-foreground">Saldo sistem · {selectedAccount ? `${String(selectedAccount.nama_bank)} ${String(selectedAccount.nomor_rekening)}` : "Pilih rekening"}</p>
             {saldoQuery.isFetching ? <p className="mt-1 text-sm">Menghitung saldo sistem…</p> : <p className="mt-1 font-semibold">{formatRupiah(saldoSistem)}</p>}
-            {saldoQuery.isError && <p className="mt-1 text-xs text-destructive">{apiErrorMessage(saldoQuery.error, "Gagal menghitung saldo sistem.")}</p>}
+            {saldoQuery.isError && <EmptyData className="mt-2 min-h-0 border-0 p-2 [&_.empty-pyramid]:hidden" label="Saldo sistem belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void saldoQuery.refetch()}>Coba lagi</Button>} />}
           </div>
           <label className="grid gap-1 text-sm sm:col-span-2">
             Saldo bank *

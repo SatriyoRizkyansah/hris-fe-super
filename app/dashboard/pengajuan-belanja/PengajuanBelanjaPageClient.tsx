@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Modal } from "@/components/modal/Modal";
 import { DataTable } from "@/components/table";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
@@ -595,18 +596,10 @@ export default function PengajuanBelanjaPageClient() {
               Memuat pengajuan belanja…
             </p>
           )}
-          {listQuery.isError && (
-            <p role="alert" className="py-8 text-center text-sm text-destructive">
-              {apiErrorMessage(listQuery.error, "Gagal memuat pengajuan belanja.")}
-            </p>
-          )}
+          {listQuery.isError && <EmptyData label="Daftar pengajuan belanja belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void listQuery.refetch()}>Coba lagi</Button>} />}
           {!listQuery.isLoading && !listQuery.isError && (
             <>
-              {filterOptionsQuery.isError && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertDescription>{apiErrorMessage(filterOptionsQuery.error, "Opsi filter pengajuan belanja gagal dimuat.")}</AlertDescription>
-                </Alert>
-              )}
+              {filterOptionsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Opsi filter belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void filterOptionsQuery.refetch()}>Coba lagi</Button>} />}
               <DataTable
                 rows={rows}
                 rowKey={(row, index) => `${String(row.jenis_sumber ?? "PROYEK")}:${String(row.id ?? index)}`}
@@ -922,7 +915,7 @@ export default function PengajuanBelanjaPageClient() {
                   </div>
                 )}
                 {projectsQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar proyek…</p>}
-                {projectsQuery.isError && <p className="text-xs text-destructive">{apiErrorMessage(projectsQuery.error, "Gagal memuat proyek.")}</p>}
+                {projectsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar proyek belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void projectsQuery.refetch()}>Coba lagi</Button>} />}
               </CardContent>
             </Card>
             {selectedProjectId && (
@@ -943,7 +936,7 @@ export default function PengajuanBelanjaPageClient() {
                     </div>
                   )}
                   {rosQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar RO…</p>}
-                  {rosQuery.isError && <p className="text-xs text-destructive">{apiErrorMessage(rosQuery.error, "Gagal memuat RO.")}</p>}
+                  {rosQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar RO belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void rosQuery.refetch()}>Coba lagi</Button>} />}
                   {!rosQuery.isLoading && !rosQuery.isError && !ros.length && <p className="text-xs text-amber-700">Belum ada RO pada proyek ini.</p>}
                 </CardContent>
               </Card>

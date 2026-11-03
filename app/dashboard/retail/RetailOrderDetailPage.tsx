@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
 import { Modal, ModalSection } from "@/components/modal/Modal";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
+import { EmptyData } from "@/components/loading/EmptyData";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -342,7 +343,7 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   if (user.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memeriksa akses...</div>;
   if (!canViewRetail) return <Alert variant="destructive" className="m-6"><AlertTitle>Akses ditolak</AlertTitle><AlertDescription>Detail Proyek Retail hanya tersedia untuk Superadmin, role Keuangan, Koordinator Umum, dan operator retail yang ditetapkan.</AlertDescription></Alert>;
   if (detail.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memuat order retail...</div>;
-  if (detail.isError || !job.id) return <div className="space-y-4 p-6"><Alert variant="destructive"><AlertTitle>Order retail tidak ditemukan</AlertTitle><AlertDescription>{detail.error ? apiErrorMessage(detail.error) : "Data order tidak tersedia."}</AlertDescription></Alert><Button variant="outline" render={<Link href="/dashboard/retail" />}><ArrowLeft size={16} /> Kembali ke Layanan Retail</Button></div>;
+  if (detail.isError || !job.id) return <div className="space-y-4 p-6"><EmptyData label="Detail order retail belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void detail.refetch()}>Coba lagi</Button>} /><Button variant="outline" render={<Link href="/dashboard/retail" />}><ArrowLeft size={16} /> Kembali ke Layanan Retail</Button></div>;
 
   const progressIndex = currentFlowIndex(status, Boolean(handoverDocument), isInvoicePaid);
   const currentStatus = statusInfo(isInvoicePaid && ["INVOICE_DITERBITKAN", "LUNAS"].includes(status) ? "LUNAS" : status);
