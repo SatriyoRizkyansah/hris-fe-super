@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Edit, LoaderCircle, Plus, Upload } from "lucide-react";
+import { ArrowLeft, Edit, Eye, LoaderCircle, Plus, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/Button";
@@ -84,6 +84,23 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     .map((unit) => ({ value: String(unit.id), label: `${String(unit.kode_unit ?? "")} — ${String(unit.nama_unit ?? "")}` }));
   const ledgerBody = envelopeData<AnyRow>(ledger.data) ?? {};
   const ledgerRows = Array.isArray(ledgerBody.list) ? (ledgerBody.list as AnyRow[]) : [];
+  const purchaseRequests = Array.isArray(ledgerBody.pengajuan_berjalan) ? (ledgerBody.pengajuan_berjalan as AnyRow[]) : [];
+  const cashAndRequestRows: AnyRow[] = [
+    ...ledgerRows,
+    ...purchaseRequests.map((request) => ({
+      ...request,
+      id: `pengajuan-${String(request.id)}`,
+      pengajuan_belanja_id: String(request.id),
+      row_type: "PENGAJUAN_BELANJA",
+      debit: 0,
+      kredit: 0,
+      saldo: null,
+    })),
+  ].sort((left: AnyRow, right: AnyRow) => {
+    const dateOrder = String(left.tanggal ?? "").localeCompare(String(right.tanggal ?? ""));
+    if (dateOrder !== 0) return dateOrder;
+    return String(left.row_type ?? "TRANSAKSI").localeCompare(String(right.row_type ?? "TRANSAKSI"));
+  });
   const allocations = Array.isArray((ro as unknown as AnyRow)?.alokasi_list) ? ((ro as unknown as AnyRow).alokasi_list as AnyRow[]) : [];
   const refresh = async () => Promise.all([detail.refetch(), ledger.refetch()]);
   const update = use_mutation({
@@ -141,13 +158,14 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       setBrowserToken();
       return (await browserApi.keuanganPengajuanBelanja.pengajuanBelanjaCreateControllerCreate(data, { format: "json" })).data;
     },
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       setSpendRequestOpen(false);
       setSpendRequest(emptySpendRequest());
       setSpendRequestError("");
       const payload = response as AnyRow;
       const message = typeof payload?.message === "string" ? payload.message : "Pengajuan belanja berhasil dikirim.";
       window.dispatchEvent(new CustomEvent("api:success", { detail: { message } }));
+      await ledger.refetch();
     },
     onError: (error) => setSpendRequestError(apiErrorMessage(error, "Pengajuan belanja gagal disimpan.")),
   });
@@ -412,7 +430,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/40 pr-3">
           <div className="flex">
             <button className={`px-4 py-3 text-sm font-medium ${tab === "ledger" ? "border-b-2 border-primary" : "text-muted-foreground"}`} onClick={() => setTab("ledger")}>
-              Ledger ({ledgerRows.length})
+              Arus Kas & Pengajuan ({cashAndRequestRows.length})
             </button>
             <button className={`px-4 py-3 text-sm font-medium ${tab === "alokasi" ? "border-b-2 border-primary" : "text-muted-foreground"}`} onClick={() => setTab("alokasi")}>
               Alokasi Gaji ({allocations.length})
@@ -427,24 +445,49 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         <div className="p-5">
           {tab === "ledger" ? (
             <DataTable
-              title="Riwayat Arus Kas RO"
-              rows={ledgerRows}
+              title="Riwayat Arus Kas & Pengajuan Belanja RO"
+              rows={cashAndRequestRows}
               rowKey={(row, index) => String(row.id ?? index)}
-              emptyMessage="Belum ada transaksi ledger."
+              emptyMessage="Belum ada transaksi ledger atau pengajuan belanja berjalan."
               searchPlaceholder="Cari tanggal, kegiatan, atau kuitansi..."
               columns={[
                 { key: "tanggal", header: "Tanggal", render: (row) => formatDate(row.tanggal) },
-                { key: "nama_kegiatan", header: "Kegiatan", render: (row) => String(row.nama_kegiatan ?? "—") },
-                { key: "no_kuitansi", header: "Kuitansi", render: (row) => String(row.no_kuitansi ?? "—") },
-                { key: "debit", header: "Debit", className: "text-right tabular-nums", render: (row) => Number(row.debit) ? formatRupiah(row.debit) : "—" },
-                { key: "kredit", header: "Kredit", className: "text-right tabular-nums", render: (row) => Number(row.kredit) ? formatRupiah(row.kredit) : "—" },
-                { key: "saldo", header: "Saldo", className: "text-right tabular-nums", render: (row) => formatRupiah(row.saldo) },
-                ...(canManage ? [{ key: "aksi", header: "Aksi", render: (row: AnyRow) => (
-                  <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => openTransaction(row)}>Ubah</Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTransaction(row)}>Hapus</Button>
+                { key: "nama_kegiatan", header: "Kegiatan", render: (row) => (
+                  <div className="min-w-40">
+                    <p>{String(row.nama_kegiatan ?? "—")}</p>
+                    {row.row_type === "PENGAJUAN_BELANJA" && <>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{String(row.nomor_pengajuan ?? "Pengajuan belanja")} · {formatRupiah(row.jumlah)}</p>
+                      <div className="mt-1"><StatusBadge status={row.status === "DIAJUKAN" ? "warn" : "ok"}>{row.status === "DIAJUKAN" ? "Menunggu KARWAS" : "Disetujui · menunggu pembayaran"}</StatusBadge></div>
+                    </>}
                   </div>
-                ) }] : []),
+                ) },
+                { key: "no_kuitansi", header: "Kuitansi", render: (row) => String(row.no_kuitansi ?? "—") },
+                { key: "debit", header: "Debit", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? "—" : Number(row.debit) ? formatRupiah(row.debit) : "—" },
+                { key: "kredit", header: "Kredit", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? "—" : Number(row.kredit) ? formatRupiah(row.kredit) : "—" },
+                { key: "saldo", header: "Saldo", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? <span className="text-xs text-muted-foreground">Belum dibukukan</span> : formatRupiah(row.saldo) },
+                {
+                  key: "aksi",
+                  header: "Aksi",
+                  render: (row: AnyRow) => {
+                    if (row.row_type === "PENGAJUAN_BELANJA") {
+                      return (
+                        <Link
+                          href={`/dashboard/pengajuan-belanja?pengajuan_id=${encodeURIComponent(String(row.pengajuan_belanja_id))}`}
+                          className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-2.5 text-xs font-medium transition-colors hover:bg-muted"
+                        >
+                          <Eye size={14} /> Detail Pengajuan
+                        </Link>
+                      );
+                    }
+                    if (!canManage) return <span className="text-muted-foreground">—</span>;
+                    return (
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => openTransaction(row)}>Ubah</Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTransaction(row)}>Hapus</Button>
+                      </div>
+                    );
+                  },
+                },
               ]}
             />
           ) : (

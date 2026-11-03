@@ -23,6 +23,7 @@ import {
   Settings,
   UserCog,
   ClipboardCheck,
+  FileClock,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/legacy-button";
@@ -63,6 +64,7 @@ const sections = [
     items: [
       { href: "/dashboard/proyek", label: "Proyek", icon: BriefcaseBusiness, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_karwas", "pimpinan"] },
       { href: "/dashboard/retail", label: "Proyek Retail", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"] },
+      { href: "/dashboard/karwas/perpanjangan-proyek", label: "Perpanjangan SK Proyek", icon: FileClock, roles: ["superadmin", "keu_karwas"] },
       { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"] },
       { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"] },
     ],
@@ -105,6 +107,7 @@ const allowedPath: Record<string, string[]> = {
   "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"],
   "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"],
   "/dashboard/karwas": ["superadmin", "keu_karwas"],
+  "/dashboard/karwas/perpanjangan-proyek": ["superadmin", "keu_karwas"],
   "/dashboard/dana-operasional": ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"],
   "/dashboard/rekening": ["superadmin", "keuangan", "keu_bendahara"],
   "/dashboard/mak": ["superadmin", "keuangan"],

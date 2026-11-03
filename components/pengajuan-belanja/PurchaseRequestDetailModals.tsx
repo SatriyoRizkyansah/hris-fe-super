@@ -1,7 +1,8 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import { Circle, CircleCheck, CircleDollarSign, CircleX, Clock3, LoaderCircle } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Circle, CircleCheck, CircleDollarSign, CircleX, Clock3, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal, ModalDetailGrid, ModalDetailItem, ModalSection } from "@/components/modal/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -85,7 +86,17 @@ export function PurchaseRequestDetailModals(props: Props) {
                 ].map(([label, value, className]) => (
                   <div key={String(label)} className={`min-w-0 py-3 sm:border-b ${className ?? ""}`}>
                     <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-                    <dd className={`mt-1 break-words text-sm ${label === "Nominal" ? "font-semibold tabular-nums text-foreground" : "text-foreground"}`}>{value}</dd>
+                    <dd className={`mt-1 break-words text-sm ${label === "Nominal" ? "font-semibold tabular-nums text-foreground" : "text-foreground"}`}>
+                      {value}
+                      {label === "RO" && detailRequest.ro?.id && (
+                        <Link
+                          href={`/dashboard/ro/${encodeURIComponent(String(detailRequest.ro.id))}`}
+                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                        >
+                          Lihat detail RO <ArrowUpRight size={13} />
+                        </Link>
+                      )}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -93,6 +104,7 @@ export function PurchaseRequestDetailModals(props: Props) {
                 <DocumentLinks
                   documents={[
                     { label: "Bukti kuitansi", path: detailRequest.file_bukti },
+                    { label: "Bukti pembayaran", path: detailRequest.pembayaran?.file_bukti },
                     { label: "RAB RO", path: detailRequest.ro?.file_rab },
                   ]}
                 />

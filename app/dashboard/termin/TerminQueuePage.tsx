@@ -119,10 +119,25 @@ export default function TerminQueuePage() {
   const pagination = unwrapEnvelope<unknown>(request.data).pagination;
   const total = Number(pagination?.total_datas ?? rows.length);
   const totalPages = Number(pagination?.total_pages ?? Math.max(1, Math.ceil(total / pageSize)));
-  const projectRows = useMemo(() => [...rows].sort((left, right) => {
-    const projectOrder = (left.proyek?.nama_proyek ?? "").localeCompare(right.proyek?.nama_proyek ?? "", "id");
-    return projectOrder || left.nomor_termin - right.nomor_termin;
-  }), [rows]);
+  const projectRows = useMemo(() => {
+    const projectKey = (row: TerminRow) => row.proyek?.id ?? `unknown-${row.id}`;
+    const latestCreatedAtByProject = new Map<string, number>();
+    for (const row of rows) {
+      const createdAt = row.created_at ? Date.parse(row.created_at) : 0;
+      const timestamp = Number.isFinite(createdAt) ? createdAt : 0;
+      const key = projectKey(row);
+      latestCreatedAtByProject.set(key, Math.max(latestCreatedAtByProject.get(key) ?? 0, timestamp));
+    }
+    return [...rows].sort((left, right) => {
+      const leftProject = projectKey(left);
+      const rightProject = projectKey(right);
+      if (leftProject === rightProject) return left.nomor_termin - right.nomor_termin;
+
+      const newestFirst = (latestCreatedAtByProject.get(rightProject) ?? 0) - (latestCreatedAtByProject.get(leftProject) ?? 0);
+      if (newestFirst !== 0) return newestFirst;
+      return (left.proyek?.nama_proyek ?? "").localeCompare(right.proyek?.nama_proyek ?? "", "id");
+    });
+  }, [rows]);
   const unitsQuery = use_query({
     tag: "retail",
     method: "retailBillingUnits",

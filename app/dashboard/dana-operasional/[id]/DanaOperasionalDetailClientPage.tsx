@@ -56,7 +56,10 @@ export default function DanaOperasionalDetailClientPage({ id }: { id: string }) 
   });
   const detail = envelopeData<Detail>(detailQuery.data);
   const ledger = envelopeData<Row>(ledgerQuery.data) ?? {};
-  const transactions = (Array.isArray(ledger.list) ? ledger.list : (detail?.transaksi_list ?? [])) as Row[];
+  const transactions = useMemo(() => {
+    const rows = (Array.isArray(ledger.list) ? ledger.list : (detail?.transaksi_list ?? [])) as Row[];
+    return [...rows].reverse();
+  }, [ledger.list, detail?.transaksi_list]);
   const allocations = detail?.alokasi_list ?? [];
   const totalPlafon = Number(detail?.total_plafon ?? 0);
   const totalDebit = Number(ledger.total_debit ?? detail?.total_debit ?? 0);

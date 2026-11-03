@@ -1,12 +1,12 @@
 import { ExternalLink, FileText } from "lucide-react";
 import { cn } from "cn";
 
-export function DocumentLinks({ documents, className }: { documents: Array<{ label: string; path?: unknown }>; className?: string }) {
+export function DocumentLinks({ documents, className, columns = 3 }: { documents: Array<{ label: string; path?: unknown }>; className?: string; columns?: 1 | 2 | 3 }) {
   const available = documents.filter((item) => typeof item.path === "string" && item.path.length > 0) as Array<{ label: string; path: string }>;
   if (!available.length) return <p className={cn("text-sm text-muted-foreground", className)}>Belum ada dokumen proyek.</p>;
   const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
   return (
-    <div className={cn("grid gap-3 sm:grid-cols-2 lg:grid-cols-3", className)}>
+    <div className={cn(`grid gap-3 ${columns === 1 ? "grid-cols-1" : columns === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"}`, className)}>
       {available.map(({ label, path }) => {
         const normalized = path
           .replace(/^\/+/, "")

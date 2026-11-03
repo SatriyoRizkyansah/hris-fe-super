@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
+import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { Modal, ModalSection } from "@/components/modal/Modal";
 import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
@@ -149,6 +150,10 @@ export default function InvoicePageClient() {
     queryFn: async () => requestHrisApi("/api/retail/jobs?status=SIAP_DITAGIH&limit=100&page=1"),
   });
   const retailJobRows = listRows(retailJobsQuery.data);
+  const retailJobOptions = useMemo(() => retailJobRows.map((item) => ({
+    value: String(item.id),
+    label: `${String(item.nomor_job ?? "Job retail")} · ${String(item.nama_pelanggan ?? "Klien")} · LHU ${String(item.nomor_lhu ?? "—")} · ${formatRupiah(item.nilai_layanan)}`,
+  })), [retailJobRows]);
   const accountsQuery = use_query({
     tag: "masterRekeningBank",
     method: "masterRekeningFindAllControllerFindAll",
@@ -345,14 +350,16 @@ export default function InvoicePageClient() {
           </>
         }
       >
-        <label className="grid gap-1 text-sm">
+        <label className="grid min-w-0 gap-1 text-sm">
           {invoiceSource === "retail" ? (
             <>
               Job retail siap ditagih *
-              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={invoiceForm.retail_job_id} onChange={(event) => setInvoiceForm((current) => ({ ...current, retail_job_id: event.target.value }))}>
-                <option value="">Pilih job retail</option>
-                {retailJobRows.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.nomor_job)} · {String(item.nama_pelanggan)} · LHU {String(item.nomor_lhu ?? "—")} · {formatRupiah(item.nilai_layanan)}</option>)}
-              </select>
+              <FilterCombobox
+                options={retailJobOptions}
+                value={invoiceForm.retail_job_id}
+                onValueChange={(value) => setInvoiceForm((current) => ({ ...current, retail_job_id: value }))}
+                label="Pilih job retail"
+              />
               {retailJobsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar job retail belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void retailJobsQuery.refetch()}>Coba lagi</Button>} />}
             </>
           ) : (

@@ -11,7 +11,7 @@ import { DataTableFilters } from "@/components/table/DataTableFilters";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
-import { envelopeRows, unwrapEnvelope } from "@/lib/hris/api";
+import { envelopeRows, requestHrisApi, unwrapEnvelope } from "@/lib/hris/api";
 import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 
 import type { ProyekItemDto, RoItemDto } from "@/lib/api/generated/api-generated";
@@ -37,7 +37,11 @@ export default function RoClientPage() {
     params: { search, project, unit, page, pageSize },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterRo.roGetDataControllerGetData({ query: search || undefined, id_proyek: project === "__all" ? undefined : project, id_unit_koordinator: unit === "__all" ? undefined : unit, page, limit: pageSize });
+      const params = new URLSearchParams({ page: String(page), limit: String(pageSize), group_by_job: "true" });
+      if (search) params.set("query", search);
+      if (project !== "__all") params.set("id_proyek", project);
+      if (unit !== "__all") params.set("id_unit_koordinator", unit);
+      return { data: await requestHrisApi(`/api/ro?${params.toString()}`) };
     },
   });
   const projects = use_query({
@@ -251,7 +255,7 @@ export default function RoClientPage() {
               </span>
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2">
-                  Baris
+                  Grup
                   <select
                     className="h-8 rounded-md border bg-background px-2"
                     value={pageSize}
@@ -260,7 +264,7 @@ export default function RoClientPage() {
                       setPage(1);
                     }}
                   >
-                    {[5, 10, 25, 50].map((size) => (
+                    {[5, 10, 25].map((size) => (
                       <option key={size} value={size}>
                         {size}
                       </option>

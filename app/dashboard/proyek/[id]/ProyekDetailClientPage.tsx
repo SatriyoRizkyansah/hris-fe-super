@@ -425,7 +425,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-5 py-4">
           <div>
-            <h2 className="font-semibold">Perpanjangan masa SK</h2>
+            <h2 className="font-semibold">Perpanjangan SK Proyek</h2>
             <p className="mt-1 text-sm text-muted-foreground">Perubahan jadwal SK diajukan sebelum tanggal akhir dan berlaku setelah disetujui KARWAS. Nilai kontrak dan alokasi RO tidak berubah.</p>
           </div>
           {pendingExtension && <StatusBadge status="warn">Menunggu pemeriksaan KARWAS</StatusBadge>}
@@ -660,7 +660,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       <Dialog open={reviewingExtension !== null} onOpenChange={(value) => !value && setReviewingExtension(null)}>
         <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Tinjau Perpanjangan Masa SK</DialogTitle>
+            <DialogTitle>Tinjau Perpanjangan SK Proyek</DialogTitle>
             <DialogDescription>Periksa alasan dan dokumen. Jika disetujui, tanggal akhir SK proyek akan diperbarui.</DialogDescription>
           </DialogHeader>
           {reviewingExtension && <div className="space-y-4">
@@ -668,7 +668,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               <p className="font-medium">{project.nama_proyek}</p>
               <p className="mt-1 text-muted-foreground">{formatDate(reviewingExtension.berakhir_sk_sebelumnya)} → <span className="font-semibold text-foreground">{formatDate(reviewingExtension.berakhir_sk_baru)}</span></p>
               <p className="mt-3 whitespace-pre-wrap">{reviewingExtension.alasan}</p>
-              <div className="mt-3"><DocumentLinks documents={[{ label: "Dokumen pendukung perpanjangan", path: reviewingExtension.file_dokumen }]} /></div>
+              <div className="mt-3"><DocumentLinks documents={[{ label: "Dokumen pendukung perpanjangan", path: reviewingExtension.file_dokumen }]} columns={1} /></div>
             </div>
             <fieldset className="grid gap-2">
               <legend className="mb-1 text-sm font-medium">Keputusan KARWAS</legend>

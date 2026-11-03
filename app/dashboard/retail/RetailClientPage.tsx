@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
-import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { Modal } from "@/components/modal/Modal";
 import { DataTable } from "@/components/table";
 import { EmptyData } from "@/components/loading/EmptyData";
@@ -32,6 +31,8 @@ import { apiErrorMessage, requestHrisApi } from "@/lib/hris/api";
 import { formatRupiah } from "@/lib/hris/format";
 
 type Row = Record<string, any>;
+const PILT_UNIT_CODE = "ORG-UMUM-HUKUM";
+
 type SampleItemForm = {
   nama_layanan: string;
   jumlah: string;
@@ -151,6 +152,10 @@ export default function RetailClientPage() {
     queryFn: async () => requestHrisApi("/api/retail/units"),
   });
   const units = useMemo(() => listRows(unitsQuery.data), [unitsQuery.data]);
+  const piltUnit = useMemo(
+    () => units.find((unit) => String(unit.kode_unit ?? "").trim().toUpperCase() === PILT_UNIT_CODE),
+    [units],
+  );
   const unitOptions = useMemo(() => units.map((unit) => ({
     value: String(unit.id),
     label: [unit.kode_unit, unit.nama_unit].filter(Boolean).join(" · "),
@@ -214,14 +219,23 @@ export default function RetailClientPage() {
     window.requestAnimationFrame(() => document.getElementById("retail-order-list")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
+  function openOrderForm() {
+    if (!piltUnit) {
+      setError(`Unit pelaksana ${PILT_UNIT_CODE} belum tersedia. Muat ulang daftar unit sebelum membuat order.`);
+      setOrderOpen(true);
+      return;
+    }
+    setOrderForm({ ...blankOrder(), unit_pelaksana_id: String(piltUnit.id) });
+    setOrderOpen(true);
+    setError("");
+  }
+
   const workflowActions: WorkflowAction[] = [
     {
       label: canCreateOrder ? "Input Sampel" : "Lihat order",
       onClick: () => {
         if (!canCreateOrder) return showRetailQueue();
-        setOrderForm(blankOrder());
-        setOrderOpen(true);
-        setError("");
+        openOrderForm();
       },
     },
     { label: "Lihat order diuji", onClick: () => showRetailQueue("PENGUJIAN") },
@@ -238,6 +252,7 @@ export default function RetailClientPage() {
       method: "POST",
       body: JSON.stringify({
         ...form,
+        unit_pelaksana_id: String(piltUnit?.id ?? ""),
         nilai_layanan: Number(form.nilai_layanan),
         rincian_layanan: form.rincian_layanan.map((item) => ({
           ...item,
@@ -258,7 +273,11 @@ export default function RetailClientPage() {
   });
 
   async function saveOrder() {
-    if (!orderForm.unit_pelaksana_id || !orderForm.nama_pelanggan.trim() || !orderForm.nomor_tanda_terima_perconto.trim() || !orderForm.tanggal_perconto_diterima || !orderForm.nilai_layanan.trim()) {
+    if (!piltUnit) {
+      setError(`Unit pelaksana ${PILT_UNIT_CODE} belum tersedia. Coba muat ulang daftar unit.`);
+      return;
+    }
+    if (!orderForm.nama_pelanggan.trim() || !orderForm.nomor_tanda_terima_perconto.trim() || !orderForm.tanggal_perconto_diterima || !orderForm.nilai_layanan.trim()) {
       setError("Unit, nama klien, nomor dan tanggal tanda terima perconto, serta nominal layanan wajib diisi.");
       return;
     }
@@ -316,7 +335,7 @@ export default function RetailClientPage() {
         <h1 className="text-2xl font-bold">Layanan Retail</h1>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">Kelola order pengujian sampel dari tanda terima sampai invoice lunas dan LHU diserahkan.</p>
       </div>
-      {canCreateOrder && <Button onClick={() => { setOrderForm(blankOrder()); setOrderOpen(true); setError(""); }}><Plus size={16} /> Input Sampel</Button>}
+      {canCreateOrder && <Button onClick={openOrderForm}><Plus size={16} /> Input Sampel</Button>}
     </header>
 
     <WorkflowDiagram
@@ -375,13 +394,11 @@ export default function RetailClientPage() {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">Unit pelaksana *
-          <FilterCombobox
-            options={unitOptions}
-            value={orderForm.unit_pelaksana_id}
-            onValueChange={(value) => setOrderForm((current) => ({ ...current, unit_pelaksana_id: value }))}
-            label="Pilih unit pelaksana"
-          />
+          <div className="flex min-h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-foreground">
+            {unitsQuery.isLoading ? "Memuat unit pelaksana…" : piltUnit ? `${piltUnit.kode_unit} · ${piltUnit.nama_unit}` : PILT_UNIT_CODE}
+          </div>
           {unitsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar unit pelaksana belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void unitsQuery.refetch()}>Coba lagi</Button>} />}
+          {!unitsQuery.isLoading && !unitsQuery.isError && !piltUnit && <p className="text-xs text-destructive">Unit pelaksana {PILT_UNIT_CODE} tidak ditemukan pada daftar unit aktif.</p>}
         </label>
         <label className="grid gap-1 text-sm">Nama klien *<Input maxLength={200} value={orderForm.nama_pelanggan} onChange={(event) => setOrderForm((current) => ({ ...current, nama_pelanggan: event.target.value }))} placeholder="Nama pelanggan atau instansi" /></label>
         <label className="grid gap-1 text-sm">Nomor tanda terima perconto *<Input maxLength={100} value={orderForm.nomor_tanda_terima_perconto} onChange={(event) => setOrderForm((current) => ({ ...current, nomor_tanda_terima_perconto: event.target.value }))} placeholder="Nomor tanda terima sampel" /></label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, ClipboardList, Eye, LoaderCircle, Plus, ShieldCheck, WalletCards } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
@@ -115,6 +115,7 @@ export default function PengajuanBelanjaPageClient() {
   const [paying, setPaying] = useState<Row | null>(null);
   const [form, setForm] = useState<Form>(blankForm);
   const [payment, setPayment] = useState<PaymentForm>(blankPayment);
+  const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
   const [retailReviewNote, setRetailReviewNote] = useState("");
   const [retailReviewError, setRetailReviewError] = useState("");
@@ -131,6 +132,26 @@ export default function PengajuanBelanjaPageClient() {
   const [sourceFilter, setSourceFilter] = useState("__all");
   const [unitPelaksanaFilter, setUnitPelaksanaFilter] = useState("__all");
   const user = useCurrentUser();
+  useEffect(() => {
+    const requestId = new URLSearchParams(window.location.search).get("pengajuan_id");
+    if (!requestId) return;
+
+    let active = true;
+    requestHrisApi(`/api/pengajuan-belanja/${encodeURIComponent(requestId)}`)
+      .then((response) => {
+        const request = objectData(response);
+        if (active && request.id) setDetailRequest(request);
+      })
+      .catch((cause) => {
+        if (active) {
+          window.dispatchEvent(new CustomEvent("api:error", { detail: { error: cause } }));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
   const role = user.data?.role?.toLowerCase() ?? "";
   const canViewRetail = user.data?.canViewRetail === true;
   const canCreate = ["superadmin", "koordinator", "subkoor"].includes(role);
@@ -383,17 +404,19 @@ export default function PengajuanBelanjaPageClient() {
       setError("");
     },
   });
-  const payMutation = use_mutation<unknown, Error, { id: string; data: BayarPengajuanBelanjaDto }>({
+  const payMutation = use_mutation<unknown, Error, { id: string; data: BayarPengajuanBelanjaDto; file: File }>({
     tag: "keuanganPengajuanBelanja",
     method: "pengajuanBelanjaBayarControllerBayar",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: async ({ id, data }) => {
-      setBrowserToken();
-      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaBayarControllerBayar(id, data, { format: "json" }));
-    },
+    mutationFn: async ({ id, data, file }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/bayar`, file, {
+      nomor_pembayaran: data.nomor_pembayaran,
+      tanggal_bayar: data.tanggal_bayar,
+      ...(data.catatan ? { catatan: data.catatan } : {}),
+    }),
     onSuccess: () => {
       setPaying(null);
       setPayment(blankPayment());
+      setPaymentFile(null);
       setError("");
     },
   });
@@ -476,8 +499,12 @@ export default function PengajuanBelanjaPageClient() {
   }
   async function pay() {
     if (!paying) return;
-    if (!payment.nomor_pembayaran.trim() || !payment.tanggal_bayar) {
-      setError("Nomor pembayaran dan tanggal wajib diisi.");
+    if (!payment.nomor_pembayaran.trim() || !payment.tanggal_bayar || !paymentFile) {
+      setError("Nomor pembayaran, tanggal, dan bukti pembayaran PDF wajib diisi.");
+      return;
+    }
+    if (!paymentFile.name.toLowerCase().endsWith(".pdf") || paymentFile.size > 10 * 1024 * 1024) {
+      setError("Bukti pembayaran harus berupa PDF maksimal 10 MB.");
       return;
     }
     try {
@@ -489,6 +516,7 @@ export default function PengajuanBelanjaPageClient() {
           tanggal_bayar: payment.tanggal_bayar,
           catatan: payment.catatan.trim() || undefined,
         },
+        file: paymentFile,
       });
     } catch (cause) {
       setError(apiErrorMessage(cause, "Pembayaran pengajuan gagal disimpan."));
@@ -764,6 +792,7 @@ export default function PengajuanBelanjaPageClient() {
                                   onClick={() => {
                                     setPaying(row);
                                     setPayment(blankPayment());
+                                    setPaymentFile(null);
                                     setError("");
                                   }}
                                 >
@@ -986,17 +1015,25 @@ export default function PengajuanBelanjaPageClient() {
       />
       <Modal
         open={Boolean(paying)}
-        onClose={() => setPaying(null)}
+        onClose={() => {
+          setPaying(null);
+          setPaymentFile(null);
+          setError("");
+        }}
         title="Bayar Pengajuan"
         description={paying ? `${String(paying.nama_kegiatan)} · ${formatRupiah(paying.jumlah)}` : "Pembayaran pengajuan belanja."}
         size="lg"
         bodyClassName="space-y-4"
         footer={
           <>
-            <Button variant="outline" onClick={() => setPaying(null)}>
+            <Button variant="outline" onClick={() => {
+              setPaying(null);
+              setPaymentFile(null);
+              setError("");
+            }}>
               Batal
             </Button>
-            <Button disabled={payMutation.isPending} onClick={pay}>
+            <Button disabled={payMutation.isPending || !paymentFile} onClick={pay}>
               {payMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <CircleDollarSign size={16} />} Simpan Pembayaran
             </Button>
           </>
@@ -1028,6 +1065,17 @@ export default function PengajuanBelanjaPageClient() {
             </div>
           </div>
         </section>
+        <div>
+          <DocumentUploadField
+            label="Bukti pembayaran (PDF) *"
+            accept=".pdf"
+            value={paymentFile}
+            onChange={setPaymentFile}
+            disabled={payMutation.isPending}
+            className="p-3 sm:p-3"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">Unggah bukti transfer atau dokumen pembayaran dalam format PDF, maksimal 10 MB.</p>
+        </div>
         <label className="grid gap-1 text-sm">
           Catatan
           <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={payment.catatan} onChange={(event) => setPayment((current) => ({ ...current, catatan: event.target.value }))} />
