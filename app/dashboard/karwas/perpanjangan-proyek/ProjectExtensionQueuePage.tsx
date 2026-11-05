@@ -31,7 +31,7 @@ type ExtensionRequest = {
   diperiksa_oleh?: { nama?: string } | null;
   diperiksa_pada?: string | null;
   catatan_pemeriksa?: string | null;
-  proyek: { id: string; kode_proyek: string; nama_proyek: string; tahun_fiscal: number; berakhir_sk?: string | null };
+  proyek: { id: string; kode_proyek: string; nama_proyek: string; tahun_fiscal: number; berakhir_kontrak?: string | null };
 };
 type QueueParams = { page: number; limit: number; query: string; status: string };
 

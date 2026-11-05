@@ -4,10 +4,8 @@ export type ProjectForm = {
   kode_proyek: string;
   nama_proyek: string;
   tahun_fiscal: string;
-  mulai_proyek: string;
-  estimasi_selesai_proyek: string;
-  mulai_sk: string;
-  berakhir_sk: string;
+  mulai_kontrak: string;
+  berakhir_kontrak: string;
   sumber_pendanaan: string;
   nama_client: string;
   no_kontrak: string;

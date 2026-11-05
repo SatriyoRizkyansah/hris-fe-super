@@ -27,7 +27,7 @@ const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: 
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
 const emptySpendRequest = (): SpendRequestForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), jumlah: "", keterangan: "" });
 function missing(row: RoItemDto) {
-  return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", (row.id_proyek ? !row.nomor_job && !row.no_sk : !row.no_sk) && (row.id_proyek ? "Nomor Job" : "No SK"), !row.mulai_sk && "Mulai SK", !row.berakhir_sk && "Berakhir SK"].filter(Boolean);
+  return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", (row.id_proyek ? !row.nomor_job && !row.no_sk : !row.no_sk) && (row.id_proyek ? "Nomor Job" : "No SK"), row.id_proyek && !row.mulai_kontrak && "Mulai kontrak proyek", row.id_proyek && !row.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean);
 }
 
 export default function RoDetailClientPage({ id }: { id: string }) {
@@ -323,12 +323,11 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   const finance = ((ro as unknown as AnyRow).balance as AnyRow | undefined) ?? {};
   const approvedBudget = Number(finance.pagu_disetujui ?? plannedPlafon) || 0;
   const totalUsed = Number(finance.realisasi ?? ro.total_terpakai) || 0;
-  const commitments = Number(finance.komitmen_aktif) || 0;
-  const remainingRight = Number(finance.sisa_dapat_direservasi ?? (approvedBudget - totalUsed - commitments)) || 0;
+  const remainingRight = Number(finance.sisa_dapat_direservasi ?? (approvedBudget - totalUsed)) || 0;
   const cashIn = Number(finance.penerimaan_kas ?? (ro as unknown as AnyRow).total_debit) || 0;
   const cashPosition = Number(finance.posisi_kas ?? (cashIn - totalUsed)) || 0;
   const outstandingAdvance = Number(finance.saldo_talangan) || 0;
-  const percent = Number(finance.persentase_pagu ?? (approvedBudget ? ((totalUsed + commitments) / approvedBudget) * 100 : 0));
+  const percent = approvedBudget ? Math.min(100, (totalUsed / approvedBudget) * 100) : 0;
   return (
     <section className="hris-page space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
@@ -361,15 +360,14 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       <section className="space-y-4 rounded-2xl border border-border bg-background p-5 shadow-sm">
         <header>
           <h2 className="text-base font-semibold">Pagu dan arus kas RO</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Hak belanja dihitung dari pagu disetujui dikurangi realisasi dan komitmen aktif. Posisi kas dihitung terpisah dari penerimaan kas dikurangi realisasi.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Ringkasan menampilkan pagu, realisasi, dan sisa hak belanja. Posisi kas dihitung terpisah dari penerimaan kas dikurangi realisasi.</p>
         </header>
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hak belanja</p>
           <MoneyFlow items={[
             { label: "Pagu disetujui", amount: approvedBudget },
             { label: "Realisasi", amount: totalUsed, operator: "−", tone: "text-rose-700" },
-            { label: "Komitmen aktif", amount: commitments, operator: "−", tone: "text-amber-700" },
-            { label: "Sisa hak belanja", amount: remainingRight, operator: "=", tone: remainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
+            { label: "Sisa hak belanja", amount: remainingRight, operator: "", tone: remainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
           ]} />
         </div>
         <div className="space-y-2">
@@ -411,7 +409,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         </p>
         <p>
           <span className="block text-xs text-muted-foreground">SK</span>
-          {String(ro.no_sk ?? "—")} · Periode SK proyek {formatDate(ro.mulai_sk)} – {formatDate(ro.berakhir_sk)}
+          {String(ro.no_sk ?? "—")} · Periode kontrak proyek {formatDate(ro.mulai_kontrak)} – {formatDate(ro.berakhir_kontrak)}
         </p>
       </section>
       {canManage && (

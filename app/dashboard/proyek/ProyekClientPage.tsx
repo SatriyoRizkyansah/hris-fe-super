@@ -44,10 +44,8 @@ const blankForm = (): ProjectForm => ({
   kode_proyek: "",
   nama_proyek: "",
   tahun_fiscal: String(currentYear),
-  mulai_proyek: "",
-  estimasi_selesai_proyek: "",
-  mulai_sk: "",
-  berakhir_sk: "",
+  mulai_kontrak: "",
+  berakhir_kontrak: "",
   sumber_pendanaan: "",
   nama_client: "",
   no_kontrak: "",
@@ -279,10 +277,10 @@ export default function ProyekClientPage() {
       Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()),
     ),
   );
-  const projectSkRequired = roRows.some((row) => row.detailMode === "detail");
-  const projectSkRangeValid = (
-    !form.mulai_sk && !form.berakhir_sk && !projectSkRequired
-  ) || Boolean(form.mulai_sk && form.berakhir_sk && form.berakhir_sk >= form.mulai_sk);
+  const contractDatesRequired = roRows.some((row) => row.detailMode === "detail");
+  const contractDateRangeValid = (
+    !form.mulai_kontrak && !form.berakhir_kontrak && !contractDatesRequired
+  ) || Boolean(form.mulai_kontrak && form.berakhir_kontrak && form.berakhir_kontrak >= form.mulai_kontrak);
   const valid = Boolean(
     form.kode_proyek &&
     form.nama_proyek &&
@@ -291,7 +289,7 @@ export default function ProyekClientPage() {
     form.total_direct_cost !== "" &&
     form.total_margin !== "" &&
     contractOk &&
-    projectSkRangeValid &&
+    contractDateRangeValid &&
     unitPengusulId &&
     collaborationAssigned &&
     allocationsValid &&
@@ -317,15 +315,57 @@ export default function ProyekClientPage() {
     setLocalDrafts(drafts);
     localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(drafts));
   }
-  function saveDraft() {
+  function hasDraftContent() {
+    const projectFieldsChanged = Object.entries(form).some(([key, value]) =>
+      key === "tahun_fiscal" ? value !== String(currentYear) : Boolean(value.trim()),
+    );
+    const allocationChanged = jobs.length > 1 || jobs.some((job) =>
+      Boolean(job.nomor_job.trim()) || job.ros.length > 1 || job.ros.some((row) =>
+        Boolean(
+          row.nama_ro.trim() ||
+          row.mak_id ||
+          row.rekening_id ||
+          row.plafonText.trim() ||
+          row.pj.trim() ||
+          row.no_kontrak.trim() ||
+          row.unit_kolaborasi_ids?.length ||
+          row.detailMode === "detail" ||
+          normalizeUnitId(row.id_unit_koordinator) !== normalizeUnitId(unitPengusulId),
+        ),
+      ),
+    );
+    const termsChanged = terms.length > 1 || terms.some((term, index) =>
+      term.persentaseText !== (index === 0 ? "100" : ""),
+    );
+
+    return projectFieldsChanged || allocationChanged || termsChanged ||
+      unitPengusulId !== identity.unitKerjaId || unitKolaborasiIds.length > 0 || Boolean(sk || rab);
+  }
+  function saveCurrentDraft() {
+    if (!hasDraftContent()) return;
     const draft: ProjectLocalDraft = { id: editingDraftId ?? crypto.randomUUID(), savedAt: new Date().toISOString(), form, jobs, terms, unitPengusulId, unitKolaborasiIds };
     persistDrafts([draft, ...localDrafts.filter((item) => item.id !== draft.id)]);
     setEditingDraftId(draft.id);
     setFormError("");
+  }
+  function closeApplicationModal() {
+    saveCurrentDraft();
     setOpen(false);
+    resetForm();
+  }
+  function saveDraft() {
+    saveCurrentDraft();
+    setOpen(false);
+    resetForm();
   }
   function editDraft(draft: ProjectLocalDraft) {
-    setForm({ ...blankForm(), ...draft.form });
+    const savedForm = draft.form as ProjectForm & { mulai_sk?: string; berakhir_sk?: string };
+    setForm({
+      ...blankForm(),
+      ...savedForm,
+      mulai_kontrak: savedForm.mulai_kontrak || savedForm.mulai_sk || "",
+      berakhir_kontrak: savedForm.berakhir_kontrak || savedForm.berakhir_sk || "",
+    });
     const savedLeadId = draft.unitPengusulId ?? identity.unitKerjaId;
     setUnitPengusulId(savedLeadId);
     setUnitKolaborasiIds(draft.unitKolaborasiIds ?? []);
@@ -444,12 +484,8 @@ export default function ProyekClientPage() {
   }
 
   async function submit() {
-    if (!projectSkRangeValid) {
-      setFormError("Isi tanggal Mulai SK dan Berakhir SK proyek secara lengkap; tanggal akhir tidak boleh sebelum tanggal mulai.");
-      return;
-    }
-    if (form.mulai_proyek && form.estimasi_selesai_proyek && form.estimasi_selesai_proyek < form.mulai_proyek) {
-      setFormError("Estimasi selesai proyek tidak boleh sebelum tanggal mulai.");
+    if (!contractDateRangeValid) {
+      setFormError("Isi Mulai Kontrak dan Berakhir Kontrak secara lengkap; tanggal akhir tidak boleh sebelum tanggal mulai.");
       return;
     }
     if (!valid || create.isPending) {
@@ -470,10 +506,8 @@ export default function ProyekClientPage() {
       const payload: CreateProyekDto = {
         ...form,
         tahun_fiscal: Number(form.tahun_fiscal),
-        mulai_proyek: form.mulai_proyek || undefined,
-        estimasi_selesai_proyek: form.estimasi_selesai_proyek || undefined,
-        mulai_sk: form.mulai_sk || undefined,
-        berakhir_sk: form.berakhir_sk || undefined,
+        mulai_kontrak: form.mulai_kontrak || undefined,
+        berakhir_kontrak: form.berakhir_kontrak || undefined,
         nilai_kontrak: numeric("nilai_kontrak"),
         total_direct_cost: numeric("total_direct_cost"),
         total_margin: numeric("total_margin"),
@@ -592,19 +626,19 @@ export default function ProyekClientPage() {
               },
               { key: "tahun", header: "Tahun", className: "w-24 whitespace-nowrap text-center tabular-nums", render: (row: ProyekItemDto) => row.tahun_fiscal },
               {
-                key: "durasi",
-                header: "Durasi proyek",
+                key: "periode_kontrak",
+                header: "Periode kontrak",
                 className: "min-w-[13rem] whitespace-nowrap",
                 render: (row: ProyekItemDto) => {
-                  const start = typeof row.mulai_proyek === "string" ? row.mulai_proyek : null;
-                  const end = typeof row.estimasi_selesai_proyek === "string" ? row.estimasi_selesai_proyek : null;
+                  const start = row.mulai_kontrak == null ? null : String(row.mulai_kontrak);
+                  const end = row.berakhir_kontrak == null ? null : String(row.berakhir_kontrak);
                   const days = start && end ? Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000) + 1 : null;
                   return (
                     <div className="text-sm">
                       <span>
                         {formatDate(start)} – {formatDate(end)}
                       </span>
-                      <p className="mt-1 text-xs text-muted-foreground">{days !== null && days > 0 ? `Â±${days} hari` : "Tanggal RO belum lengkap"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{days !== null && days > 0 ? `${days} hari kontrak` : "Periode kontrak belum diatur"}</p>
                     </div>
                   );
                 },
@@ -779,11 +813,10 @@ export default function ProyekClientPage() {
       </Modal>
       <ProjectApplicationModal
         open={open}
-        setOpen={setOpen}
-        resetForm={resetForm}
+        closeModal={closeApplicationModal}
         form={form}
         setForm={setForm}
-        projectSkRequired={projectSkRequired}
+        contractDatesRequired={contractDatesRequired}
         editingDraftId={editingDraftId}
         identity={identity}
         currentUnit={currentUnit}

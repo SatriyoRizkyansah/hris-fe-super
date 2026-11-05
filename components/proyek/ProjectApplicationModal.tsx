@@ -16,11 +16,10 @@ type Option = { value: string; label: string };
 type MoneyKey = "nilai_kontrak" | "total_direct_cost" | "total_margin";
 type Props = {
   open: boolean;
-  setOpen: (open: boolean) => void;
-  resetForm: () => void;
+  closeModal: () => void;
   form: ProjectForm;
   setForm: Dispatch<SetStateAction<ProjectForm>>;
-  projectSkRequired: boolean;
+  contractDatesRequired: boolean;
   editingDraftId: string | null;
   identity: { role: string | null };
   currentUnit?: { kode_unit?: string; nama_unit?: string };
@@ -83,7 +82,7 @@ function Field({ label, value, onChange, type = "text", required = false }: { la
 
 export function ProjectApplicationModal(props: Props) {
   const {
-    open, setOpen, resetForm, form, setForm, projectSkRequired, editingDraftId,
+    open, closeModal, form, setForm, contractDatesRequired, editingDraftId,
     identity, currentUnit, unitComboboxOptions, unitPengusulId, changeLeadUnit,
     availableCollaboratorOptions, addCollaborator, unitKolaborasiIds, assignedRoUnitIds,
     normalizeUnitId, removeCollaborator, numeric, contractOk, jobs, addJob, removeJob,
@@ -95,16 +94,13 @@ export function ProjectApplicationModal(props: Props) {
   return (
     <Modal
         open={open}
-        onClose={() => {
-          setOpen(false);
-          resetForm();
-        }}
+        onClose={closeModal}
         title="Ajukan Proyek"
         size="md"
         bodyClassName="space-y-4"
         footer={
           <>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={closeModal}>
               Batal
             </Button>
             <Button variant="outline" onClick={saveDraft}>
@@ -121,10 +117,11 @@ export function ProjectApplicationModal(props: Props) {
             <AlertTitle>Tahapan persetujuan</AlertTitle>
             <AlertDescription>Pengajuan proyek → validasi Koordinator Umum → unggah notulen → persetujuan pimpinan. RO aktif setelah pimpinan menyetujui proyek.</AlertDescription>
           </Alert>
+          <p className="text-xs text-muted-foreground">Perubahan otomatis disimpan sebagai draft saat modal ditutup.</p>
           {editingDraftId && (
             <Alert>
               <AlertTitle>Draft tersimpan di browser ini</AlertTitle>
-              <AlertDescription>Draft tidak tersedia di browser, profil, atau perangkat lain. Berkas SK dan RAB harus dipilih kembali sebelum pengajuan.</AlertDescription>
+              <AlertDescription>Draft tidak tersedia di browser, profil, atau perangkat lain. Berkas Kontrak Proyek dan RAB harus dipilih kembali sebelum pengajuan.</AlertDescription>
             </Alert>
           )}
         </div>
@@ -143,12 +140,10 @@ export function ProjectApplicationModal(props: Props) {
             <Field label="Nomor kontrak" value={form.no_kontrak} onChange={(value) => setForm((current) => ({ ...current, no_kontrak: value }))} />
             <Field label="PJ 1" value={form.pj_1} onChange={(value) => setForm((current) => ({ ...current, pj_1: value }))} />
             <Field label="PJ 2" value={form.pj_2} onChange={(value) => setForm((current) => ({ ...current, pj_2: value }))} />
-            <Field label="Mulai proyek" type="date" value={form.mulai_proyek} onChange={(value) => setForm((current) => ({ ...current, mulai_proyek: value }))} />
-            <Field label="Estimasi selesai proyek" type="date" value={form.estimasi_selesai_proyek} onChange={(value) => setForm((current) => ({ ...current, estimasi_selesai_proyek: value }))} />
-            <Field label="Mulai SK" type="date" required={projectSkRequired} value={form.mulai_sk} onChange={(value) => setForm((current) => ({ ...current, mulai_sk: value }))} />
-            <Field label="Berakhir SK" type="date" required={projectSkRequired} value={form.berakhir_sk} onChange={(value) => setForm((current) => ({ ...current, berakhir_sk: value }))} />
+            <Field label="Mulai Kontrak" type="date" required={contractDatesRequired} value={form.mulai_kontrak} onChange={(value) => setForm((current) => ({ ...current, mulai_kontrak: value }))} />
+            <Field label="Berakhir Kontrak" type="date" required={contractDatesRequired} value={form.berakhir_kontrak} onChange={(value) => setForm((current) => ({ ...current, berakhir_kontrak: value }))} />
           </div>
-          <p className="text-xs text-muted-foreground">Periode SK ini berlaku untuk seluruh RO. Wajib diisi jika detail administrasi RO dilengkapi sekarang.</p>
+          <p className="text-xs text-muted-foreground">Periode kontrak ini berlaku untuk seluruh RO. Wajib diisi jika detail administrasi RO dilengkapi sekarang.</p>
         </section>
         <section className="space-y-3 rounded-lg border p-4">
           <div className="space-y-1">
@@ -363,7 +358,7 @@ export function ProjectApplicationModal(props: Props) {
             <p className="mt-1 text-xs text-muted-foreground">Unggah dokumen opsional untuk melengkapi pengajuan.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <DocumentUploadField label="SK Proyek" accept=".pdf" value={sk} onChange={setSk} />
+            <DocumentUploadField label="Kontrak Proyek" accept=".pdf" value={sk} onChange={setSk} />
             <DocumentUploadField label="RAB Proyek" accept=".pdf,.xls,.xlsx" value={rab} onChange={setRab} />
           </div>
         </section>

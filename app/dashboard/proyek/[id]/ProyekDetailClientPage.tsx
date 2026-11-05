@@ -165,7 +165,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const isKarwas = identity.role === "keu_karwas" || identity.role === "superadmin";
   const extensionRows = project?.perpanjangan_list ?? [];
   const pendingExtension = extensionRows.find((item) => item.status === "DIAJUKAN");
-  const projectEndDate = dateKey(project?.berakhir_sk);
+  const projectEndDate = dateKey(project?.berakhir_kontrak);
   const extensionOpenForSubmission = Boolean(
     isSubmitter && statusIsApproved(project?.status_proyek) && projectEndDate && jakartaToday() <= projectEndDate,
   );
@@ -295,7 +295,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const roPlan = roRows.reduce((total, row) => total + (Number(row.nilai_rencana) || Number(row.total_plafon) || 0), 0);
   const approvedRoBudget = roRows.reduce((total, row) => total + (Number(financeOf(row).pagu_disetujui) || 0), 0);
   const roUsed = roRows.reduce((total, row) => total + (Number(financeOf(row).realisasi ?? row.total_terpakai) || 0), 0);
-  const roCommitments = roRows.reduce((total, row) => total + (Number(financeOf(row).komitmen_aktif) || 0), 0);
   const roCashReceived = roRows.reduce((total, row) => total + (Number(financeOf(row).penerimaan_kas ?? row.trx_debit) || 0), 0);
   const roCashPosition = roRows.reduce((total, row) => total + (Number(financeOf(row).posisi_kas) || 0), 0);
   const roRemainingRight = roRows.reduce((total, row) => total + (Number(financeOf(row).sisa_hak_belanja ?? row.sisa_saldo) || 0), 0);
@@ -307,7 +306,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const margin = Number(project.total_margin) || 0;
   const marginRemaining = Math.max(0, margin - marginDistributed);
   const contract = Number(project.nilai_kontrak) || 0;
-  const usedPercent = approvedRoBudget ? Math.min(100, ((roUsed + roCommitments) / approvedRoBudget) * 100) : 0;
+  const usedPercent = approvedRoBudget ? Math.min(100, (roUsed / approvedRoBudget) * 100) : 0;
   const marginPercent = margin ? (marginDistributed / margin) * 100 : 0;
   async function toggleRo(roId: string) {
     const opening = !expandedRos[roId];
@@ -338,7 +337,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor kontrak · {text(project.no_kontrak)}</span>
-            <span className="rounded-md bg-muted px-2.5 py-1.5">Periode SK proyek · {formatDate(String(project.mulai_sk ?? ""))} – {formatDate(String(project.berakhir_sk ?? ""))}</span>
+            <span className="rounded-md bg-muted px-2.5 py-1.5">Periode kontrak · {formatDate(String(project.mulai_kontrak ?? ""))} – {formatDate(String(project.berakhir_kontrak ?? ""))}</span>
           </div>
           {project.unit_terlibat?.length ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -482,7 +481,8 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         </div>
       </section>
       <ProjectFinancialSections
-        summary={{ contract, directCost, margin, marginDistributed, roPlan, approvedRoBudget, roUsed, roCommitments, roCashReceived, roCashPosition, roRemainingRight, usedPercent, marginPercent }}
+        summary={{ contract, directCost, margin, marginDistributed, roPlan, approvedRoBudget, roUsed, roCashReceived, roCashPosition, roRemainingRight, usedPercent, marginPercent }}
+        roRows={roRows}
         termRows={termRows}
         termTotal={termTotal}
         termPaid={termPaid}
@@ -506,7 +506,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         <div className="p-5">
           <DocumentLinks
             documents={[
-              { label: "SK Proyek", path: project.file_sk },
+              { label: "Kontrak Proyek", path: project.file_sk },
               { label: "RAB Proyek", path: project.file_rab },
               { label: "Notulen", path: project.file_notulen },
             ]}

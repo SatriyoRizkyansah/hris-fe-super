@@ -16,7 +16,7 @@ import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 
 import type { ProyekItemDto, RoItemDto } from "@/lib/api/generated/api-generated";
 
-const missing = (row: RoItemDto) => [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", (row.id_proyek ? !row.nomor_job && !row.no_sk : !row.no_sk) && (row.id_proyek ? "Nomor Job" : "No SK"), !row.mulai_sk && (row.id_proyek ? "Mulai SK proyek" : "Mulai SK"), !row.berakhir_sk && (row.id_proyek ? "Berakhir SK proyek" : "Berakhir SK")].filter(Boolean);
+const missing = (row: RoItemDto) => [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", (row.id_proyek ? !row.nomor_job && !row.no_sk : !row.no_sk) && (row.id_proyek ? "Nomor Job" : "No SK"), row.id_proyek && !row.mulai_kontrak && "Mulai kontrak proyek", row.id_proyek && !row.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean);
 type RoListItem = RoItemDto & {
   balance?: { pagu_disetujui?: number; sisa_dapat_direservasi?: number; penerimaan_kas?: number; posisi_kas?: number };
   status_pencairan?: "BELUM_CAIR" | "SEBAGIAN_CAIR" | "CAIR";
@@ -103,7 +103,7 @@ export default function RoClientPage() {
         <span className="break-words text-sm">
           {row.nomor_job ? `Job: ${String(row.nomor_job)}` : `SK: ${String(row.no_sk ?? "—")}`}
           <span className="block text-xs text-muted-foreground">
-            {row.id_proyek ? "Periode SK proyek · " : "Periode SK · "}{formatDate(row.mulai_sk)} – {formatDate(row.berakhir_sk)}
+            {row.id_proyek ? "Periode kontrak proyek · " : "Periode kontrak · "}{formatDate(row.mulai_kontrak)} – {formatDate(row.berakhir_kontrak)}
           </span>
         </span>
       ),

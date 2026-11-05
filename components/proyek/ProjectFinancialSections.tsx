@@ -1,6 +1,7 @@
 "use client";
 
 import { MoneyFlow } from "@/components/common/MoneyFlow";
+import { ProjectOverviewCharts } from "@/components/proyek/ProjectOverviewCharts";
 import { formatDate, formatRupiah } from "@/lib/hris/format";
 
 type Row = Record<string, any>;
@@ -12,7 +13,6 @@ type FinanceSummary = {
   roPlan: number;
   approvedRoBudget: number;
   roUsed: number;
-  roCommitments: number;
   roCashReceived: number;
   roCashPosition: number;
   roRemainingRight: number;
@@ -21,6 +21,7 @@ type FinanceSummary = {
 };
 type Props = {
   summary: FinanceSummary;
+  roRows: Row[];
   termRows: Row[];
   termTotal: number;
   termPaid: number;
@@ -39,10 +40,10 @@ function Card({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-export function ProjectFinancialSections({ summary, termRows, termTotal, termPaid, termRemaining, roCount, hasRestrictedRos }: Props) {
+export function ProjectFinancialSections({ summary, roRows, termRows, termTotal, termPaid, termRemaining, roCount, hasRestrictedRos }: Props) {
   const {
     contract, directCost, margin, marginDistributed, roPlan, approvedRoBudget,
-    roUsed, roCommitments, roCashReceived, roCashPosition, roRemainingRight,
+    roUsed, roCashReceived, roCashPosition, roRemainingRight,
     usedPercent, marginPercent,
   } = summary;
   return (
@@ -63,17 +64,17 @@ export function ProjectFinancialSections({ summary, termRows, termTotal, termPai
           <Card label="Total Margin" value={formatRupiah(margin)} hint={`Distribusi ${formatRupiah(marginDistributed)}`} />
           <Card label={hasRestrictedRos ? "Posisi kas RO unit Anda" : "Posisi kas seluruh RO"} value={formatRupiah(roCashPosition)} hint={`Kas masuk ${formatRupiah(roCashReceived)} · realisasi ${formatRupiah(roUsed)}`} />
         </div>
+        <ProjectOverviewCharts roRows={roRows} termRows={termRows} />
         <div className="mt-5 grid gap-4 border-t pt-5 xl:grid-cols-2">
           <div className="space-y-2">
             <div>
               <p className="text-sm font-semibold">{hasRestrictedRos ? "Hak belanja RO unit Anda" : "Hak belanja seluruh RO"}</p>
-              <p className="text-xs text-muted-foreground">{hasRestrictedRos ? "Ringkasan ini hanya mencakup RO yang dapat diakses unit Anda." : "Pagu yang disetujui dikurangi realisasi dan komitmen aktif."}</p>
+              <p className="text-xs text-muted-foreground">{hasRestrictedRos ? "Ringkasan ini hanya mencakup RO yang dapat diakses unit Anda." : "Ringkasan pagu, realisasi, dan sisa hak belanja RO."}</p>
             </div>
             <MoneyFlow items={[
               { label: "Pagu disetujui", amount: approvedRoBudget },
               { label: "Realisasi", amount: roUsed, operator: "−", tone: "text-rose-700" },
-              { label: "Komitmen aktif", amount: roCommitments, operator: "−", tone: "text-amber-700" },
-              { label: "Sisa hak belanja", amount: roRemainingRight, operator: "=", tone: roRemainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
+              { label: "Sisa hak belanja", amount: roRemainingRight, operator: "", tone: roRemainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
             ]} />
           </div>
           <div className="space-y-2">
@@ -98,7 +99,7 @@ export function ProjectFinancialSections({ summary, termRows, termTotal, termPai
               <div className="h-full rounded-full bg-primary" style={{ width: `${usedPercent}%` }} />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatRupiah(roUsed + roCommitments)} dari {formatRupiah(approvedRoBudget)}
+              {formatRupiah(roUsed)} terealisasi dari {formatRupiah(approvedRoBudget)}
             </p>
           </div>
           <div>

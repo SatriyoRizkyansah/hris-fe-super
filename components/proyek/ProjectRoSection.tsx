@@ -48,15 +48,14 @@ export function ProjectRoSection({ roGroups, roRows, project, roDetails, roLoadi
               const roFinance = canViewFinance ? { ...financeOf(row), ...financeOf(detailRow ?? {}) } : {};
               const approved = Number(roFinance.pagu_disetujui) || 0;
               const realized = Number(roFinance.realisasi ?? row.total_terpakai) || 0;
-              const commitments = Number(roFinance.komitmen_aktif) || 0;
               const remainingRight = Number(roFinance.sisa_hak_belanja ?? row.sisa_saldo) || 0;
               const cashReceived = Number(roFinance.penerimaan_kas ?? row.trx_debit) || 0;
               const cashPosition = Number(roFinance.posisi_kas) || 0;
-              const usage = approved > 0 ? Math.min(100, ((realized + commitments) / approved) * 100) : 0;
+              const usage = approved > 0 ? Math.min(100, (realized / approved) * 100) : 0;
               const jobNumber = String(row.nomor_job ?? "").trim();
               const splitParts = jobNumber ? roRows.filter((item) => String(item.nomor_job ?? "").trim() === jobNumber).length : 0;
               const collaborationUnits = Array.isArray(row.unit_kolaborasi) ? (row.unit_kolaborasi as Row[]).map((unit) => String(unit.nama_unit ?? "")).filter(Boolean) : [];
-              const missing = [!(row.no_kontrak ?? project.no_kontrak) && "No Kontrak", !row.pj && "PJ", !row.nomor_job && !row.no_sk && "Nomor Job", !project.mulai_sk && "Mulai SK proyek", !project.berakhir_sk && "Berakhir SK proyek"].filter(Boolean) as string[];
+              const missing = [!(row.no_kontrak ?? project.no_kontrak) && "No Kontrak", !row.pj && "PJ", !row.nomor_job && !row.no_sk && "Nomor Job", !project.mulai_kontrak && "Mulai kontrak proyek", !project.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean) as string[];
               const allocations = Array.isArray(detailRow?.alokasi_list) ? (detailRow.alokasi_list as Row[]) : [];
               const ledger = Array.isArray(detailRow?.transaksi_list) ? (detailRow.transaksi_list as Row[]) : [];
               return (
@@ -120,8 +119,7 @@ export function ProjectRoSection({ roGroups, roRows, project, roDetails, roLoadi
                               <MoneyFlow items={[
                                 { label: "Pagu disetujui", amount: approved },
                                 { label: "Realisasi", amount: realized, operator: "−", tone: "text-rose-700" },
-                                { label: "Komitmen aktif", amount: commitments, operator: "−", tone: "text-amber-700" },
-                                { label: "Sisa hak belanja", amount: remainingRight, operator: "=", tone: remainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
+                                { label: "Sisa hak belanja", amount: remainingRight, operator: "", tone: remainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
                               ]} />
                             </div>
                             <div className="space-y-2">

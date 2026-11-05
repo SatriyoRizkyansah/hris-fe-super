@@ -130,7 +130,7 @@ export function RoDetailModals(props: Props) {
             No SK
             <Input value={edit.no_sk} onChange={(event) => setEdit((state) => ({ ...state, no_sk: event.target.value }))} />
           </label>
-          {ro.id_proyek && <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">Periode SK mengikuti proyek: {formatDate(ro.mulai_sk)} – {formatDate(ro.berakhir_sk)}. Ubah periode dari detail proyek.</p>}
+          {ro.id_proyek && <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">Periode kontrak mengikuti proyek: {formatDate(ro.mulai_kontrak)} – {formatDate(ro.berakhir_kontrak)}. Ubah periode dari detail proyek.</p>}
         </div>
       </Modal>
       <Modal

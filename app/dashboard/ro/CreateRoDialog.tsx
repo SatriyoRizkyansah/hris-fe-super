@@ -261,9 +261,9 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
         </label>
         {selectedProject && (
           <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">
-            Periode SK proyek: {selectedProject.mulai_sk ? formatDate(String(selectedProject.mulai_sk)) : "Belum diatur"}
+            Periode kontrak proyek: {selectedProject.mulai_kontrak ? formatDate(String(selectedProject.mulai_kontrak)) : "Belum diatur"}
             {" – "}
-            {selectedProject.berakhir_sk ? formatDate(String(selectedProject.berakhir_sk)) : "Belum diatur"}
+            {selectedProject.berakhir_kontrak ? formatDate(String(selectedProject.berakhir_kontrak)) : "Belum diatur"}
           </p>
         )}
       </div>

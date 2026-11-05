@@ -99,8 +99,8 @@ export function buildProjectReportHtml(input: {
   const units = unique(project.unit_terlibat?.map((unit) => unit.nama_unit) ?? ros.map((ro) => ro.nama_unit_koordinator));
   const coordinatorNames = units.map((unit) => unit.replace(/^koordinator\s+/i, "")).filter(Boolean);
   const evaluatorTitle = coordinatorNames.length ? `Koordinator ${coordinatorNames.join(" · ")}` : "Koordinator";
-  const periodStart = project.mulai_proyek ?? ros.map((ro) => ro.mulai_sk).find(Boolean);
-  const periodEnd = project.estimasi_selesai_proyek ?? ros.map((ro) => ro.berakhir_sk).find(Boolean);
+  const periodStart = project.mulai_kontrak ?? ros.map((ro) => ro.mulai_kontrak).find(Boolean);
+  const periodEnd = project.berakhir_kontrak ?? ros.map((ro) => ro.berakhir_kontrak).find(Boolean);
   const fileName = valueText(project.file_rab || ros.find((ro) => ro.file_rab)?.file_rab, "Rekap aplikasi").split(/[\\/]/).pop() || "Rekap aplikasi";
 
   const summaryRows = [...byMak.values()].map((group, index) => `<tr>

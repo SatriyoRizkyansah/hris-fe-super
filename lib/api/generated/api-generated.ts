@@ -270,12 +270,10 @@ export interface ProyekItemDto {
   total_realisasi_ro?: number;
   total_komitmen_ro?: number;
   total_sisa_hak_belanja_ro?: number;
-  mulai_proyek?: object | null;
-  estimasi_selesai_proyek?: object | null;
-  /** Tanggal mulai SK proyek, diwariskan oleh seluruh RO */
-  mulai_sk?: object | null;
-  /** Tanggal akhir SK proyek, diwariskan oleh seluruh RO */
-  berakhir_sk?: object | null;
+  /** Tanggal mulai kontrak proyek */
+  mulai_kontrak?: object | null;
+  /** Tanggal akhir kontrak proyek */
+  berakhir_kontrak?: object | null;
   /** @format date-time */
   created_at?: string;
   /** @format date-time */
@@ -331,26 +329,10 @@ export interface CreateProyekDto {
   nama_proyek: string;
   /** @example 2026 */
   tahun_fiscal: number;
-  /**
-   * Tanggal mulai proyek
-   * @example "2026-01-01"
-   */
-  mulai_proyek?: string;
-  /**
-   * Estimasi tanggal selesai proyek
-   * @example "2026-12-31"
-   */
-  estimasi_selesai_proyek?: string;
-  /**
-   * Tanggal mulai SK yang berlaku untuk seluruh RO proyek
-   * @example "2026-01-01"
-   */
-  mulai_sk?: string;
-  /**
-   * Tanggal akhir SK yang berlaku untuk seluruh RO proyek
-   * @example "2026-12-31"
-   */
-  berakhir_sk?: string;
+  /** Tanggal mulai kontrak proyek yang berlaku untuk seluruh RO */
+  mulai_kontrak?: string;
+  /** Tanggal akhir kontrak proyek yang berlaku untuk seluruh RO */
+  berakhir_kontrak?: string;
   /** @example "APBN 2026" */
   sumber_pendanaan?: string;
   /** @example "Nama Penanggung Jawab 1" */
@@ -393,9 +375,9 @@ export interface UpdateProyekDto {
   /** @example 2026 */
   tahun_fiscal?: number;
   /** @example "2026-01-01" */
-  mulai_sk?: string;
+  mulai_kontrak?: string;
   /** @example "2026-12-31" */
-  berakhir_sk?: string;
+  berakhir_kontrak?: string;
   sumber_pendanaan?: string;
   pj_1?: string;
   pj_2?: string;
@@ -470,8 +452,8 @@ export interface RoItemDto {
   file_rab?: object | null;
   status_ro?: string;
   no_sk?: object | null;
-  mulai_sk?: object | null;
-  berakhir_sk?: object | null;
+  mulai_kontrak?: object | null;
+  berakhir_kontrak?: object | null;
   /** @format date-time */
   created_at?: string;
   /** @format date-time */
@@ -532,8 +514,8 @@ export interface RoDetailDto {
   file_rab?: object | null;
   status_ro?: string;
   no_sk?: object | null;
-  mulai_sk?: object | null;
-  berakhir_sk?: object | null;
+  mulai_kontrak?: object | null;
+  berakhir_kontrak?: object | null;
   /** @format date-time */
   created_at?: string;
   /** @format date-time */

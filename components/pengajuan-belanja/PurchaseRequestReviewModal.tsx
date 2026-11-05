@@ -97,7 +97,7 @@ export function PurchaseRequestReviewModal({
                     { label: "Bukti kuitansi", path: reviewRequest.file_bukti },
                     { label: "RAB RO", path: reviewRequest.ro?.file_rab },
                     { label: "RAB proyek", path: reviewProject.file_rab },
-                    { label: "SK proyek", path: reviewProject.file_sk },
+                    { label: "Kontrak Proyek", path: reviewProject.file_sk },
                   ]}
                 />
               </div>
