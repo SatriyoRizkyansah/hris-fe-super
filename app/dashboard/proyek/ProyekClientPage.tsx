@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, Eye, LoaderCircle, Plus, Trash2, FilePenLine } from "lucide-react";
+import { Check, Eye, LoaderCircle, Plus, Trash2, FilePenLine, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
-import { envelopeRows, unwrapEnvelope, apiErrorMessage, uploadHrisFile } from "@/lib/hris/api";
+import { envelopeRows, unwrapEnvelope, apiErrorMessage, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { CreateProyekDto, ProyekItemDto } from "@/lib/api/generated/api-generated";
@@ -31,12 +31,17 @@ type LegacyRoDraft = RoDraft & { nomor_job?: string };
 type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; jobs?: JobDraft[]; ros?: LegacyRoDraft[]; terms: TerminDraft[]; unitPengusulId?: string; unitKolaborasiIds?: string[] };
 const DRAFTS_STORAGE_KEY = "lemigas:proyek:drafts:v1";
 const PROJECT_STATUS_FILTERS = [
-  { label: "Menunggu validasi Koordinator Umum", value: "MENUNGGU_VALIDASI_UMUM" },
+  { label: "Menunggu pemeriksaan Koordinator Layanan", value: "MENUNGGU_VALIDASI_LAYANAN" },
   { label: "Menunggu notulen", value: "MENUNGGU_NOTULEN" },
+  { label: "Menunggu validasi Bagian Umum", value: "MENUNGGU_VALIDASI_UMUM" },
   { label: "Menunggu persetujuan Pimpinan", value: "MENUNGGU_VALIDASI_PIMPINAN" },
+  { label: "Perlu revisi Koordinator Layanan", value: "PERLU_REVISI_LAYANAN" },
+  { label: "Perlu revisi Bagian Umum", value: "PERLU_REVISI_UMUM" },
+  { label: "Perlu revisi Pimpinan", value: "PERLU_REVISI_PIMPINAN" },
   { label: "Berjalan · Disetujui Pimpinan", value: "DISETUJUI_PIMPINAN" },
   { label: "Selesai", value: "SELESAI" },
-  { label: "Ditolak Koordinator Umum", value: "DITOLAK_UMUM" },
+  { label: "Ditolak Koordinator Layanan", value: "DITOLAK_LAYANAN" },
+  { label: "Ditolak Bagian Umum", value: "DITOLAK_UMUM" },
   { label: "Ditolak Pimpinan", value: "DITOLAK_PIMPINAN" },
 ];
 const currentYear = new Date().getFullYear();
@@ -128,6 +133,7 @@ export default function ProyekClientPage() {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [validationProject, setValidationProject] = useState<ProyekItemDto | null>(null);
   const [validationApproved, setValidationApproved] = useState(true);
+  const [validationRevision, setValidationRevision] = useState(false);
   const [validationNote, setValidationNote] = useState("");
   const [validationError, setValidationError] = useState("");
 
@@ -166,10 +172,10 @@ export default function ProyekClientPage() {
   const units = use_query({
     tag: "masterUnitKerja",
     method: "list",
-    params: { tipe: "KOORDINATOR" },
+    params: { purpose: "project-collaborators" },
     queryFn: async () => {
       setBrowserToken();
-      return apiData(browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData({ tipe_unit: "KOORDINATOR", limit: 200 }, { format: "json" }));
+      return requestHrisApi("/api/unit-kerja/kolaborator-proyek?limit=200", { method: "GET" });
     },
   });
   const makLookup = use_query({
@@ -194,7 +200,10 @@ export default function ProyekClientPage() {
   const makOptions = responseRows<MakOption>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const rekeningOptions = responseRows<AccountOption>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const currentUnit = unitOptions.find((unit) => unit.id === identity.unitKerjaId);
-  const isUmumValidator = identity.role === "superadmin" || (identity.role === "koordinator" && String(currentUnit?.kode_unit ?? "") === "ORG-UMUM");
+  const serviceUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_LAYANAN ?? "").trim().toLocaleUpperCase("id-ID");
+  const umumUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_KABAG ?? "").trim().toLocaleUpperCase("id-ID");
+  const isServiceValidator = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(serviceUnitCode) && String(currentUnit?.kode_unit ?? "").trim().toLocaleUpperCase("id-ID") === serviceUnitCode);
+  const isUmumValidator = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(umumUnitCode) && String(currentUnit?.kode_unit ?? "").trim().toLocaleUpperCase("id-ID") === umumUnitCode);
   const isPimpinanValidator = identity.role === "superadmin" || identity.role === "pimpinan";
   const makComboboxOptions = makOptions.map((option) => ({ value: option.id, label: [option.kode_mak, option.nama_mak, option.tipe_akun ? `(${option.tipe_akun})` : ""].filter(Boolean).join(" — ") }));
   const unitComboboxOptions = unitOptions.map((option) => ({ value: option.id, label: [option.kode_unit, option.nama_unit].filter(Boolean).join(" — ") }));
@@ -206,10 +215,19 @@ export default function ProyekClientPage() {
   const validation = use_mutation({
     tag: "masterProyek",
     method: "workflow",
-    mutationFn: async ({ projectId, stage, approved, note }: { projectId: string; stage: "umum" | "pimpinan"; approved: boolean; note?: string }) => {
+    mutationFn: async ({ projectId, stage, approved, revision, note }: { projectId: string; stage: "layanan" | "umum" | "pimpinan"; approved: boolean; revision: boolean; note?: string }) => {
       setBrowserToken();
-      const payload = { disetujui: approved, catatan: note };
-      return stage === "umum" ? browserApi.masterProyek.proyekValidasiUmumControllerValidasiUmum(projectId, payload) : browserApi.masterProyek.proyekValidasiPimpinanControllerValidasiPimpinan(projectId, payload);
+      return requestHrisApi(`/api/proyek/${projectId}/validasi-${stage}`, {
+        method: "POST",
+        body: JSON.stringify({ disetujui: approved, minta_revisi: revision, catatan: note }),
+      });
+    },
+    successMessage: (_response, variables) => {
+      const stageLabel = variables.stage === "layanan" ? "Koordinator Layanan" : variables.stage === "umum" ? "Bagian Umum" : "Pimpinan";
+      if (variables.revision) return `Permintaan revisi proyek berhasil dikirim ke ${stageLabel}.`;
+      return variables.approved
+        ? `Proyek berhasil disetujui pada tahap ${stageLabel}.`
+        : `Pengajuan proyek berhasil ditolak pada tahap ${stageLabel}.`;
     },
     invalidateKeys: [["api", "masterProyek"]],
   });
@@ -232,19 +250,21 @@ export default function ProyekClientPage() {
       },
     },
     {
-      label: isUmumValidator ? "Tinjau antrean" : "Lihat antrean",
-      onClick: () => showProjectQueue("MENUNGGU_VALIDASI_UMUM"),
+      label: isServiceValidator ? "Tinjau rencana" : "Lihat antrean",
+      onClick: () => showProjectQueue("MENUNGGU_VALIDASI_LAYANAN"),
     },
     {
-      label: "Lengkapi notulen",
+      label: isServiceValidator ? "Unggah notulen" : "Lihat antrean",
       onClick: () => showProjectQueue("MENUNGGU_NOTULEN"),
+    },
+    {
+      label: isUmumValidator ? "Tinjau anggaran" : "Lihat antrean",
+      onClick: () => showProjectQueue("MENUNGGU_VALIDASI_UMUM"),
     },
     {
       label: isPimpinanValidator ? "Tinjau persetujuan" : "Lihat antrean",
       onClick: () => showProjectQueue("MENUNGGU_VALIDASI_PIMPINAN"),
     },
-    { label: "Buka daftar RO", href: "/dashboard/ro" },
-    { label: "Pilih proyek aktif", onClick: () => showProjectQueue("DISETUJUI_PIMPINAN") },
   ];
 
   const create = use_mutation({
@@ -471,14 +491,15 @@ export default function ProyekClientPage() {
 
   async function submitValidation() {
     if (!validationProject) return;
-    if (!validationApproved && !validationNote.trim()) {
-      setValidationError("Catatan wajib diisi saat menolak pengajuan.");
+    if ((!validationApproved || validationRevision) && !validationNote.trim()) {
+      setValidationError("Catatan wajib diisi saat menolak atau meminta revisi.");
       return;
     }
-    const stage = validationProject.status_proyek === "MENUNGGU_VALIDASI_UMUM" ? "umum" : "pimpinan";
+    const validationStatus = String(validationProject.status_proyek);
+    const stage = validationStatus === "MENUNGGU_VALIDASI_LAYANAN" ? "layanan" : validationStatus === "MENUNGGU_VALIDASI_UMUM" ? "umum" : "pimpinan";
     setValidationError("");
     try {
-      await validation.mutateAsync({ projectId: validationProject.id, stage, approved: validationApproved, note: validationNote.trim() || undefined });
+      await validation.mutateAsync({ projectId: validationProject.id, stage, approved: validationApproved, revision: validationRevision, note: validationNote.trim() || undefined });
       setValidationProject(null);
     } catch (error) {
       setValidationError(apiErrorMessage(error, "Validasi proyek gagal."));
@@ -680,17 +701,26 @@ export default function ProyekClientPage() {
                 header: "Aksi",
                 className: "min-w-[14rem] whitespace-nowrap text-right",
                 render: (row: ProyekItemDto) => {
-                  const canValidateUmum = isUmumValidator && row.status_proyek === "MENUNGGU_VALIDASI_UMUM";
-                  const canValidatePimpinan = isPimpinanValidator && row.status_proyek === "MENUNGGU_VALIDASI_PIMPINAN";
+                  const rowStatus = String(row.status_proyek);
+                  const canValidateLayanan = isServiceValidator && rowStatus === "MENUNGGU_VALIDASI_LAYANAN";
+                  const canValidateUmum = isUmumValidator && rowStatus === "MENUNGGU_VALIDASI_UMUM";
+                  const canValidatePimpinan = isPimpinanValidator && rowStatus === "MENUNGGU_VALIDASI_PIMPINAN";
+                  const canUploadMinutes = isServiceValidator && rowStatus === "MENUNGGU_NOTULEN";
                   return (
                     <div className="flex justify-end gap-1">
-                      {(canValidateUmum || canValidatePimpinan) && (
+                      {canUploadMinutes && (
+                        <Button size="sm" variant="outline" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
+                          <Upload size={15} /> Notulen
+                        </Button>
+                      )}
+                      {(canValidateLayanan || canValidateUmum || canValidatePimpinan) && (
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => {
                             setValidationProject(row);
                             setValidationApproved(true);
+                            setValidationRevision(false);
                             setValidationNote("");
                             setValidationError("");
                           }}
@@ -748,7 +778,7 @@ export default function ProyekClientPage() {
         onClose={() => {
           if (!validation.isPending) setValidationProject(null);
         }}
-        title="Validasi Pengajuan Proyek"
+        title={String(validationProject?.status_proyek) === "MENUNGGU_VALIDASI_LAYANAN" ? "Pemeriksaan Koordinator Layanan" : String(validationProject?.status_proyek) === "MENUNGGU_VALIDASI_UMUM" ? "Validasi Bagian Umum" : "Validasi Pengajuan Proyek"}
         size="sm"
         bodyClassName="space-y-4"
         footer={
@@ -756,9 +786,9 @@ export default function ProyekClientPage() {
             <Button variant="outline" disabled={validation.isPending} onClick={() => setValidationProject(null)}>
               Batal
             </Button>
-            <Button disabled={validation.isPending || (!validationApproved && !validationNote.trim())} variant={validationApproved ? "default" : "destructive"} onClick={submitValidation}>
+            <Button disabled={validation.isPending || ((!validationApproved || validationRevision) && !validationNote.trim())} variant={validationApproved ? "default" : "destructive"} onClick={submitValidation}>
               {validation.isPending && <LoaderCircle className="animate-spin" size={16} />}
-              {validationApproved ? "Setujui Pengajuan" : "Tolak Pengajuan"}
+              {validationApproved ? "Setujui dan Lanjutkan" : validationRevision ? "Minta Revisi" : "Tolak Pengajuan"}
             </Button>
           </>
         }
@@ -772,13 +802,14 @@ export default function ProyekClientPage() {
           </div>
           <fieldset className="grid gap-2">
             <legend className="mb-1 text-sm font-medium">Keputusan validasi</legend>
-            <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${validationApproved ? "border-primary bg-primary/5" : ""}`}>
+            <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${validationApproved && !validationRevision ? "border-primary bg-primary/5" : ""}`}>
               <input
                 type="radio"
                 name="project-validation-decision"
                 checked={validationApproved}
                 onChange={() => {
                   setValidationApproved(true);
+                  setValidationRevision(false);
                   setValidationError("");
                 }}
                 className="mt-1 accent-primary"
@@ -788,8 +819,15 @@ export default function ProyekClientPage() {
                 <span className="block text-xs text-muted-foreground">Lanjutkan pengajuan ke proses berikutnya.</span>
               </span>
             </label>
-            <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${!validationApproved ? "border-destructive bg-destructive/5" : ""}`}>
-              <input type="radio" name="project-validation-decision" checked={!validationApproved} onChange={() => setValidationApproved(false)} className="mt-1 accent-destructive" />
+            <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${validationRevision ? "border-amber-400 bg-amber-50" : ""}`}>
+              <input type="radio" name="project-validation-decision" checked={validationRevision} onChange={() => { setValidationApproved(false); setValidationRevision(true); setValidationError(""); }} className="mt-1 accent-amber-600" />
+              <span>
+                <span className="block text-sm font-medium">Minta revisi</span>
+                <span className="block text-xs text-muted-foreground">Kembalikan kepada pemilik untuk diperbaiki; riwayat versi tetap tersimpan.</span>
+              </span>
+            </label>
+            <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${!validationApproved && !validationRevision ? "border-destructive bg-destructive/5" : ""}`}>
+              <input type="radio" name="project-validation-decision" checked={!validationApproved && !validationRevision} onChange={() => { setValidationApproved(false); setValidationRevision(false); setValidationError(""); }} className="mt-1 accent-destructive" />
               <span>
                 <span className="block text-sm font-medium">Tolak</span>
                 <span className="block text-xs text-muted-foreground">Pengajuan dikembalikan dengan catatan.</span>
@@ -797,12 +835,12 @@ export default function ProyekClientPage() {
             </label>
           </fieldset>
           <label className="grid gap-1.5 text-sm font-medium">
-            Catatan {!validationApproved && <span className="text-destructive">(wajib saat menolak)</span>}
+            Catatan {(!validationApproved || validationRevision) && <span className="text-destructive">(wajib)</span>}
             <textarea
               value={validationNote}
               onChange={(event) => setValidationNote(event.target.value)}
               rows={3}
-              placeholder={validationApproved ? "Catatan tambahan (opsional)" : "Tuliskan alasan penolakan"}
+              placeholder={validationApproved ? "Catatan tambahan (opsional)" : validationRevision ? "Tuliskan bagian yang perlu diperbaiki" : "Tuliskan alasan penolakan"}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             />
           </label>

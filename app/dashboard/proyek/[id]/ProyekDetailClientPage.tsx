@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Check, Clock3, FileClock, LoaderCircle, Upload } from "lucide-react";
+import { ArrowLeft, Check, Clock3, FileClock, LoaderCircle, Pencil, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,6 +14,7 @@ import { ProjectFinalReportButton } from "@/components/proyek/ProjectFinalReport
 import { EmptyData } from "@/components/loading/EmptyData";
 import { ProjectFinancialSections } from "@/components/proyek/ProjectFinancialSections";
 import { ProjectRoSection } from "@/components/proyek/ProjectRoSection";
+import { ProjectApplicationModal } from "@/components/proyek/ProjectApplicationModal";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
@@ -21,10 +22,12 @@ import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, envelopeData, envelopeRows, requestHrisApi, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
+import type { JobDraft, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
 import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
 
-type Workflow = "umum" | "pimpinan" | "notulen" | "bast" | null;
+type Workflow = "layanan" | "umum" | "pimpinan" | "notulen" | "bast" | null;
 type Row = Record<string, unknown>;
+type ProjectRevisionRow = { id: string; nomor_revisi: number; tahap: string; alasan: string; diminta_oleh_id: string; diminta_pada: string; diajukan_ulang_oleh_id?: string | null; diajukan_ulang_pada?: string | null };
 type ProjectExtensionRow = {
   id: string;
   berakhir_sk_sebelumnya: string;
@@ -43,7 +46,22 @@ type ProjectDetail = ProyekItemDto & {
   selesai_oleh_id?: string | null;
   selesai_pada?: string | null;
   perpanjangan_list?: ProjectExtensionRow[];
+  alur_proyek_version?: number;
+  riwayat_revisi?: ProjectRevisionRow[];
+  catatan_layanan?: string | null;
+  divalidasi_layanan_pada?: string | null;
+  job_list?: Array<{ id: string; nomor_job: string; ro_list: Array<{ id: string; nama_ro: string; mak_id?: string | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }> }>;
+  ro_list?: Array<{ id: string; job_proyek_id?: string | null; nomor_job?: string | null; nama_ro: string; mak_id?: string | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }>;
+  termin_list?: Array<{ id: string; nomor_termin: number; persentase: number; nilai_termin: number; has_invoice?: boolean }>;
+  unit_terlibat?: Array<{ id: string; peran?: string }>;
 };
+type LookupRow = { id: string; [key: string]: unknown };
+type Option = { value: string; label: string };
+const blankProjectForm = (): ProjectForm => ({ kode_proyek: "", nama_proyek: "", tahun_fiscal: String(new Date().getFullYear()), mulai_kontrak: "", berakhir_kontrak: "", sumber_pendanaan: "", nama_client: "", no_kontrak: "", pj_1: "", pj_2: "", nilai_kontrak: "", total_direct_cost: "", total_margin: "" });
+const blankRevisionRo = (unitId = ""): RoDraft => ({ key: crypto.randomUUID(), nama_ro: "", mak_id: "", id_unit_koordinator: unitId, rekening_id: "", plafon: 0, plafonText: "", detailMode: "later", no_kontrak: "", pj: "", unit_kolaborasi_ids: [] });
+const blankRevisionJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nomor_job: "", ros: [blankRevisionRo(unitId)] });
+const blankRevisionTerm = (percentage = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(percentage) || 0, persentaseText: percentage });
+const normalizeUnitId = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("en-US");
 const text = (value: unknown, fallback = "—") => (value === null || value === undefined || value === "" ? fallback : String(value));
 const financeOf = (row: Row): Row => (row.balance && typeof row.balance === "object" ? (row.balance as Row) : {});
 const dateKey = (value: unknown) => String(value ?? "").slice(0, 10);
@@ -74,6 +92,16 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const identity = useMemo(browserIdentity, []);
   const [workflow, setWorkflow] = useState<Workflow>(null);
   const [approved, setApproved] = useState(true);
+  const [requestRevision, setRequestRevision] = useState(false);
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  const [revisionForm, setRevisionForm] = useState<ProjectForm>(blankProjectForm);
+  const [revisionJobs, setRevisionJobs] = useState<JobDraft[]>([blankRevisionJob()]);
+  const [revisionLeadUnitId, setRevisionLeadUnitId] = useState("");
+  const [revisionCollaboratorIds, setRevisionCollaboratorIds] = useState<string[]>([]);
+  const [revisionTerms, setRevisionTerms] = useState<TerminDraft[]>([blankRevisionTerm("100")]);
+  const [revisionContractFile, setRevisionContractFile] = useState<File | null>(null);
+  const [revisionRabFile, setRevisionRabFile] = useState<File | null>(null);
+  const [revisionError, setRevisionError] = useState("");
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [actionError, setActionError] = useState("");
@@ -139,11 +167,28 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const units = use_query({
     tag: "masterUnitKerja",
     method: "list",
-    params: { enabled: Boolean(identity.unitKerjaId) },
-    enabled: Boolean(identity.unitKerjaId),
+    params: { purpose: "project-collaborators" },
     queryFn: async () => {
       setBrowserToken();
-      return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData({ limit: 200 });
+      return requestHrisApi("/api/unit-kerja/kolaborator-proyek?limit=200", { method: "GET" });
+    },
+  });
+  const makLookup = use_query({
+    tag: "masterMak",
+    method: "list",
+    params: undefined,
+    queryFn: async () => {
+      setBrowserToken();
+      return browserApi.masterMak.masterMakFindAllControllerFindAll({ format: "json" });
+    },
+  });
+  const rekeningLookup = use_query({
+    tag: "masterRekeningBank",
+    method: "list",
+    params: undefined,
+    queryFn: async () => {
+      setBrowserToken();
+      return browserApi.masterRekeningBank.masterRekeningFindAllControllerFindAll({ format: "json" });
     },
   });
   const project = envelopeData<ProjectDetail>(detail.data);
@@ -164,8 +209,33 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const distributionRows = envelopeRows<Row>(distribution.data);
   const settingsData = envelopeData<Row>(settings.data);
   const settingRows = Array.isArray(settingsData?.list) ? (settingsData.list as Row[]) : [];
-  const currentUnit = envelopeRows<Row>(units.data).find((unit) => String(unit.id) === identity.unitKerjaId);
-  const isUmum = identity.role === "superadmin" || (identity.role === "koordinator" && String(currentUnit?.kode_unit ?? coordinatorCode) === "ORG-UMUM");
+  const unitOptions = envelopeRows<LookupRow>(units.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
+  const makOptions = envelopeRows<LookupRow>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
+  const rekeningOptions = envelopeRows<LookupRow>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
+  const currentUnit = unitOptions.find((unit) => String(unit.id) === identity.unitKerjaId);
+  const unitComboboxOptions: Option[] = unitOptions.map((unit) => ({ value: unit.id, label: [unit.kode_unit, unit.nama_unit].filter(Boolean).join(" — ") }));
+  const makComboboxOptions: Option[] = makOptions.map((mak) => ({ value: mak.id, label: [mak.kode_mak, mak.nama_mak, mak.tipe_akun ? `(${mak.tipe_akun})` : ""].filter(Boolean).join(" — ") }));
+  const rekeningComboboxOptions: Option[] = rekeningOptions.map((account) => ({ value: account.id, label: [account.nama_bank, account.nama_rekening, account.nomor_rekening ? `(${account.nomor_rekening})` : ""].filter(Boolean).join(" — ") }));
+  const revisionProjectUnitIds = [...new Set([revisionLeadUnitId, ...revisionCollaboratorIds].filter(Boolean))];
+  const roUnitComboboxOptions = unitComboboxOptions.filter((option) => revisionProjectUnitIds.includes(option.value));
+  const availableCollaboratorOptions = unitComboboxOptions.filter((option) => option.value !== revisionLeadUnitId && !revisionCollaboratorIds.includes(option.value));
+  const revisionRoRows = revisionJobs.flatMap((job) => job.ros);
+  const revisionNumeric = (key: "nilai_kontrak" | "total_direct_cost" | "total_margin") => Number(revisionForm[key]) || 0;
+  const revisionContractOk = revisionNumeric("nilai_kontrak") === revisionNumeric("total_direct_cost") + revisionNumeric("total_margin");
+  const revisionRoTotal = revisionRoRows.reduce((total, row) => total + (Number(row.plafonText) || 0), 0);
+  const revisionTermsTotal = revisionTerms.reduce((total, term) => total + (Number(term.persentaseText) || 0), 0);
+  const assignedRoUnitIds = new Set(revisionRoRows.flatMap((row) => [row.id_unit_koordinator, ...(row.unit_kolaborasi_ids ?? [])]).map(normalizeUnitId).filter(Boolean));
+  const revisionCollaboratorsAssigned = revisionCollaboratorIds.every((unitId) => assignedRoUnitIds.has(normalizeUnitId(unitId)));
+  const revisionJobNumbers = revisionJobs.map((job) => job.nomor_job.trim().toLocaleUpperCase("id-ID")).filter(Boolean);
+  const revisionJobsUnique = new Set(revisionJobNumbers).size === revisionJobNumbers.length;
+  const revisionAllocationsValid = revisionJobs.length > 0 && revisionJobs.every((job) => job.nomor_job.trim() && job.ros.length > 0 && job.ros.every((row) => row.nama_ro.trim() && row.mak_id && revisionProjectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) && Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()) && (row.unit_kolaborasi_ids ?? []).every((unitId) => revisionProjectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator))));
+  const revisionContractDatesRequired = revisionRoRows.some((row) => row.detailMode === "detail");
+  const revisionContractDatesValid = (!revisionForm.mulai_kontrak && !revisionForm.berakhir_kontrak && !revisionContractDatesRequired) || Boolean(revisionForm.mulai_kontrak && revisionForm.berakhir_kontrak && revisionForm.berakhir_kontrak >= revisionForm.mulai_kontrak);
+  const serviceUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_LAYANAN ?? "").trim().toLocaleUpperCase("id-ID");
+  const umumUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_KABAG ?? "").trim().toLocaleUpperCase("id-ID");
+  const currentUnitCode = String(currentUnit?.kode_unit ?? coordinatorCode).trim().toLocaleUpperCase("id-ID");
+  const isLayanan = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(serviceUnitCode) && currentUnitCode === serviceUnitCode);
+  const isUmum = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(umumUnitCode) && currentUnitCode === umumUnitCode);
   const isSubmitter = identity.role === "superadmin" || (identity.role === "koordinator" && identity.userId === String(project?.diajukan_oleh_id ?? ""));
   const isKarwas = identity.role === "keu_karwas" || identity.role === "superadmin";
   const extensionRows = project?.perpanjangan_list ?? [];
@@ -191,16 +261,136 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         if (!file) throw new Error("Pilih dokumen BAST dalam format PDF.");
         return uploadHrisFile(`/api/proyek/${id}/bast`, file);
       }
-      if (!workflow) throw new Error("Aksi workflow tidak dipilih.");
-      if (!approved && !note.trim()) throw new Error("Catatan penolakan wajib diisi.");
-      return workflow === "umum"
-        ? browserApi.masterProyek.proyekValidasiUmumControllerValidasiUmum(id, { disetujui: approved, catatan: note.trim() || undefined })
-        : browserApi.masterProyek.proyekValidasiPimpinanControllerValidasiPimpinan(id, { disetujui: approved, catatan: note.trim() || undefined });
+       if (!workflow) throw new Error("Aksi workflow tidak dipilih.");
+       if ((requestRevision || !approved) && !note.trim()) throw new Error("Catatan wajib diisi saat meminta revisi atau menolak.");
+       return requestHrisApi(`/api/proyek/${id}/validasi-${workflow}`, {
+         method: "POST",
+         body: JSON.stringify({ disetujui: approved, minta_revisi: requestRevision, catatan: note.trim() || undefined }),
+       });
     },
     onSuccess: async () => {
       await invalidate();
       setWorkflow(null);
     },
+    successMessage: () => {
+      if (workflow === "notulen") return "Notulen proyek berhasil diunggah.";
+      if (workflow === "bast") return "Dokumen BAST berhasil diunggah. Proyek ditandai selesai.";
+      if (requestRevision) return "Permintaan revisi proyek berhasil dikirim.";
+      if (!approved) return "Pengajuan proyek berhasil ditolak.";
+      const stageLabel = workflow === "layanan" ? "Koordinator Layanan" : workflow === "umum" ? "Bagian Umum" : "Pimpinan";
+      return `Proyek berhasil disetujui pada tahap ${stageLabel}.`;
+    },
+  });
+  function updateRevisionRo(key: string, field: keyof RoDraft, value: string) {
+    setRevisionJobs((current) => current.map((job) => ({
+      ...job,
+      ros: job.ros.map((row) => row.key !== key ? row : {
+        ...row,
+        [field]: value,
+        ...(field === "id_unit_koordinator" ? { unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((unitId) => normalizeUnitId(unitId) !== normalizeUnitId(value)) } : {}),
+      }),
+    })));
+  }
+  function updateRevisionJob(key: string, nomor_job: string) {
+    setRevisionJobs((current) => current.map((job) => job.key === key ? { ...job, nomor_job } : job));
+  }
+  function addRevisionJob() { setRevisionJobs((current) => [...current, blankRevisionJob(revisionLeadUnitId)]); }
+  function removeRevisionJob(key: string) { setRevisionJobs((current) => current.length > 1 ? current.filter((job) => job.key !== key) : current); }
+  function addRevisionRo(jobKey: string) { setRevisionJobs((current) => current.map((job) => job.key === jobKey ? { ...job, ros: [...job.ros, blankRevisionRo(revisionLeadUnitId)] } : job)); }
+  function removeRevisionRo(key: string) { setRevisionJobs((current) => current.map((job) => job.ros.length > 1 ? { ...job, ros: job.ros.filter((row) => row.key !== key) } : job)); }
+  function addRevisionCollaborator(unitId: string) {
+    if (!unitId || normalizeUnitId(unitId) === normalizeUnitId(revisionLeadUnitId) || revisionCollaboratorIds.includes(unitId)) return;
+    setRevisionCollaboratorIds((current) => [...current, unitId]);
+  }
+  function removeRevisionCollaborator(unitId: string) {
+    setRevisionCollaboratorIds((current) => current.filter((candidate) => candidate !== unitId));
+    setRevisionJobs((current) => current.map((job) => ({ ...job, ros: job.ros.map((row) => ({
+      ...row,
+      ...(normalizeUnitId(row.id_unit_koordinator) === normalizeUnitId(unitId) ? { id_unit_koordinator: revisionLeadUnitId } : {}),
+      unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((candidate) => normalizeUnitId(candidate) !== normalizeUnitId(unitId)),
+    })) })));
+  }
+  function changeRevisionLeadUnit(unitId: string) {
+    const previous = revisionLeadUnitId;
+    setRevisionLeadUnitId(unitId);
+    setRevisionCollaboratorIds((current) => {
+      const next = current.filter((candidate) => normalizeUnitId(candidate) !== normalizeUnitId(unitId));
+      if (previous && normalizeUnitId(previous) !== normalizeUnitId(unitId) && revisionRoRows.some((row) => normalizeUnitId(row.id_unit_koordinator) === normalizeUnitId(previous)) && !next.some((candidate) => normalizeUnitId(candidate) === normalizeUnitId(previous))) next.push(previous);
+      return next;
+    });
+    setRevisionJobs((current) => current.map((job) => ({ ...job, ros: job.ros.map((row) => row.id_unit_koordinator ? row : { ...row, id_unit_koordinator: unitId }) })));
+  }
+  function addRevisionRoCollaborator(roKey: string, unitId: string) {
+    setRevisionJobs((current) => current.map((job) => ({ ...job, ros: job.ros.map((row) => {
+      if (row.key !== roKey || normalizeUnitId(row.id_unit_koordinator) === normalizeUnitId(unitId)) return row;
+      const ids = row.unit_kolaborasi_ids ?? [];
+      return ids.some((candidate) => normalizeUnitId(candidate) === normalizeUnitId(unitId)) ? row : { ...row, unit_kolaborasi_ids: [...ids, unitId] };
+    }) })));
+  }
+  function removeRevisionRoCollaborator(roKey: string, unitId: string) {
+    setRevisionJobs((current) => current.map((job) => ({ ...job, ros: job.ros.map((row) => row.key === roKey ? { ...row, unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((candidate) => normalizeUnitId(candidate) !== normalizeUnitId(unitId)) } : row) })));
+  }
+  function updateRevisionTerm(key: string, value: string) { setRevisionTerms((current) => current.map((term) => term.key === key ? { ...term, persentaseText: value } : term)); }
+  function addRevisionTerm() { setRevisionTerms((current) => [...current, blankRevisionTerm()]); }
+  const revisionMutation = use_mutation({
+    tag: "masterProyek",
+    method: "revision-resubmit",
+    mutationFn: async () => {
+      setBrowserToken();
+      if (revisionContractFile) {
+        await uploadHrisFile(`/api/proyek/${id}/sk`, revisionContractFile);
+      }
+      if (revisionRabFile) {
+        await uploadHrisFile(`/api/proyek/${id}/rab`, revisionRabFile);
+      }
+      return requestHrisApi(`/api/proyek/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          kode_proyek: revisionForm.kode_proyek.trim(),
+          nama_proyek: revisionForm.nama_proyek.trim(),
+          tahun_fiscal: Number(revisionForm.tahun_fiscal),
+          nama_client: revisionForm.nama_client.trim() || null,
+          sumber_pendanaan: revisionForm.sumber_pendanaan.trim() || null,
+          no_kontrak: revisionForm.no_kontrak.trim() || null,
+          pj_1: revisionForm.pj_1.trim() || null,
+          pj_2: revisionForm.pj_2.trim() || null,
+          mulai_kontrak: revisionForm.mulai_kontrak || null,
+          berakhir_kontrak: revisionForm.berakhir_kontrak || null,
+          nilai_kontrak: revisionNumeric("nilai_kontrak"),
+          total_direct_cost: revisionNumeric("total_direct_cost"),
+          total_margin: revisionNumeric("total_margin"),
+          unit_pengusul_id: revisionLeadUnitId,
+          unit_kolaborasi_ids: revisionCollaboratorIds,
+          job_list: revisionJobs.map((job) => ({
+            ...(job.id ? { id: job.id } : {}),
+            nomor_job: job.nomor_job.trim(),
+            ro_list: job.ros.map((row) => ({
+              ...(row.id ? { id: row.id } : {}),
+              nama_ro: row.nama_ro.trim(),
+              mak_id: row.mak_id,
+              id_unit_koordinator: row.id_unit_koordinator,
+              rekening_id: row.rekening_id || null,
+              plafon: Number(row.plafonText),
+              unit_kolaborasi_ids: row.unit_kolaborasi_ids ?? [],
+              pj: row.detailMode === "detail" ? row.pj.trim() : "",
+            })),
+          })),
+          termin_list: revisionTerms.map((term, index) => ({
+            ...(term.id ? { id: term.id } : {}),
+            nomor_termin: index + 1,
+            persentase: Number(term.persentaseText),
+          })),
+        }),
+      });
+    },
+    onSuccess: async () => {
+      await invalidate();
+      setRevisionOpen(false);
+      setRevisionError("");
+      setRevisionContractFile(null);
+      setRevisionRabFile(null);
+    },
+    successMessage: "Pengajuan proyek berhasil diajukan ulang dan dikirim ke pemeriksaan Koordinator Layanan.",
   });
   const extensionMutation = use_mutation<unknown, Error, { endDate: string; reason: string; file: File }>({
     tag: "masterProyek",
@@ -220,6 +410,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       setExtensionFile(null);
       setExtensionError("");
     },
+    successMessage: "Pengajuan perpanjangan SK proyek berhasil dikirim ke KARWAS.",
   });
   const extensionReviewMutation = use_mutation<unknown, Error, { extensionId: string; approved: boolean; note: string }>({
     tag: "masterProyek",
@@ -237,13 +428,112 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       setExtensionReviewNote("");
       setExtensionReviewError("");
     },
+    successMessage: (_response, variables) => variables.approved
+      ? "Perpanjangan masa SK proyek berhasil disetujui."
+      : "Pengajuan perpanjangan masa SK proyek ditolak.",
   });
   function openWorkflow(action: Exclude<Workflow, null>) {
     setWorkflow(action);
     setApproved(true);
+    setRequestRevision(false);
     setNote("");
     setFile(null);
     setActionError("");
+  }
+  function openRevisionForm() {
+    if (!project) return;
+    setRevisionForm({
+      ...blankProjectForm(),
+      kode_proyek: String(project.kode_proyek ?? ""),
+      nama_proyek: String(project.nama_proyek ?? ""),
+      tahun_fiscal: String(project.tahun_fiscal ?? new Date().getFullYear()),
+      nama_client: String(project.nama_client ?? ""),
+      sumber_pendanaan: String(project.sumber_pendanaan ?? ""),
+      no_kontrak: String(project.no_kontrak ?? ""),
+      pj_1: String(project.pj_1 ?? ""),
+      pj_2: String(project.pj_2 ?? ""),
+      mulai_kontrak: dateKey(project.mulai_kontrak),
+      berakhir_kontrak: dateKey(project.berakhir_kontrak),
+      nilai_kontrak: String(project.nilai_kontrak ?? 0),
+      total_direct_cost: String(project.total_direct_cost ?? 0),
+      total_margin: String(project.total_margin ?? 0),
+    });
+    const participants = project.unit_terlibat ?? [];
+    const lead = participants.find((unit) => unit.peran === "PENGUSUL")?.id ?? identity.unitKerjaId;
+    setRevisionLeadUnitId(lead);
+    setRevisionCollaboratorIds(participants.filter((unit) => unit.peran !== "PENGUSUL").map((unit) => unit.id));
+    const existingJobs = (project.job_list ?? []).map((job) => ({ ...job, ro_list: [...job.ro_list] }));
+    const assignedRoIds = new Set(existingJobs.flatMap((job) => job.ro_list.map((ro) => ro.id)));
+    for (const ro of project.ro_list ?? []) {
+      if (assignedRoIds.has(ro.id)) continue;
+      const nomorJob = String(ro.nomor_job ?? "").trim() || `JOB-${ro.id.slice(0, 8)}`;
+      let group = existingJobs.find((job) => job.nomor_job === nomorJob);
+      if (!group) {
+        group = { id: "", nomor_job: nomorJob, ro_list: [] };
+        existingJobs.push(group);
+      }
+      group.ro_list.push(ro);
+    }
+    setRevisionJobs(existingJobs.length ? existingJobs.map((job) => ({
+      id: job.id,
+      key: crypto.randomUUID(),
+      nomor_job: job.nomor_job,
+      ros: job.ro_list.map((row) => ({
+        ...blankRevisionRo(lead),
+        id: row.id,
+        key: crypto.randomUUID(),
+        nama_ro: row.nama_ro,
+        mak_id: String(row.mak_id ?? ""),
+        id_unit_koordinator: row.id_unit_koordinator,
+        rekening_id: String(row.rekening_id ?? ""),
+        plafon: Number(row.plafon) || 0,
+        plafonText: String(row.plafon ?? ""),
+        pj: String(row.pj ?? ""),
+        detailMode: row.pj ? "detail" : "later",
+        no_kontrak: String(row.no_kontrak ?? ""),
+        unit_kolaborasi_ids: row.unit_kolaborasi_ids ?? [],
+      })),
+    })) : [blankRevisionJob(lead)]);
+    const existingTerms = [...(project.termin_list ?? [])].sort((left, right) => left.nomor_termin - right.nomor_termin);
+    setRevisionTerms(existingTerms.length ? existingTerms.map((term) => ({
+      id: term.id,
+      key: crypto.randomUUID(),
+      nomor_termin: term.nomor_termin,
+      persentase: term.persentase,
+      persentaseText: String(term.persentase),
+    })) : [blankRevisionTerm("100")]);
+    setRevisionContractFile(null);
+    setRevisionRabFile(null);
+    setRevisionError("");
+    setRevisionOpen(true);
+  }
+  async function submitRevision() {
+    setRevisionError("");
+    if (!revisionForm.kode_proyek.trim() || !revisionForm.nama_proyek.trim() || !revisionForm.tahun_fiscal.trim()) {
+      setRevisionError("Kode, nama, dan tahun fiskal proyek wajib diisi.");
+      return;
+    }
+    if (!revisionContractOk || revisionRoTotal !== revisionNumeric("total_direct_cost")) {
+      setRevisionError("Nilai kontrak harus sama dengan direct cost + margin, dan total plafon RO harus sama dengan direct cost.");
+      return;
+    }
+    if (!revisionContractDatesValid) {
+      setRevisionError("Isi tanggal kontrak berpasangan dan pastikan tanggal akhir tidak sebelum tanggal mulai.");
+      return;
+    }
+    if (!revisionLeadUnitId || !revisionCollaboratorsAssigned || !revisionAllocationsValid || !revisionJobsUnique) {
+      setRevisionError("Lengkapi unit terlibat, nomor Job, dan seluruh detail RO. Setiap unit kolaborator harus digunakan pada minimal satu RO.");
+      return;
+    }
+    if (!revisionTerms.length || revisionTerms.some((term) => !(Number(term.persentaseText) > 0)) || revisionTermsTotal !== 100) {
+      setRevisionError("Rencana termin harus bernilai lebih dari 0 dan total persentasenya harus tepat 100%.");
+      return;
+    }
+    try {
+      await revisionMutation.mutateAsync();
+    } catch (error) {
+      setRevisionError(apiErrorMessage(error, "Pengajuan revisi gagal dikirim."));
+    }
   }
   async function submitWorkflow() {
     setActionError("");
@@ -300,7 +590,10 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         </Button>
       </div>
     );
-  const status = project.status_proyek;
+  const status = String(project.status_proyek);
+  const workflowVersion = Number(project.alur_proyek_version ?? 1);
+  const isRevisionPending = status.startsWith("PERLU_REVISI_");
+  const isNotulenUploader = isSubmitter || (workflowVersion >= 2 && isLayanan);
   const roPlan = roRows.reduce((total, row) => total + (Number(row.nilai_rencana) || Number(row.total_plafon) || 0), 0);
   const approvedRoBudget = roRows.reduce((total, row) => total + (Number(financeOf(row).pagu_disetujui) || 0), 0);
   const roUsed = roRows.reduce((total, row) => total + (Number(financeOf(row).realisasi ?? row.total_terpakai) || 0), 0);
@@ -377,15 +670,20 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-semibold">Status pengajuan</p>
-            <p className="text-sm text-muted-foreground">{String(project.catatan_validasi ?? "Belum ada catatan validasi.")}</p>
+            <p className="text-sm text-muted-foreground">{String(project.catatan_validasi ?? project.catatan_layanan ?? "Belum ada catatan validasi.")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {isLayanan && status === "MENUNGGU_VALIDASI_LAYANAN" && (
+              <Button variant="outline" onClick={() => openWorkflow("layanan")}>
+                <Check size={16} /> Tinjau Rencana
+              </Button>
+            )}
             {isUmum && status === "MENUNGGU_VALIDASI_UMUM" && (
               <Button variant="outline" onClick={() => openWorkflow("umum")}>
                 <Check size={16} /> Validasi Umum
               </Button>
             )}
-            {isSubmitter && status === "MENUNGGU_NOTULEN" && (
+            {isNotulenUploader && status === "MENUNGGU_NOTULEN" && (
               <Button variant="outline" onClick={() => openWorkflow("notulen")}>
                 <Upload size={16} /> Unggah Notulen
               </Button>
@@ -393,6 +691,11 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             {(identity.role === "pimpinan" || identity.role === "superadmin") && status === "MENUNGGU_VALIDASI_PIMPINAN" && (
               <Button variant="outline" onClick={() => openWorkflow("pimpinan")}>
                 <Check size={16} /> Validasi Pimpinan
+              </Button>
+            )}
+            {isSubmitter && isRevisionPending && (
+              <Button variant="outline" onClick={openRevisionForm}>
+                <Pencil size={16} /> Perbaiki dan Ajukan Ulang
               </Button>
             )}
           </div>
@@ -403,11 +706,26 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             <p className="text-xs text-muted-foreground">Proses berjalan berurutan. Rencana Operasional (RO) aktif setelah persetujuan pimpinan.</p>
           </div>
           {(() => {
-            const steps = ["Pengajuan proyek", "Validasi Koordinator Umum", "Unggah notulen", "Persetujuan pimpinan", "Serah terima BAST"];
-            const currentIndex = status === "MENUNGGU_VALIDASI_UMUM" ? 1 : status === "MENUNGGU_NOTULEN" ? 2 : status === "MENUNGGU_VALIDASI_PIMPINAN" ? 3 : status === "DISETUJUI_PIMPINAN" ? 4 : status === "SELESAI" ? 5 : 0;
+            const steps = workflowVersion >= 2
+              ? ["Pengajuan proyek", "Pemeriksaan Koordinator Layanan", "Rapat dan unggah notulen", "Validasi Bagian Umum", "Persetujuan Pimpinan", "Pelaksanaan dan BAST"]
+              : ["Pengajuan proyek", "Validasi Bagian Umum", "Unggah notulen", "Persetujuan Pimpinan", "Pelaksanaan dan BAST"];
+            const currentIndex = workflowVersion >= 2
+              ? status === "MENUNGGU_VALIDASI_LAYANAN" || status === "PERLU_REVISI_LAYANAN" ? 1
+                : status === "MENUNGGU_NOTULEN" ? 2
+                : status === "MENUNGGU_VALIDASI_UMUM" || status === "PERLU_REVISI_UMUM" ? 3
+                : status === "MENUNGGU_VALIDASI_PIMPINAN" || status === "PERLU_REVISI_PIMPINAN" ? 4
+                : status === "DISETUJUI_PIMPINAN" ? 5
+                : status === "SELESAI" ? 6 : 0
+              : status === "MENUNGGU_VALIDASI_UMUM" ? 1
+                : status === "PERLU_REVISI_UMUM" ? 1
+                : status === "MENUNGGU_NOTULEN" ? 2
+                : status === "MENUNGGU_VALIDASI_PIMPINAN" ? 3
+                : status === "PERLU_REVISI_PIMPINAN" ? 3
+                : status === "DISETUJUI_PIMPINAN" ? 4
+                : status === "SELESAI" ? 5 : 0;
             const rejected = String(status).startsWith("DITOLAK");
             return (
-              <ol className="grid grid-cols-1 gap-0 sm:grid-cols-5">
+              <ol className={`grid grid-cols-1 gap-0 sm:grid-cols-5 ${workflowVersion >= 2 ? "xl:grid-cols-6" : ""}`}>
                 {steps.map((step, index) => {
                   const complete = !rejected && index < currentIndex;
                   const active = !rejected && index === currentIndex && currentIndex < steps.length;
@@ -431,10 +749,28 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             );
           })()}
           {String(status).startsWith("DITOLAK") && <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">Pengajuan ditolak. Silakan periksa catatan validasi.</p>}
+          {isRevisionPending && <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Pengajuan perlu diperbaiki oleh pemilik proyek sebelum masuk kembali ke pemeriksaan Koordinator Layanan.</p>}
           {status === "DISETUJUI_PIMPINAN" && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Proyek berjalan dan RO aktif setelah disetujui Pimpinan.</p>}
           {status === "SELESAI" && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Proyek telah dinyatakan selesai setelah pemilik proyek mengunggah BAST{project.selesai_pada ? ` pada ${formatDate(project.selesai_pada)}` : ""}.</p>}
           <p className="mt-4 text-xs text-muted-foreground">Setelah proyek disetujui, Billing menerbitkan invoice dan Bendahara mencatat pembayaran setelah dana masuk.</p>
         </div>
+        {project.riwayat_revisi?.length ? (
+          <div className="mt-5 border-t pt-4">
+            <h3 className="text-sm font-semibold">Riwayat revisi</h3>
+            <ol className="mt-3 space-y-2">
+              {project.riwayat_revisi.map((revision) => (
+                <li key={revision.id} className="rounded-lg border bg-muted/20 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">Revisi {revision.nomor_revisi} · {revision.tahap === "LAYANAN" ? "Koordinator Layanan" : revision.tahap === "UMUM" ? "Bagian Umum" : "Pimpinan"}</span>
+                    <span className="text-xs text-muted-foreground">Diminta {formatDate(revision.diminta_pada)}</span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{revision.alasan}</p>
+                  {revision.diajukan_ulang_pada && <p className="mt-1 text-xs text-emerald-700">Diajukan ulang {formatDate(revision.diajukan_ulang_pada)}; versi sebelum dan sesudah tersimpan.</p>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
       </div>
       <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-5 py-4">
@@ -582,11 +918,61 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           )}
         </div>
       </section>
+      <ProjectApplicationModal
+        open={revisionOpen}
+        closeModal={() => !revisionMutation.isPending && setRevisionOpen(false)}
+        mode="revision"
+        revisionNote={String(project.catatan_validasi ?? project.catatan_layanan ?? "")}
+        currentSk={typeof project.file_sk === "string" ? project.file_sk : null}
+        currentRab={typeof project.file_rab === "string" ? project.file_rab : null}
+        form={revisionForm}
+        setForm={setRevisionForm}
+        contractDatesRequired={revisionContractDatesRequired}
+        editingDraftId={null}
+        identity={identity}
+        currentUnit={currentUnit as { kode_unit?: string; nama_unit?: string } | undefined}
+        unitComboboxOptions={unitComboboxOptions}
+        unitPengusulId={revisionLeadUnitId}
+        changeLeadUnit={changeRevisionLeadUnit}
+        availableCollaboratorOptions={availableCollaboratorOptions}
+        addCollaborator={addRevisionCollaborator}
+        unitKolaborasiIds={revisionCollaboratorIds}
+        assignedRoUnitIds={assignedRoUnitIds}
+        normalizeUnitId={normalizeUnitId}
+        removeCollaborator={removeRevisionCollaborator}
+        numeric={revisionNumeric}
+        contractOk={revisionContractOk}
+        jobs={revisionJobs}
+        addJob={addRevisionJob}
+        removeJob={removeRevisionJob}
+        updateJob={updateRevisionJob}
+        updateRo={updateRevisionRo}
+        addRo={addRevisionRo}
+        removeRo={removeRevisionRo}
+        addRoCollaborator={addRevisionRoCollaborator}
+        removeRoCollaborator={removeRevisionRoCollaborator}
+        roUnitComboboxOptions={roUnitComboboxOptions}
+        makComboboxOptions={makComboboxOptions}
+        rekeningComboboxOptions={rekeningComboboxOptions}
+        roTotal={revisionRoTotal}
+        terms={revisionTerms}
+        setTerms={setRevisionTerms}
+        addTerm={addRevisionTerm}
+        updateTerm={updateRevisionTerm}
+        termsTotal={revisionTermsTotal}
+        sk={revisionContractFile}
+        setSk={setRevisionContractFile}
+        rab={revisionRabFile}
+        setRab={setRevisionRabFile}
+        formError={revisionError}
+        submit={() => void submitRevision()}
+        submitting={revisionMutation.isPending}
+      />
       <Dialog open={workflow !== null} onOpenChange={(value) => !value && setWorkflow(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{workflow === "notulen" ? "Unggah Notulen" : workflow === "bast" ? "Unggah BAST dan Selesaikan Proyek" : `Validasi ${workflow === "umum" ? "Bagian Umum" : "Pimpinan"}`}</DialogTitle>
-            <DialogDescription>{workflow === "notulen" ? "Unggah PDF, DOC, atau DOCX notulen." : workflow === "bast" ? "Unggah Berita Acara Serah Terima dalam format PDF. Setelah berhasil, status proyek berubah menjadi Selesai." : "Pilih setuju atau tolak. Catatan wajib saat menolak."}</DialogDescription>
+            <DialogTitle>{workflow === "notulen" ? "Unggah Notulen" : workflow === "bast" ? "Unggah BAST dan Selesaikan Proyek" : `Validasi ${workflow === "layanan" ? "Koordinator Layanan" : workflow === "umum" ? "Bagian Umum" : "Pimpinan"}`}</DialogTitle>
+            <DialogDescription>{workflow === "notulen" ? "Unggah PDF, DOC, atau DOCX notulen." : workflow === "bast" ? "Unggah Berita Acara Serah Terima dalam format PDF. Setelah berhasil, status proyek berubah menjadi Selesai." : "Setujui, minta revisi, atau tolak pengajuan. Catatan wajib untuk revisi dan penolakan."}</DialogDescription>
           </DialogHeader>
           {workflow === "notulen" || workflow === "bast" ? (
             <DocumentUploadField label={workflow === "bast" ? "BAST (Berita Acara Serah Terima) · PDF" : "Dokumen Notulen"} accept={workflow === "bast" ? ".pdf" : ".pdf,.doc,.docx"} value={file} onChange={setFile} currentFile={typeof (workflow === "bast" ? project.file_bast : project.file_notulen) === "string" ? String(workflow === "bast" ? project.file_bast : project.file_notulen) : null} />
@@ -601,25 +987,32 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               <fieldset className="grid gap-2">
                 <legend className="mb-1 text-sm font-medium">Keputusan validasi</legend>
                 <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${approved ? "border-primary bg-primary/5" : ""}`}>
-                  <input type="radio" name="project-detail-validation-decision" checked={approved} onChange={() => setApproved(true)} className="mt-1 accent-primary" />
+                  <input type="radio" name="project-detail-validation-decision" checked={approved && !requestRevision} onChange={() => { setApproved(true); setRequestRevision(false); }} className="mt-1 accent-primary" />
                   <span>
                     <span className="block text-sm font-medium">Setujui</span>
                     <span className="block text-xs text-muted-foreground">Lanjutkan pengajuan ke proses berikutnya.</span>
                   </span>
                 </label>
-                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${!approved ? "border-destructive bg-destructive/5" : ""}`}>
-                  <input type="radio" name="project-detail-validation-decision" checked={!approved} onChange={() => setApproved(false)} className="mt-1 accent-destructive" />
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${requestRevision ? "border-amber-400 bg-amber-50" : ""}`}>
+                  <input type="radio" name="project-detail-validation-decision" checked={requestRevision} onChange={() => { setApproved(false); setRequestRevision(true); }} className="mt-1 accent-amber-600" />
+                  <span>
+                    <span className="block text-sm font-medium">Minta revisi</span>
+                    <span className="block text-xs text-muted-foreground">Kembalikan kepada pemilik untuk diperbaiki; riwayat versi disimpan.</span>
+                  </span>
+                </label>
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${!approved && !requestRevision ? "border-destructive bg-destructive/5" : ""}`}>
+                  <input type="radio" name="project-detail-validation-decision" checked={!approved && !requestRevision} onChange={() => { setApproved(false); setRequestRevision(false); }} className="mt-1 accent-destructive" />
                   <span>
                     <span className="block text-sm font-medium">Tolak</span>
-                    <span className="block text-xs text-muted-foreground">Pengajuan dikembalikan dengan catatan.</span>
+                    <span className="block text-xs text-muted-foreground">Akhiri pengajuan dengan alasan yang tercatat.</span>
                   </span>
                 </label>
               </fieldset>
               <label className="grid gap-1.5 text-sm font-medium">
-                Catatan{!approved ? <span className="text-destructive">(wajib saat menolak)</span> : null}
+                Catatan{(!approved || requestRevision) ? <span className="text-destructive">(wajib)</span> : null}
                 <textarea
                   rows={3}
-                  placeholder={approved ? "Catatan tambahan (opsional)" : "Tuliskan alasan penolakan"}
+                  placeholder={approved ? "Catatan tambahan (opsional)" : requestRevision ? "Tuliskan bagian yang perlu diperbaiki" : "Tuliskan alasan penolakan"}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
@@ -636,9 +1029,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             <Button variant="outline" onClick={() => setWorkflow(null)}>
               Batal
             </Button>
-            <Button disabled={workflowMutation.isPending || ((workflow === "notulen" || workflow === "bast") && !file) || ((workflow === "umum" || workflow === "pimpinan") && !approved && !note.trim())} onClick={submitWorkflow}>
+            <Button disabled={workflowMutation.isPending || ((workflow === "notulen" || workflow === "bast") && !file) || ((workflow === "layanan" || workflow === "umum" || workflow === "pimpinan") && (!approved || requestRevision) && !note.trim())} onClick={submitWorkflow}>
               {workflowMutation.isPending && <LoaderCircle className="animate-spin" size={16} />}
-              {workflow === "bast" ? "Selesaikan Proyek" : workflow === "notulen" ? "Unggah Notulen" : approved ? "Setujui" : "Tolak"}
+              {workflow === "bast" ? "Selesaikan Proyek" : workflow === "notulen" ? "Unggah Notulen" : approved ? "Setujui" : requestRevision ? "Minta Revisi" : "Tolak Pengajuan"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -12,7 +12,7 @@ export function formatDate(value: unknown) {
 export function projectStatusTone(status?: string): "ok" | "warn" | "danger" | "neutral" {
   if (status === "DISETUJUI_PIMPINAN" || status === "SELESAI") return "ok";
   if (status?.startsWith("DITOLAK")) return "danger";
-  if (status?.startsWith("MENUNGGU")) return "warn";
+  if (status?.startsWith("MENUNGGU") || status?.startsWith("PERLU_REVISI_")) return "warn";
   return "neutral";
 }
 
@@ -28,6 +28,16 @@ export function humanizeStatus(status?: string) {
 }
 
 export function projectStatusLabel(status?: string) {
+  if (status === "MENUNGGU_VALIDASI_LAYANAN") return "Menunggu pemeriksaan Koordinator Layanan";
+  if (status === "MENUNGGU_NOTULEN") return "Menunggu notulen";
+  if (status === "MENUNGGU_VALIDASI_UMUM") return "Menunggu validasi Bagian Umum";
+  if (status === "MENUNGGU_VALIDASI_PIMPINAN") return "Menunggu persetujuan Pimpinan";
+  if (status === "PERLU_REVISI_LAYANAN") return "Perlu revisi · Koordinator Layanan";
+  if (status === "PERLU_REVISI_UMUM") return "Perlu revisi · Bagian Umum";
+  if (status === "PERLU_REVISI_PIMPINAN") return "Perlu revisi · Pimpinan";
+  if (status === "DITOLAK_LAYANAN") return "Ditolak Koordinator Layanan";
+  if (status === "DITOLAK_UMUM") return "Ditolak Bagian Umum";
+  if (status === "DITOLAK_PIMPINAN") return "Ditolak Pimpinan";
   if (status === "DISETUJUI_PIMPINAN") return "Berjalan · Disetujui Pimpinan";
   if (status === "SELESAI") return "Selesai · BAST diunggah";
   return humanizeStatus(status);

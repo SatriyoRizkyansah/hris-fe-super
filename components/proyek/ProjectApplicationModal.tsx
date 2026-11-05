@@ -17,6 +17,10 @@ type MoneyKey = "nilai_kontrak" | "total_direct_cost" | "total_margin";
 type Props = {
   open: boolean;
   closeModal: () => void;
+  mode?: "create" | "revision";
+  revisionNote?: string;
+  currentSk?: string | null;
+  currentRab?: string | null;
   form: ProjectForm;
   setForm: Dispatch<SetStateAction<ProjectForm>>;
   contractDatesRequired: boolean;
@@ -57,7 +61,7 @@ type Props = {
   rab: File | null;
   setRab: (file: File | null) => void;
   formError: string;
-  saveDraft: () => void;
+  saveDraft?: () => void;
   submit: () => void;
   submitting: boolean;
 };
@@ -83,6 +87,7 @@ function Field({ label, value, onChange, type = "text", required = false }: { la
 export function ProjectApplicationModal(props: Props) {
   const {
     open, closeModal, form, setForm, contractDatesRequired, editingDraftId,
+    mode = "create", revisionNote, currentSk, currentRab,
     identity, currentUnit, unitComboboxOptions, unitPengusulId, changeLeadUnit,
     availableCollaboratorOptions, addCollaborator, unitKolaborasiIds, assignedRoUnitIds,
     normalizeUnitId, removeCollaborator, numeric, contractOk, jobs, addJob, removeJob,
@@ -95,27 +100,30 @@ export function ProjectApplicationModal(props: Props) {
     <Modal
         open={open}
         onClose={closeModal}
-        title="Ajukan Proyek"
-        size="md"
+        title={mode === "revision" ? "Perbaiki Pengajuan Proyek" : "Ajukan Proyek"}
+        description={mode === "revision" ? "Perbarui informasi proyek, unit, Job/RO, anggaran, termin, dan dokumen. Setelah dikirim ulang, pengajuan kembali ke pemeriksaan Koordinator Layanan dan menjalani urutan persetujuan dari awal." : undefined}
+        size={mode === "revision" ? "xl" : "md"}
         bodyClassName="space-y-4"
         footer={
           <>
             <Button variant="outline" onClick={closeModal}>
               Batal
             </Button>
-            <Button variant="outline" onClick={saveDraft}>
-              Simpan Draft
-            </Button>
+            {mode === "create" && (
+              <Button variant="outline" onClick={saveDraft}>
+                Simpan Draft
+              </Button>
+            )}
             <Button disabled={submitting} onClick={submit}>
-              {submitting && <LoaderCircle className="animate-spin" size={16} />} Simpan Pengajuan
+              {submitting && <LoaderCircle className="animate-spin" size={16} />} {mode === "revision" ? "Ajukan Ulang" : "Simpan Pengajuan"}
             </Button>
           </>
         }
       >
-        <div className="space-y-3">
+        {mode === "create" ? <div className="space-y-3">
           <Alert>
             <AlertTitle>Tahapan persetujuan</AlertTitle>
-            <AlertDescription>Pengajuan proyek → validasi Koordinator Umum → unggah notulen → persetujuan pimpinan. RO aktif setelah pimpinan menyetujui proyek.</AlertDescription>
+            <AlertDescription>Pengajuan → pemeriksaan Koordinator Layanan → rapat dan unggah notulen → validasi Bagian Umum → persetujuan Pimpinan. RO aktif setelah disetujui Pimpinan.</AlertDescription>
           </Alert>
           <p className="text-xs text-muted-foreground">Perubahan otomatis disimpan sebagai draft saat modal ditutup.</p>
           {editingDraftId && (
@@ -124,7 +132,10 @@ export function ProjectApplicationModal(props: Props) {
               <AlertDescription>Draft tidak tersedia di browser, profil, atau perangkat lain. Berkas Kontrak Proyek dan RAB harus dipilih kembali sebelum pengajuan.</AlertDescription>
             </Alert>
           )}
-        </div>
+        </div> : <Alert className="border-amber-200 bg-amber-50 text-amber-950">
+          <AlertTitle>Catatan pemeriksa</AlertTitle>
+          <AlertDescription className="whitespace-pre-wrap">{revisionNote || "Pemeriksa meminta perbaikan pada pengajuan ini."}</AlertDescription>
+        </Alert>}
         <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">RO awal dan rencana termin wajib seimbang sebelum proyek dikirim.</div>
         <section className="space-y-4 rounded-lg border p-4">
           <div>
@@ -145,19 +156,19 @@ export function ProjectApplicationModal(props: Props) {
           </div>
           <p className="text-xs text-muted-foreground">Periode kontrak ini berlaku untuk seluruh RO. Wajib diisi jika detail administrasi RO dilengkapi sekarang.</p>
         </section>
-        <section className="space-y-3 rounded-lg border p-4">
+        <section className="min-w-0 space-y-3 rounded-lg border p-4">
           <div className="space-y-1">
             <h2 className="text-sm font-semibold">Unit terlibat</h2>
             <p className="max-w-3xl text-xs leading-5 text-muted-foreground">Daftarkan unit pengusul dan unit kerja yang terlibat. Pilih unit pemilik di tiap RO; beberapa RO dapat memakai nomor Job yang sama untuk membagi alokasi.</p>
           </div>
-          <div className="grid items-start gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 items-start gap-4 md:grid-cols-2">
             <label className="grid min-w-0 gap-1.5 text-sm font-medium">
               <span>Unit pengusul *</span>
               {identity.role === "superadmin" ? (
                 <FilterCombobox options={unitComboboxOptions} value={unitPengusulId} onValueChange={changeLeadUnit} label="Pilih unit pengusul" />
               ) : (
-                <div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm font-normal">
-                  {[currentUnit?.kode_unit, currentUnit?.nama_unit].filter(Boolean).join(" · ") || "Unit akun belum tersedia"}
+                <div title={[currentUnit?.kode_unit, currentUnit?.nama_unit].filter(Boolean).join(" — ")} className="flex h-10 min-w-0 items-center overflow-hidden rounded-lg border bg-muted/30 px-3 text-sm font-normal text-muted-foreground">
+                  <span className="min-w-0 truncate">{[currentUnit?.kode_unit, currentUnit?.nama_unit].filter(Boolean).join(" · ") || "Unit akun belum tersedia"}</span>
                 </div>
               )}
             </label>
@@ -173,22 +184,22 @@ export function ProjectApplicationModal(props: Props) {
                 <span>Unit pada proyek</span>
                 <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{unitKolaborasiIds.length + Number(Boolean(unitPengusulId))}</span>
               </div>
-              <div className="grid gap-1.5">
+              <div className="flex min-w-0 flex-wrap gap-2">
                 {unitPengusulId && (() => {
                   const unitLabel = unitComboboxOptions.find((option) => option.value === unitPengusulId)?.label ?? "Unit pengusul";
                   return (
-                    <div title={unitLabel} className="flex min-h-9 min-w-0 items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs">
-                      <span className="inline-flex w-24 shrink-0 justify-center rounded-full bg-primary/10 px-2 py-1 font-semibold text-primary">Pengusul</span>
-                      <span className="min-w-0 flex-1 truncate text-foreground">{unitLabel}</span>
+                    <div title={unitLabel} className="inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs">
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 font-semibold text-primary">Pengusul</span>
+                      <span className="max-w-[min(60vw,32rem)] truncate text-foreground">{unitLabel}</span>
                     </div>
                   );
                 })()}
                 {unitKolaborasiIds.map((unitId) => {
                   const unitLabel = unitComboboxOptions.find((option) => option.value === unitId)?.label ?? "Unit kolaborator";
                   return (
-                    <div key={unitId} title={unitLabel} className="flex min-h-9 min-w-0 items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs">
-                      <span className="inline-flex w-24 shrink-0 justify-center rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground">Kolaborator</span>
-                      <span className="min-w-0 flex-1 truncate">{unitLabel}</span>
+                    <div key={unitId} title={unitLabel} className="inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-full border bg-background px-2.5 py-1.5 text-xs">
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground">Kolaborator</span>
+                      <span className="max-w-[min(52vw,28rem)] truncate">{unitLabel}</span>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${assignedRoUnitIds.has(normalizeUnitId(unitId)) ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                         {assignedRoUnitIds.has(normalizeUnitId(unitId)) ? "Ada di RO" : "Belum di RO"}
                       </span>
@@ -358,8 +369,8 @@ export function ProjectApplicationModal(props: Props) {
             <p className="mt-1 text-xs text-muted-foreground">Unggah dokumen opsional untuk melengkapi pengajuan.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <DocumentUploadField label="Kontrak Proyek" accept=".pdf" value={sk} onChange={setSk} />
-            <DocumentUploadField label="RAB Proyek" accept=".pdf,.xls,.xlsx" value={rab} onChange={setRab} />
+            <DocumentUploadField label="Kontrak Proyek" accept=".pdf" value={sk} onChange={setSk} currentFile={mode === "revision" ? currentSk : null} />
+            <DocumentUploadField label="RAB Proyek" accept=".pdf,.xls,.xlsx" value={rab} onChange={setRab} currentFile={mode === "revision" ? currentRab : null} />
           </div>
         </section>
         {formError && (

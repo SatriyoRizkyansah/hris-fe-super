@@ -7,6 +7,7 @@ type ApiMutationOptions<TData, TError, TVariables> = {
   method: string;
   mutationFn: (variables: TVariables) => Promise<TData>;
   invalidateKeys?: readonly (readonly unknown[])[];
+  successMessage?: string | ((data: TData, variables: TVariables) => string | undefined);
   onSuccess?: (data: TData, variables: TVariables) => void | Promise<void>;
   onError?: (error: TError, variables: TVariables) => void;
 };
@@ -17,6 +18,7 @@ export function use_mutation<TData, TError = Error, TVariables = void>({
   method,
   mutationFn,
   invalidateKeys = [["api", tag]],
+  successMessage,
   onSuccess,
   onError,
 }: ApiMutationOptions<TData, TError, TVariables>): UseMutationResult<TData, TError, TVariables> {
@@ -27,6 +29,12 @@ export function use_mutation<TData, TError = Error, TVariables = void>({
     mutationFn,
     onSuccess: async (data, variables) => {
       await Promise.all(invalidateKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+      const message = typeof successMessage === "function"
+        ? successMessage(data, variables)
+        : successMessage;
+      if (message?.trim() && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("api:success", { detail: { message: message.trim() } }));
+      }
       await onSuccess?.(data, variables);
     },
     onError,

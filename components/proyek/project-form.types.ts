@@ -17,6 +17,7 @@ export type ProjectForm = {
 };
 
 export type RoDraft = Omit<RoInputDto, "nomor_job"> & {
+  id?: string;
   key: string;
   plafonText: string;
   detailMode: "detail" | "later";
@@ -24,5 +25,5 @@ export type RoDraft = Omit<RoInputDto, "nomor_job"> & {
   pj: string;
 };
 
-export type JobDraft = { key: string; nomor_job: string; ros: RoDraft[] };
-export type TerminDraft = TerminInputDto & { key: string; persentaseText: string };
+export type JobDraft = { id?: string; key: string; nomor_job: string; ros: RoDraft[] };
+export type TerminDraft = TerminInputDto & { id?: string; key: string; persentaseText: string };
