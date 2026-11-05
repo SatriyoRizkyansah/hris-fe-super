@@ -10,7 +10,7 @@ export function formatDate(value: unknown) {
 }
 
 export function projectStatusTone(status?: string): "ok" | "warn" | "danger" | "neutral" {
-  if (status === "DISETUJUI_PIMPINAN") return "ok";
+  if (status === "DISETUJUI_PIMPINAN" || status === "SELESAI") return "ok";
   if (status?.startsWith("DITOLAK")) return "danger";
   if (status?.startsWith("MENUNGGU")) return "warn";
   return "neutral";
@@ -25,4 +25,10 @@ export function roStatusTone(status?: string): "ok" | "warn" | "danger" | "neutr
 
 export function humanizeStatus(status?: string) {
   return status ? status.replaceAll("_", " ") : "—";
+}
+
+export function projectStatusLabel(status?: string) {
+  if (status === "DISETUJUI_PIMPINAN") return "Berjalan · Disetujui Pimpinan";
+  if (status === "SELESAI") return "Selesai · BAST diunggah";
+  return humanizeStatus(status);
 }

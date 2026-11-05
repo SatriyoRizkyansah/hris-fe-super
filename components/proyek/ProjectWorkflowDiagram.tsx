@@ -39,7 +39,7 @@ const stages: WorkflowStage[] = [
     icon: ClipboardCheck,
     color: "indigo",
     summary: "Tinjau proyek dan dokumen sebelum memberikan keputusan akhir.",
-    result: "DISETUJUI_PIMPINAN",
+    result: "Aktif · Disetujui Pimpinan",
     next: "Jika ditolak, status menjadi DITOLAK_PIMPINAN. Jika disetujui, RO proyek menjadi aktif.",
   },
   {
@@ -48,8 +48,17 @@ const stages: WorkflowStage[] = [
     icon: ReceiptText,
     color: "emerald",
     summary: "Unit menjalankan RO; tagihan termin dan penerimaan diproses melalui modul keuangan.",
-    result: "DISETUJUI_PIMPINAN / RO AKTIF",
+    result: "Proyek berjalan · RO aktif",
     next: "Billing menerbitkan invoice termin dan Bendahara mencatat penerimaan pada alur Penagihan/Invoice.",
+  },
+  {
+    title: "Serah terima BAST",
+    owner: "PEMILIK PROYEK",
+    icon: FileUp,
+    color: "emerald",
+    summary: "Unggah BAST setelah pekerjaan proyek selesai.",
+    result: "SELESAI",
+    next: "Buka detail proyek aktif, lalu unggah BAST PDF. Status proyek berubah menjadi Selesai.",
   },
 ];
 
@@ -59,6 +68,6 @@ export function ProjectWorkflowDiagram({ actions }: { actions: ProjectWorkflowAc
     description="Pilih tahap untuk melihat penanggung jawab dan hasilnya, atau gunakan tombol pada tahap untuk memulai aksinya."
     stages={stages}
     actions={actions}
-    footerNote="Penolakan dapat terjadi pada validasi Koordinator Umum atau Pimpinan. Penerbitan invoice termin dan pencatatan pembayaran dilanjutkan di modul Penagihan/Invoice setelah proyek disetujui."
+    footerNote="Setelah disetujui Pimpinan, proyek berjalan dan RO aktif. Pemilik proyek menutup alur dengan mengunggah BAST dari halaman detail proyek."
   />;
 }

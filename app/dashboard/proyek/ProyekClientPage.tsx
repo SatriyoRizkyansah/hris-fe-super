@@ -18,7 +18,7 @@ import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { envelopeRows, unwrapEnvelope, apiErrorMessage, uploadHrisFile } from "@/lib/hris/api";
-import { formatDate, formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
+import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { CreateProyekDto, ProyekItemDto } from "@/lib/api/generated/api-generated";
 import type { JobDraft, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
@@ -34,7 +34,8 @@ const PROJECT_STATUS_FILTERS = [
   { label: "Menunggu validasi Koordinator Umum", value: "MENUNGGU_VALIDASI_UMUM" },
   { label: "Menunggu notulen", value: "MENUNGGU_NOTULEN" },
   { label: "Menunggu persetujuan Pimpinan", value: "MENUNGGU_VALIDASI_PIMPINAN" },
-  { label: "Disetujui Pimpinan", value: "DISETUJUI_PIMPINAN" },
+  { label: "Berjalan · Disetujui Pimpinan", value: "DISETUJUI_PIMPINAN" },
+  { label: "Selesai", value: "SELESAI" },
   { label: "Ditolak Koordinator Umum", value: "DITOLAK_UMUM" },
   { label: "Ditolak Pimpinan", value: "DITOLAK_PIMPINAN" },
 ];
@@ -243,6 +244,7 @@ export default function ProyekClientPage() {
       onClick: () => showProjectQueue("MENUNGGU_VALIDASI_PIMPINAN"),
     },
     { label: "Buka daftar RO", href: "/dashboard/ro" },
+    { label: "Pilih proyek aktif", onClick: () => showProjectQueue("DISETUJUI_PIMPINAN") },
   ];
 
   const create = use_mutation({
@@ -672,7 +674,7 @@ export default function ProyekClientPage() {
                   );
                 },
               },
-              { key: "status", header: "Status", className: "min-w-[9rem] whitespace-nowrap", render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{humanizeStatus(row.status_proyek)}</StatusBadge> },
+              { key: "status", header: "Status", className: "min-w-[14rem] whitespace-nowrap", render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{projectStatusLabel(row.status_proyek)}</StatusBadge> },
               {
                 key: "aksi",
                 header: "Aksi",

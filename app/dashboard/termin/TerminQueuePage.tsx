@@ -13,7 +13,7 @@ import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
 import { envelopeRows, requestHrisApi, unwrapEnvelope } from "@/lib/hris/api";
-import { formatDate, formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
+import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 
 type TerminRow = {
   id: string;
@@ -222,7 +222,7 @@ export default function TerminQueuePage() {
                         <p className="text-xs text-muted-foreground">{project?.kode_proyek ?? "—"} · TA {project?.tahun_fiscal ?? "—"} · {termCount} termin</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <StatusBadge status={projectStatusTone(project?.status_proyek)}>{humanizeStatus(project?.status_proyek)}</StatusBadge>
+                        <StatusBadge status={projectStatusTone(project?.status_proyek)}>{projectStatusLabel(project?.status_proyek)}</StatusBadge>
                         <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{paidTerms}/{termCount} cair</span>
                       </div>
                     </header>

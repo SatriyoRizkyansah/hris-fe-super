@@ -243,6 +243,9 @@ export interface ProyekItemDto {
   file_sk?: object | null;
   file_rab?: object | null;
   file_notulen?: object | null;
+  file_bast?: string | null;
+  selesai_oleh_id?: string | null;
+  selesai_pada?: string | null;
   /** @example 1000000000 */
   nilai_kontrak?: number;
   /** @example 750000000 */
@@ -254,6 +257,7 @@ export interface ProyekItemDto {
     | "MENUNGGU_NOTULEN"
     | "MENUNGGU_VALIDASI_PIMPINAN"
     | "DISETUJUI_PIMPINAN"
+    | "SELESAI"
     | "DITOLAK_UMUM"
     | "DITOLAK_PIMPINAN";
   catatan_validasi?: object | null;
@@ -1793,6 +1797,7 @@ export class Api<
           | "MENUNGGU_NOTULEN"
           | "MENUNGGU_VALIDASI_PIMPINAN"
           | "DISETUJUI_PIMPINAN"
+          | "SELESAI"
           | "DITOLAK_UMUM"
           | "DITOLAK_PIMPINAN";
       },
@@ -2045,6 +2050,24 @@ export class Api<
     ) =>
       this.request<void, any>({
         path: `/api/proyek/${id}/notulen`,
+        method: "POST",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * @tags Master - Proyek
+     * @name ProyekUploadBastControllerUploadBast
+     * @summary Upload BAST dan selesaikan proyek (Superadmin, Koordinator pemilik)
+     * @request POST:/api/proyek/{id}/bast
+     * @secure
+     */
+    proyekUploadBastControllerUploadBast: (
+      id: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/proyek/${id}/bast`,
         method: "POST",
         secure: true,
         ...params,

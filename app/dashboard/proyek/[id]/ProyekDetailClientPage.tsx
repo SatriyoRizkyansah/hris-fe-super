@@ -19,11 +19,11 @@ import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, envelopeData, envelopeRows, requestHrisApi, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
-import { formatDate, formatRupiah, humanizeStatus, projectStatusTone } from "@/lib/hris/format";
+import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
 
-type Workflow = "umum" | "pimpinan" | "notulen" | null;
+type Workflow = "umum" | "pimpinan" | "notulen" | "bast" | null;
 type Row = Record<string, unknown>;
 type ProjectExtensionRow = {
   id: string;
@@ -38,7 +38,12 @@ type ProjectExtensionRow = {
   diperiksa_oleh?: { nama?: string } | null;
   catatan_pemeriksa?: string | null;
 };
-type ProjectDetail = ProyekItemDto & { perpanjangan_list?: ProjectExtensionRow[] };
+type ProjectDetail = ProyekItemDto & {
+  file_bast?: string | null;
+  selesai_oleh_id?: string | null;
+  selesai_pada?: string | null;
+  perpanjangan_list?: ProjectExtensionRow[];
+};
 const text = (value: unknown, fallback = "—") => (value === null || value === undefined || value === "" ? fallback : String(value));
 const financeOf = (row: Row): Row => (row.balance && typeof row.balance === "object" ? (row.balance as Row) : {});
 const dateKey = (value: unknown) => String(value ?? "").slice(0, 10);
@@ -181,6 +186,10 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       if (workflow === "notulen") {
         if (!file) throw new Error("Pilih berkas notulen.");
         return uploadHrisFile(`/api/proyek/${id}/notulen`, file);
+      }
+      if (workflow === "bast") {
+        if (!file) throw new Error("Pilih dokumen BAST dalam format PDF.");
+        return uploadHrisFile(`/api/proyek/${id}/bast`, file);
       }
       if (!workflow) throw new Error("Aksi workflow tidak dipilih.");
       if (!approved && !note.trim()) throw new Error("Catatan penolakan wajib diisi.");
@@ -355,8 +364,13 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               <FileClock size={16} /> Ajukan Perpanjangan SK
             </Button>
           )}
+          {isSubmitter && statusIsApproved(status) && (
+            <Button onClick={() => openWorkflow("bast")}>
+              <Upload size={16} /> Unggah BAST & Selesaikan
+            </Button>
+          )}
           <ProjectFinalReportButton project={project} />
-          <StatusBadge status={projectStatusTone(status)}>{humanizeStatus(status)}</StatusBadge>
+          <StatusBadge status={projectStatusTone(status)}>{projectStatusLabel(status)}</StatusBadge>
         </div>
       </header>
       <div className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
@@ -389,11 +403,11 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             <p className="text-xs text-muted-foreground">Proses berjalan berurutan. Rencana Operasional (RO) aktif setelah persetujuan pimpinan.</p>
           </div>
           {(() => {
-            const steps = ["Pengajuan proyek", "Validasi Koordinator Umum", "Unggah notulen", "Persetujuan pimpinan"];
-            const currentIndex = status === "MENUNGGU_VALIDASI_UMUM" ? 1 : status === "MENUNGGU_NOTULEN" ? 2 : status === "MENUNGGU_VALIDASI_PIMPINAN" ? 3 : status === "DISETUJUI_PIMPINAN" ? 4 : 0;
+            const steps = ["Pengajuan proyek", "Validasi Koordinator Umum", "Unggah notulen", "Persetujuan pimpinan", "Serah terima BAST"];
+            const currentIndex = status === "MENUNGGU_VALIDASI_UMUM" ? 1 : status === "MENUNGGU_NOTULEN" ? 2 : status === "MENUNGGU_VALIDASI_PIMPINAN" ? 3 : status === "DISETUJUI_PIMPINAN" ? 4 : status === "SELESAI" ? 5 : 0;
             const rejected = String(status).startsWith("DITOLAK");
             return (
-              <ol className="grid grid-cols-1 gap-0 sm:grid-cols-4">
+              <ol className="grid grid-cols-1 gap-0 sm:grid-cols-5">
                 {steps.map((step, index) => {
                   const complete = !rejected && index < currentIndex;
                   const active = !rejected && index === currentIndex && currentIndex < steps.length;
@@ -417,7 +431,8 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             );
           })()}
           {String(status).startsWith("DITOLAK") && <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">Pengajuan ditolak. Silakan periksa catatan validasi.</p>}
-          {status === "DISETUJUI_PIMPINAN" && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Proyek disetujui pimpinan. RO telah memasuki tahap aktif.</p>}
+          {status === "DISETUJUI_PIMPINAN" && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Proyek berjalan dan RO aktif setelah disetujui Pimpinan.</p>}
+          {status === "SELESAI" && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Proyek telah dinyatakan selesai setelah pemilik proyek mengunggah BAST{project.selesai_pada ? ` pada ${formatDate(project.selesai_pada)}` : ""}.</p>}
           <p className="mt-4 text-xs text-muted-foreground">Setelah proyek disetujui, Billing menerbitkan invoice dan Bendahara mencatat pembayaran setelah dana masuk.</p>
         </div>
       </div>
@@ -509,6 +524,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
               { label: "Kontrak Proyek", path: project.file_sk },
               { label: "RAB Proyek", path: project.file_rab },
               { label: "Notulen", path: project.file_notulen },
+              { label: "BAST Proyek", path: project.file_bast },
             ]}
           />
         </div>
@@ -569,11 +585,11 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       <Dialog open={workflow !== null} onOpenChange={(value) => !value && setWorkflow(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{workflow === "notulen" ? "Unggah Notulen" : `Validasi ${workflow === "umum" ? "Bagian Umum" : "Pimpinan"}`}</DialogTitle>
-            <DialogDescription>{workflow === "notulen" ? "Unggah PDF, DOC, atau DOCX notulen." : "Pilih setuju atau tolak. Catatan wajib saat menolak."}</DialogDescription>
+            <DialogTitle>{workflow === "notulen" ? "Unggah Notulen" : workflow === "bast" ? "Unggah BAST dan Selesaikan Proyek" : `Validasi ${workflow === "umum" ? "Bagian Umum" : "Pimpinan"}`}</DialogTitle>
+            <DialogDescription>{workflow === "notulen" ? "Unggah PDF, DOC, atau DOCX notulen." : workflow === "bast" ? "Unggah Berita Acara Serah Terima dalam format PDF. Setelah berhasil, status proyek berubah menjadi Selesai." : "Pilih setuju atau tolak. Catatan wajib saat menolak."}</DialogDescription>
           </DialogHeader>
-          {workflow === "notulen" ? (
-            <DocumentUploadField label="Dokumen Notulen" accept=".pdf,.doc,.docx" value={file} onChange={setFile} currentFile={typeof project.file_notulen === "string" ? project.file_notulen : null} />
+          {workflow === "notulen" || workflow === "bast" ? (
+            <DocumentUploadField label={workflow === "bast" ? "BAST (Berita Acara Serah Terima) · PDF" : "Dokumen Notulen"} accept={workflow === "bast" ? ".pdf" : ".pdf,.doc,.docx"} value={file} onChange={setFile} currentFile={typeof (workflow === "bast" ? project.file_bast : project.file_notulen) === "string" ? String(workflow === "bast" ? project.file_bast : project.file_notulen) : null} />
           ) : (
             <div className="space-y-3">
               <div className="rounded-lg bg-muted/40 p-3 text-sm">
@@ -620,8 +636,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             <Button variant="outline" onClick={() => setWorkflow(null)}>
               Batal
             </Button>
-            <Button disabled={workflowMutation.isPending} onClick={submitWorkflow}>
-              {workflowMutation.isPending && <LoaderCircle className="animate-spin" size={16} />} Proses
+            <Button disabled={workflowMutation.isPending || ((workflow === "notulen" || workflow === "bast") && !file) || ((workflow === "umum" || workflow === "pimpinan") && !approved && !note.trim())} onClick={submitWorkflow}>
+              {workflowMutation.isPending && <LoaderCircle className="animate-spin" size={16} />}
+              {workflow === "bast" ? "Selesaikan Proyek" : workflow === "notulen" ? "Unggah Notulen" : approved ? "Setujui" : "Tolak"}
             </Button>
           </DialogFooter>
         </DialogContent>
