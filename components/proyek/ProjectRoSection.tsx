@@ -69,7 +69,7 @@ export function ProjectRoSection({ roGroups, roRows, project, roDetails, roLoadi
                     className="flex w-full flex-col gap-3 p-4 text-left transition-colors enabled:hover:bg-muted/30 disabled:cursor-default sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span className="min-w-0">
-                      <span className="block font-semibold">{text(row.nama_ro, "RO")}</span>
+                      <span className="block font-semibold">{text(row.nama_mak ?? row.mak?.nama_mak ?? row.nama_ro, "RO")}</span>
                       <span className="mt-1 block text-xs text-muted-foreground">
                         {text(row.nama_unit_koordinator)} · Tahun fiskal {text(row.tahun_fiscal)}
                       </span>

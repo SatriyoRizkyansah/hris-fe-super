@@ -29,7 +29,7 @@ function roDataFrom(rows: Row[]) {
   const allRows = rows.map((row, index) => {
     const balance = row.balance && typeof row.balance === "object" ? row.balance as Row : {};
     return {
-      name: String(row.nama_ro ?? row.kode_ro ?? `RO ${index + 1}`),
+      name: String(row.nama_mak ?? row.mak?.nama_mak ?? row.nama_ro ?? row.kode_ro ?? `RO ${index + 1}`),
       pagu: Number(balance.pagu_disetujui) || Number(row.nilai_rencana) || Number(row.total_plafon) || 0,
       belanja: Number(balance.realisasi ?? row.total_terpakai) || 0,
     };

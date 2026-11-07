@@ -50,15 +50,15 @@ type ProjectDetail = ProyekItemDto & {
   riwayat_revisi?: ProjectRevisionRow[];
   catatan_layanan?: string | null;
   divalidasi_layanan_pada?: string | null;
-  job_list?: Array<{ id: string; nomor_job: string; ro_list: Array<{ id: string; nama_ro: string; mak_id?: string | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }> }>;
-  ro_list?: Array<{ id: string; job_proyek_id?: string | null; nomor_job?: string | null; nama_ro: string; mak_id?: string | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }>;
+  job_list?: Array<{ id: string; nomor_job: string; ro_list: Array<{ id: string; nama_ro: string; mak_id?: string | null; mak?: { id?: string; kode_mak?: string; nama_mak?: string } | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }> }>;
+  ro_list?: Array<{ id: string; job_proyek_id?: string | null; nomor_job?: string | null; nama_ro: string; mak_id?: string | null; mak?: { id?: string; kode_mak?: string; nama_mak?: string } | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }>;
   termin_list?: Array<{ id: string; nomor_termin: number; persentase: number; nilai_termin: number; has_invoice?: boolean }>;
   unit_terlibat?: Array<{ id: string; peran?: string }>;
 };
 type LookupRow = { id: string; [key: string]: unknown };
 type Option = { value: string; label: string };
 const blankProjectForm = (): ProjectForm => ({ kode_proyek: "", nama_proyek: "", tahun_fiscal: String(new Date().getFullYear()), mulai_kontrak: "", berakhir_kontrak: "", sumber_pendanaan: "", nama_client: "", no_kontrak: "", pj_1: "", pj_2: "", nilai_kontrak: "", total_direct_cost: "", total_margin: "" });
-const blankRevisionRo = (unitId = ""): RoDraft => ({ key: crypto.randomUUID(), nama_ro: "", mak_id: "", id_unit_koordinator: unitId, rekening_id: "", plafon: 0, plafonText: "", detailMode: "later", no_kontrak: "", pj: "", unit_kolaborasi_ids: [] });
+const blankRevisionRo = (unitId = ""): RoDraft => ({ key: crypto.randomUUID(), mak_id: "", id_unit_koordinator: unitId, rekening_id: "", plafon: 0, plafonText: "", detailMode: "later", no_kontrak: "", pj: "", unit_kolaborasi_ids: [] });
 const blankRevisionJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nomor_job: "", ros: [blankRevisionRo(unitId)] });
 const blankRevisionTerm = (percentage = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(percentage) || 0, persentaseText: percentage });
 const normalizeUnitId = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("en-US");
@@ -210,11 +210,12 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const settingsData = envelopeData<Row>(settings.data);
   const settingRows = Array.isArray(settingsData?.list) ? (settingsData.list as Row[]) : [];
   const unitOptions = envelopeRows<LookupRow>(units.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
-  const makOptions = envelopeRows<LookupRow>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
+  const makOptions = envelopeRows<LookupRow & { kode_mak?: string; nama_mak?: string; tipe_akun?: string }>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const rekeningOptions = envelopeRows<LookupRow>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const currentUnit = unitOptions.find((unit) => String(unit.id) === identity.unitKerjaId);
   const unitComboboxOptions: Option[] = unitOptions.map((unit) => ({ value: unit.id, label: [unit.kode_unit, unit.nama_unit].filter(Boolean).join(" — ") }));
   const makComboboxOptions: Option[] = makOptions.map((mak) => ({ value: mak.id, label: [mak.kode_mak, mak.nama_mak, mak.tipe_akun ? `(${mak.tipe_akun})` : ""].filter(Boolean).join(" — ") }));
+  const makNameById = Object.fromEntries(makOptions.map((mak) => [mak.id, String(mak.nama_mak ?? "")]));
   const rekeningComboboxOptions: Option[] = rekeningOptions.map((account) => ({ value: account.id, label: [account.nama_bank, account.nama_rekening, account.nomor_rekening ? `(${account.nomor_rekening})` : ""].filter(Boolean).join(" — ") }));
   const revisionProjectUnitIds = [...new Set([revisionLeadUnitId, ...revisionCollaboratorIds].filter(Boolean))];
   const roUnitComboboxOptions = unitComboboxOptions.filter((option) => revisionProjectUnitIds.includes(option.value));
@@ -228,7 +229,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const revisionCollaboratorsAssigned = revisionCollaboratorIds.every((unitId) => assignedRoUnitIds.has(normalizeUnitId(unitId)));
   const revisionJobNumbers = revisionJobs.map((job) => job.nomor_job.trim().toLocaleUpperCase("id-ID")).filter(Boolean);
   const revisionJobsUnique = new Set(revisionJobNumbers).size === revisionJobNumbers.length;
-  const revisionAllocationsValid = revisionJobs.length > 0 && revisionJobs.every((job) => job.nomor_job.trim() && job.ros.length > 0 && job.ros.every((row) => row.nama_ro.trim() && row.mak_id && revisionProjectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) && Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()) && (row.unit_kolaborasi_ids ?? []).every((unitId) => revisionProjectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator))));
+  const revisionAllocationsValid = revisionJobs.length > 0 && revisionJobs.every((job) => job.nomor_job.trim() && job.ros.length > 0 && job.ros.every((row) => row.mak_id && revisionProjectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) && Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()) && (row.unit_kolaborasi_ids ?? []).every((unitId) => revisionProjectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator))));
   const revisionContractDatesRequired = revisionRoRows.some((row) => row.detailMode === "detail");
   const revisionContractDatesValid = (!revisionForm.mulai_kontrak && !revisionForm.berakhir_kontrak && !revisionContractDatesRequired) || Boolean(revisionForm.mulai_kontrak && revisionForm.berakhir_kontrak && revisionForm.berakhir_kontrak >= revisionForm.mulai_kontrak);
   const serviceUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_LAYANAN ?? "").trim().toLocaleUpperCase("id-ID");
@@ -366,7 +367,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             nomor_job: job.nomor_job.trim(),
             ro_list: job.ros.map((row) => ({
               ...(row.id ? { id: row.id } : {}),
-              nama_ro: row.nama_ro.trim(),
+              nama_ro: makNameById[row.mak_id] ?? "",
               mak_id: row.mak_id,
               id_unit_koordinator: row.id_unit_koordinator,
               rekening_id: row.rekening_id || null,
@@ -482,7 +483,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         ...blankRevisionRo(lead),
         id: row.id,
         key: crypto.randomUUID(),
-        nama_ro: row.nama_ro,
         mak_id: String(row.mak_id ?? ""),
         id_unit_koordinator: row.id_unit_koordinator,
         rekening_id: String(row.rekening_id ?? ""),
@@ -594,6 +594,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const workflowVersion = Number(project.alur_proyek_version ?? 1);
   const isRevisionPending = status.startsWith("PERLU_REVISI_");
   const isNotulenUploader = isSubmitter || (workflowVersion >= 2 && isLayanan);
+  const hasProjectActions = (extensionOpenForSubmission && !pendingExtension) || (isSubmitter && statusIsApproved(status)) || Boolean(pendingExtension && isSubmitter);
   const roPlan = roRows.reduce((total, row) => total + (Number(row.nilai_rencana) || Number(row.total_plafon) || 0), 0);
   const approvedRoBudget = roRows.reduce((total, row) => total + (Number(financeOf(row).pagu_disetujui) || 0), 0);
   const roUsed = roRows.reduce((total, row) => total + (Number(financeOf(row).realisasi ?? row.total_terpakai) || 0), 0);
@@ -628,8 +629,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
 
   return (
     <section className="hris-page space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
-        <div>
+      <header className="space-y-4 rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
           <Button variant="ghost" size="sm" className="mb-2" render={<Link href="/dashboard/proyek" />}>
             <ArrowLeft size={16} /> Semua Proyek
           </Button>
@@ -651,19 +653,40 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             </div>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {extensionOpenForSubmission && !pendingExtension && (
-            <Button variant="outline" onClick={() => { setExtensionError(""); setExtensionOpen(true); }}>
-              <FileClock size={16} /> Ajukan Perpanjangan SK
-            </Button>
-          )}
-          {isSubmitter && statusIsApproved(status) && (
-            <Button onClick={() => openWorkflow("bast")}>
-              <Upload size={16} /> Unggah BAST & Selesaikan
-            </Button>
-          )}
-          <ProjectFinalReportButton project={project} />
+        <div className="flex items-center">
           <StatusBadge status={projectStatusTone(status)}>{projectStatusLabel(status)}</StatusBadge>
+        </div>
+        </div>
+        <div className="border-t border-border pt-4">
+          {hasProjectActions && (
+            <>
+              <div className="mb-3">
+                <p className="text-sm font-semibold">Tindakan proyek</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Ajukan perpanjangan masa SK atau unggah BAST untuk menyelesaikan proyek.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {extensionOpenForSubmission && !pendingExtension && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => { setExtensionError(""); setExtensionOpen(true); }}>
+                    <FileClock size={15} /> Ajukan perpanjangan SK
+                  </Button>
+                )}
+                {isSubmitter && statusIsApproved(status) && (
+                  <Button type="button" size="sm" onClick={() => openWorkflow("bast")}>
+                    <Upload size={15} /> Unggah BAST untuk menyelesaikan
+                  </Button>
+                )}
+                {pendingExtension && isSubmitter && (
+                  <span className="rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                    Perpanjangan SK sedang diperiksa KARWAS
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+            <span className="text-xs font-medium text-muted-foreground">Laporan proyek</span>
+            <ProjectFinalReportButton project={project} />
+          </div>
         </div>
       </header>
       <div className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
@@ -953,6 +976,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         removeRoCollaborator={removeRevisionRoCollaborator}
         roUnitComboboxOptions={roUnitComboboxOptions}
         makComboboxOptions={makComboboxOptions}
+        makNameById={makNameById}
         rekeningComboboxOptions={rekeningComboboxOptions}
         roTotal={revisionRoTotal}
         terms={revisionTerms}

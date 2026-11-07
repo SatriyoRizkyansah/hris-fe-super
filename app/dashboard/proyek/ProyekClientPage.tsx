@@ -63,7 +63,6 @@ const blankForm = (): ProjectForm => ({
 });
 const blankRo = (unitId = ""): RoDraft => ({
   key: crypto.randomUUID(),
-  nama_ro: "",
   mak_id: "",
   id_unit_koordinator: unitId,
   rekening_id: "",
@@ -206,6 +205,7 @@ export default function ProyekClientPage() {
   const isUmumValidator = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(umumUnitCode) && String(currentUnit?.kode_unit ?? "").trim().toLocaleUpperCase("id-ID") === umumUnitCode);
   const isPimpinanValidator = identity.role === "superadmin" || identity.role === "pimpinan";
   const makComboboxOptions = makOptions.map((option) => ({ value: option.id, label: [option.kode_mak, option.nama_mak, option.tipe_akun ? `(${option.tipe_akun})` : ""].filter(Boolean).join(" — ") }));
+  const makNameById = Object.fromEntries(makOptions.map((option) => [option.id, String(option.nama_mak ?? "")]));
   const unitComboboxOptions = unitOptions.map((option) => ({ value: option.id, label: [option.kode_unit, option.nama_unit].filter(Boolean).join(" — ") }));
   const projectUnitIds = [...new Set([unitPengusulId, ...unitKolaborasiIds].filter(Boolean))];
   const roUnitComboboxOptions = unitComboboxOptions.filter((option) => projectUnitIds.includes(option.value));
@@ -294,7 +294,7 @@ export default function ProyekClientPage() {
   const jobNumbersUnique = new Set(filledJobNumbers).size === filledJobNumbers.length;
   const allocationsValid = jobs.length > 0 && jobs.every((job) =>
     job.nomor_job.trim() && job.ros.length > 0 && job.ros.every((row) =>
-      row.nama_ro && row.mak_id && projectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) &&
+      row.mak_id && projectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) &&
       (row.unit_kolaborasi_ids ?? []).every((unitId) => projectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator)) &&
       Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()),
     ),
@@ -344,7 +344,6 @@ export default function ProyekClientPage() {
     const allocationChanged = jobs.length > 1 || jobs.some((job) =>
       Boolean(job.nomor_job.trim()) || job.ros.length > 1 || job.ros.some((row) =>
         Boolean(
-          row.nama_ro.trim() ||
           row.mak_id ||
           row.rekening_id ||
           row.plafonText.trim() ||
@@ -540,7 +539,7 @@ export default function ProyekClientPage() {
         job_list: jobs.map((job) => ({
           nomor_job: job.nomor_job.trim(),
           ro_list: job.ros.map((row) => ({
-            nama_ro: row.nama_ro,
+            nama_ro: makNameById[row.mak_id] ?? "",
             mak_id: row.mak_id,
             id_unit_koordinator: normalizeUnitId(row.id_unit_koordinator),
             ...(row.rekening_id ? { rekening_id: row.rekening_id } : {}),
@@ -882,6 +881,7 @@ export default function ProyekClientPage() {
         removeRoCollaborator={removeRoCollaborator}
         roUnitComboboxOptions={roUnitComboboxOptions}
         makComboboxOptions={makComboboxOptions}
+        makNameById={makNameById}
         rekeningComboboxOptions={rekeningComboboxOptions}
         roTotal={roTotal}
         terms={terms}

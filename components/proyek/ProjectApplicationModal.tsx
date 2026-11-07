@@ -49,6 +49,7 @@ type Props = {
   removeRoCollaborator: (roKey: string, unitId: string) => void;
   roUnitComboboxOptions: Option[];
   makComboboxOptions: Option[];
+  makNameById: Record<string, string>;
   rekeningComboboxOptions: Option[];
   roTotal: number;
   terms: TerminDraft[];
@@ -92,7 +93,7 @@ export function ProjectApplicationModal(props: Props) {
     availableCollaboratorOptions, addCollaborator, unitKolaborasiIds, assignedRoUnitIds,
     normalizeUnitId, removeCollaborator, numeric, contractOk, jobs, addJob, removeJob,
     updateJob, updateRo, addRo, removeRo, addRoCollaborator, removeRoCollaborator,
-    roUnitComboboxOptions, makComboboxOptions, rekeningComboboxOptions, roTotal, terms,
+    roUnitComboboxOptions, makComboboxOptions, makNameById, rekeningComboboxOptions, roTotal, terms,
     setTerms, addTerm, updateTerm, termsTotal, sk, setSk, rab, setRab, formError, saveDraft,
     submit, submitting,
   } = props;
@@ -264,13 +265,19 @@ export function ProjectApplicationModal(props: Props) {
                         <article key={row.key} className="overflow-hidden rounded-lg border">
                           <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-background px-3 py-2">
                             <div>
-                              <h4 className="text-sm font-semibold">RO {String(rowIndex + 1).padStart(2, "0")}{row.nama_ro.trim() ? ` · ${row.nama_ro.trim()}` : ""}</h4>
+                              <h4 className="text-sm font-semibold">RO {String(rowIndex + 1).padStart(2, "0")}{row.mak_id && makNameById[row.mak_id] ? ` · ${makNameById[row.mak_id]}` : ""}</h4>
                               <p className="text-xs text-muted-foreground">{row.detailMode === "detail" ? "PJ RO diisi sekarang" : "PJ RO dilengkapi nanti"}</p>
                             </div>
                             {job.ros.length > 1 && <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeRo(row.key)}><Trash2 size={14} /> Hapus RO</Button>}
                           </header>
                           <div className="grid gap-4 p-3 sm:grid-cols-2">
-                            <Field label="Nama RO" required value={row.nama_ro} onChange={(value) => updateRo(row.key, "nama_ro", value)} />
+                            <div className="sm:col-span-2">
+                              <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                                <span>MAK *</span>
+                                <FilterCombobox options={makComboboxOptions} value={row.mak_id} onValueChange={(value) => updateRo(row.key, "mak_id", value)} label="Pilih MAK" />
+                                <span className="text-xs font-normal text-muted-foreground">Nama RO mengikuti nama MAK yang dipilih.</span>
+                              </label>
+                            </div>
                             <MoneyField label="Plafon" required value={row.plafonText} onChange={(value) => updateRo(row.key, "plafonText", value)} />
                             <fieldset className="grid gap-2 sm:col-span-2">
                               <legend className="text-sm font-medium">Detail administrasi RO</legend>
@@ -292,12 +299,6 @@ export function ProjectApplicationModal(props: Props) {
                                 </div>
                               </>
                             )}
-                            <div className="sm:col-span-2">
-                              <label className="grid min-w-0 gap-1.5 text-sm font-medium">
-                                <span>MAK *</span>
-                                <FilterCombobox options={makComboboxOptions} value={row.mak_id} onValueChange={(value) => updateRo(row.key, "mak_id", value)} label="Pilih MAK" />
-                              </label>
-                            </div>
                             <label className="grid min-w-0 gap-1.5 text-sm font-medium">
                               <span>Unit pemilik RO *</span>
                               <FilterCombobox options={roUnitComboboxOptions} value={row.id_unit_koordinator} onValueChange={(value) => updateRo(row.key, "id_unit_koordinator", value)} label="Pilih unit pemilik RO" />
