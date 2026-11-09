@@ -10,7 +10,7 @@ import { Modal } from "@/components/modal/Modal";
 import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { formatRupiah } from "@/lib/hris/format";
-import type { JobDraft, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
+import type { JobDraft, JobMetadataField, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
 
 type Option = { value: string; label: string };
 type MoneyKey = "nilai_kontrak" | "total_direct_cost" | "total_margin";
@@ -41,7 +41,7 @@ type Props = {
   jobs: JobDraft[];
   addJob: () => void;
   removeJob: (jobKey: string) => void;
-  updateJob: (jobKey: string, value: string) => void;
+  updateJob: (jobKey: string, field: JobMetadataField, value: string) => void;
   updateRo: (roKey: string, field: keyof RoDraft, value: string) => void;
   addRo: (jobKey: string) => void;
   removeRo: (roKey: string) => void;
@@ -239,12 +239,11 @@ export function ProjectApplicationModal(props: Props) {
           </div>
           {jobs.map((job, jobIndex) => {
             const jobRoTotal = job.ros.reduce((total, row) => total + (Number(row.plafonText) || 0), 0);
-            const duplicateJob = job.nomor_job.trim() && jobs.some((other) => other.key !== job.key && other.nomor_job.trim().toLocaleUpperCase("id-ID") === job.nomor_job.trim().toLocaleUpperCase("id-ID"));
             return (
               <article key={job.key} className="overflow-hidden rounded-xl border bg-background shadow-sm">
                 <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
                   <div>
-                    <h3 className="font-semibold">Job {String(jobIndex + 1).padStart(2, "0")}{job.nomor_job.trim() ? ` · ${job.nomor_job.trim()}` : ""}</h3>
+                    <h3 className="font-semibold">Job {String(jobIndex + 1).padStart(2, "0")}</h3>
                     <p className="text-xs text-muted-foreground">{job.ros.length > 1 ? `Split ke ${job.ros.length} RO · Total ${formatRupiah(jobRoTotal)}` : "Satu Job dapat memuat satu atau beberapa alokasi RO."}</p>
                   </div>
                   {jobs.length > 1 && (
@@ -254,9 +253,24 @@ export function ProjectApplicationModal(props: Props) {
                   )}
                 </header>
                 <div className="space-y-4 p-4">
-                  <div className="max-w-xl">
-                    <Field label="Nomor Job *" required value={job.nomor_job} onChange={(value) => updateJob(job.key, value)} />
-                    {duplicateJob && <p className="mt-1 text-xs text-destructive">Nomor Job sudah dipakai. Tambahkan RO split pada card Job yang sama.</p>}
+                  <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                    <span>Nomor Job</span>
+                    <Input aria-label="Nomor Job" readOnly value={job.nomor_job ?? "Menyiapkan nomor..."} className="max-w-xl cursor-not-allowed bg-muted/40 font-mono" />
+                    <span className="text-xs font-normal text-muted-foreground">Dibuat otomatis saat form dibuka dan tidak dapat diubah.</span>
+                  </label>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Nama Job *" required value={job.nama_job} onChange={(value) => updateJob(job.key, "nama_job", value)} />
+                    <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+                      <span>Kategori Job *</span>
+                      <select className="h-9 rounded-md border bg-background px-3 text-sm font-normal" value={job.kategori_job} onChange={(event) => updateJob(job.key, "kategori_job", event.target.value)}>
+                        <option value="">Pilih kategori</option>
+                        <option value="LABORATORIUM">Laboratorium</option>
+                        <option value="STUDI">Studi</option>
+                        <option value="KAJIAN">Kajian</option>
+                        <option value="DOMINAN_LAB">Dominan Lab</option>
+                        <option value="DOMINAN_STUDI">Dominan Studi</option>
+                      </select>
+                    </label>
                   </div>
                   <div className="space-y-3">
                     {job.ros.map((row, rowIndex) => {
@@ -270,6 +284,11 @@ export function ProjectApplicationModal(props: Props) {
                             </div>
                             {job.ros.length > 1 && <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeRo(row.key)}><Trash2 size={14} /> Hapus RO</Button>}
                           </header>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 border-b bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                            <span>Job: <strong className="text-foreground">{job.nama_job || "Belum diisi"}</strong></span>
+                            <span>Kategori: <strong className="text-foreground">{job.kategori_job || "Belum dipilih"}</strong></span>
+                            {job.nomor_job ? <span>No. Job: <strong className="text-foreground">{job.nomor_job}</strong></span> : null}
+                          </div>
                           <div className="grid gap-4 p-3 sm:grid-cols-2">
                             <div className="sm:col-span-2">
                               <label className="grid min-w-0 gap-1.5 text-sm font-medium">

@@ -102,6 +102,8 @@ export default function RoClientPage() {
       render: (row: RoItemDto) => (
         <span className="break-words text-sm">
           {String(row.nomor_job ?? "—")}
+          {row.nama_job ? <span className="mt-1 block text-xs text-foreground">{String(row.nama_job)}</span> : null}
+          {row.kategori_job ? <span className="block text-xs text-muted-foreground">{String(row.kategori_job).replaceAll("_", " ")}</span> : null}
           <span className="block text-xs text-muted-foreground">
             {row.id_proyek ? "Periode kontrak proyek · " : "Periode kontrak · "}{formatDate(row.mulai_kontrak)} – {formatDate(row.berakhir_kontrak)}
           </span>

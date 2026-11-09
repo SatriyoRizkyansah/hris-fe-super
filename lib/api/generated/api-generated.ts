@@ -294,8 +294,6 @@ export interface RoInputDto {
   rekening_id?: string;
   /** @example "KONTRAK/2026/001" */
   no_kontrak?: string;
-  /** @example "JOB/2026/001" */
-  nomor_job?: string;
   /** Unit kerja lain yang terlibat pada RO ini */
   unit_kolaborasi_ids?: string[];
   /** @example "Budi Santoso" */
@@ -303,11 +301,13 @@ export interface RoInputDto {
 }
 
 export interface JobProyekInputDto {
-  /**
-   * Nomor Job bersama untuk satu atau beberapa RO
-   * @example "JOB/2026/014"
-   */
-  nomor_job: string;
+  /** ID Job untuk mempertahankan data saat revisi */
+  id?: string;
+  /** ID reservasi nomor Job otomatis untuk Job baru */
+  nomor_job_reservasi_id?: string;
+  /** @example "Pengujian Rheology" */
+  nama_job: string;
+  kategori_job: "LABORATORIUM" | "STUDI" | "KAJIAN" | "DOMINAN_LAB" | "DOMINAN_STUDI";
   /** Alokasi RO milik Job ini */
   ro_list: RoInputDto[];
 }
@@ -365,7 +365,7 @@ export interface CreateProyekDto {
   /** Daftar RO awal — total plafon harus = total_direct_cost */
   ro_list?: RoInputDto[];
   /** Job proyek sebagai parent untuk satu atau beberapa alokasi RO */
-  job_list?: JobProyekInputDto[];
+  job_list: JobProyekInputDto[];
   /** Rencana termin; total persentase harus 100% */
   termin_list: TerminInputDto[];
 }
@@ -445,6 +445,8 @@ export interface RoItemDto {
   nomor_job?: object | null;
   job_proyek_id?: object | null;
   job_proyek?: object | null;
+  nama_job?: string | null;
+  kategori_job?: "LABORATORIUM" | "STUDI" | "KAJIAN" | "DOMINAN_LAB" | "DOMINAN_STUDI" | null;
   /** Jumlah RO proyek yang memakai nomor Job sama */
   jumlah_ro_split_nomor_job?: number;
   unit_kolaborasi?: object[];
@@ -541,10 +543,15 @@ export interface CreateRoDto {
    * @example 500000000
    */
   total_plafon: number;
+  /** Pilih Job yang telah terdaftar pada proyek untuk menambah RO split */
+  job_proyek_id?: string;
+  /** Wajib jika membuat Job baru bersama RO ini */
+  nama_job?: string;
+  kategori_job?: "LABORATORIUM" | "STUDI" | "KAJIAN" | "DOMINAN_LAB" | "DOMINAN_STUDI";
+  /** ID reservasi nomor Job otomatis untuk Job baru */
+  nomor_job_reservasi_id?: string;
   /** @example "KONTRAK/2026/001" */
   no_kontrak?: string;
-  /** @example "JOB/2026/001" */
-  nomor_job?: string;
   /** Unit kerja lain yang terlibat pada RO ini */
   unit_kolaborasi_ids?: string[];
   /** @example "Budi Santoso" */
@@ -560,7 +567,6 @@ export interface UpdateRoDto {
   id_rekening?: string;
   total_plafon?: number;
   no_kontrak?: string;
-  nomor_job?: string;
   /** Unit kerja lain yang terlibat pada RO ini */
   unit_kolaborasi_ids?: string[];
   pj?: string;

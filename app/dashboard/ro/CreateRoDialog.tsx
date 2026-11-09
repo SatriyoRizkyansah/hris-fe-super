@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +11,7 @@ import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeRows } from "@/lib/hris/api";
+import { apiErrorMessage, envelopeData, envelopeRows, requestHrisApi, unwrapEnvelope } from "@/lib/hris/api";
 import { formatDate } from "@/lib/hris/format";
 import type { CreateRoDto, ProyekItemDto } from "@/lib/api/generated/api-generated";
 
@@ -24,7 +24,11 @@ type Form = {
   tahun_fiscal: string;
   total_plafon: string;
   no_kontrak: string;
+  job_proyek_id: string;
+  nama_job: string;
+  kategori_job: string;
   nomor_job: string;
+  nomor_job_reservasi_id: string;
   pj: string;
 };
 const blank = (): Form => ({
@@ -35,7 +39,11 @@ const blank = (): Form => ({
   tahun_fiscal: String(new Date().getFullYear()),
   total_plafon: "",
   no_kontrak: "",
+  job_proyek_id: "",
+  nama_job: "",
+  kategori_job: "",
   nomor_job: "",
+  nomor_job_reservasi_id: "",
   pj: "",
 });
 
@@ -44,6 +52,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
   const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
   const [collaboratorCandidate, setCollaboratorCandidate] = useState("");
   const [error, setError] = useState("");
+  const reservationRequests = useRef(new Set<string>());
   const mak = use_query({
     tag: "masterMak",
     method: "options",
@@ -60,6 +69,16 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
     queryFn: async () => {
       setBrowserToken();
       return browserApi.masterProyek.proyekGetDataControllerGetData({ limit: 200 });
+    },
+  });
+  const projectDetail = use_query({
+    tag: "masterProyek",
+    method: "detail-ro-form",
+    params: { id: form.id_proyek },
+    enabled: Boolean(form.id_proyek),
+    queryFn: async ({ id }) => {
+      setBrowserToken();
+      return browserApi.masterProyek.proyekGetDetailControllerGetDetail(id);
     },
   });
   const unit = use_query({
@@ -100,18 +119,50 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
   const projects = envelopeRows<ProyekItemDto>(project.data);
   const units = envelopeRows<Row>(unit.data);
   const selectedProject = projects.find((row) => row.id === form.id_proyek);
+  const selectedProjectDetail = envelopeData<Row>(projectDetail.data);
+  const projectJobs = Array.isArray(selectedProjectDetail?.job_list)
+    ? selectedProjectDetail.job_list as Row[]
+    : [];
+  const selectedJob = projectJobs.find((job) => String(job.id) === form.job_proyek_id);
+  const creatingJob = form.job_proyek_id === "__new__" || (!form.job_proyek_id && !projectJobs.length);
+  useEffect(() => {
+    if (!open || !form.id_proyek || !creatingJob || projectDetail.isFetching || form.nomor_job_reservasi_id) return;
+    const projectId = form.id_proyek;
+    const jobId = form.job_proyek_id;
+    const requestKey = `${projectId}:${jobId || "new"}`;
+    if (reservationRequests.current.has(requestKey)) return;
+    reservationRequests.current.add(requestKey);
+    void (async () => {
+      try {
+        const response = await requestHrisApi("/api/proyek/job-number/reserve", { method: "POST" });
+        const reservation = unwrapEnvelope<{ id: string; nomor_job: string }>(response).data;
+        if (!reservation?.id || !reservation.nomor_job) throw new Error("Nomor Job tidak diterima dari server.");
+        setForm((current) => current.id_proyek === projectId && current.job_proyek_id === jobId
+          ? { ...current, nomor_job: reservation.nomor_job, nomor_job_reservasi_id: reservation.id }
+          : current);
+      } catch (cause) {
+        setError(apiErrorMessage(cause, "Nomor Job belum dapat disiapkan. Pilih ulang proyek untuk mencoba lagi."));
+      } finally {
+        reservationRequests.current.delete(requestKey);
+      }
+    })();
+  }, [open, form.id_proyek, form.job_proyek_id, form.nomor_job_reservasi_id, creatingJob, projectDetail.isFetching]);
   const projectUnits = units.filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const collaboratorOptions = projectUnits
     .filter((row) => String(row.id) !== form.id_unit_koordinator && !collaboratorIds.includes(String(row.id)))
     .map((row) => ({ value: String(row.id), label: `${String(row.kode_unit)} — ${String(row.nama_unit)}` }));
   const rekenings = envelopeRows<Row>(rekening.data);
   const field = (key: keyof Form, value: string) => {
-    setForm((state) => ({ ...state, [key]: value }));
+    setForm((state) => ({
+      ...state,
+      [key]: value,
+      ...(key === "job_proyek_id" && value !== "__new__" ? { nomor_job: "", nomor_job_reservasi_id: "" } : {}),
+    }));
     if (key === "id_unit_koordinator") setCollaboratorIds((ids) => ids.filter((id) => id !== value));
   };
   async function submit() {
-    if (!form.id_mak || !form.id_proyek || !form.id_unit_koordinator || !form.tahun_fiscal || !form.nomor_job || Number(form.total_plafon) <= 0) {
-      setError("MAK, proyek, unit pemilik, tahun fiskal, nomor Job, dan plafon wajib diisi.");
+    if (!form.id_mak || !form.id_proyek || !form.id_unit_koordinator || !form.tahun_fiscal || Number(form.total_plafon) <= 0 || (creatingJob && (!form.nama_job.trim() || !form.kategori_job || !form.nomor_job_reservasi_id)) || (!creatingJob && !form.job_proyek_id)) {
+      setError("Lengkapi MAK, proyek, unit pemilik, tahun fiskal, Job, dan plafon.");
       return;
     }
     try {
@@ -124,7 +175,11 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
         tahun_fiscal: Number(form.tahun_fiscal),
         total_plafon: Number(form.total_plafon),
         no_kontrak: form.no_kontrak || undefined,
-        nomor_job: form.nomor_job,
+        ...(creatingJob ? {
+          nama_job: form.nama_job.trim(),
+          kategori_job: form.kategori_job as CreateRoDto["kategori_job"],
+          nomor_job_reservasi_id: form.nomor_job_reservasi_id,
+        } : { job_proyek_id: form.job_proyek_id }),
         unit_kolaborasi_ids: collaboratorIds,
         pj: form.pj || undefined,
       });
@@ -175,6 +230,11 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
             setForm((state) => ({
               ...state,
               id_proyek: projectId,
+              job_proyek_id: "",
+              nama_job: "",
+              kategori_job: "",
+              nomor_job: "",
+              nomor_job_reservasi_id: "",
               id_unit_koordinator: nextParticipantIds.includes(state.id_unit_koordinator)
                 ? state.id_unit_koordinator
                 : nextParticipantIds[0] ?? "",
@@ -191,6 +251,35 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
             ))}
           </select>
         </label>
+        {form.id_proyek && (
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Job proyek *
+            <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.job_proyek_id} onChange={(event) => field("job_proyek_id", event.target.value)}>
+              <option value="">Pilih Job</option>
+              {projectJobs.map((job) => (
+                <option key={String(job.id)} value={String(job.id)}>
+                  {String(job.nomor_job)} · {String(job.nama_job ?? "Job tanpa nama")}
+                </option>
+              ))}
+              <option value="__new__">Buat Job baru</option>
+            </select>
+            {selectedJob && <span className="text-xs text-muted-foreground">{String(selectedJob.kategori_job ?? "Kategori belum diisi")}</span>}
+          </label>
+        )}
+        {form.id_proyek && creatingJob && (
+          <>
+            <label className="grid gap-1 text-sm sm:col-span-2">Nama Job *<Input value={form.nama_job} onChange={(event) => field("nama_job", event.target.value)} /></label>
+            <label className="grid gap-1 text-sm">Kategori Job *
+              <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.kategori_job} onChange={(event) => field("kategori_job", event.target.value)}>
+                <option value="">Pilih kategori</option><option value="LABORATORIUM">Laboratorium</option><option value="STUDI">Studi</option><option value="KAJIAN">Kajian</option><option value="DOMINAN_LAB">Dominan Lab</option><option value="DOMINAN_STUDI">Dominan Studi</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">Nomor Job
+              <Input readOnly value={form.nomor_job || "Menyiapkan nomor..."} className="bg-muted/40 font-mono" />
+            </label>
+            <p className="text-xs text-muted-foreground sm:col-span-2">Nomor Job dibuat otomatis dan tidak dapat diubah.</p>
+          </>
+        )}
         <label className="grid gap-1 text-sm">
           Unit koordinator *
           <select className="h-9 rounded-md border bg-background px-3 text-sm" value={form.id_unit_koordinator} onChange={(event) => field("id_unit_koordinator", event.target.value)}>
@@ -216,10 +305,6 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
         </label>
         <label className="grid gap-1 text-sm sm:col-span-2">
           Plafon *<Input type="number" min="1" value={form.total_plafon} onChange={(event) => field("total_plafon", event.target.value)} />
-        </label>
-        <label className="grid gap-1 text-sm">
-          Nomor Job RO *
-          <Input value={form.nomor_job} onChange={(event) => field("nomor_job", event.target.value)} />
         </label>
         <div className="grid gap-1.5 text-sm sm:col-span-2">
           <span className="font-medium">Unit kolaborasi RO</span>

@@ -3,7 +3,6 @@ export type AnyRow = Record<string, unknown>;
 export type EditForm = {
   total_plafon: string;
   no_kontrak: string;
-  nomor_job: string;
   unit_kolaborasi_ids: string[];
   pj: string;
   status_ro: "AKTIF" | "NONAKTIF" | "SELESAI";

@@ -96,10 +96,6 @@ export function RoDetailModals(props: Props) {
             No Kontrak
             <Input value={edit.no_kontrak} onChange={(event) => setEdit((state) => ({ ...state, no_kontrak: event.target.value }))} />
           </label>
-          <label className="grid gap-1 text-sm">
-            Nomor Job
-            <Input value={edit.nomor_job} onChange={(event) => setEdit((state) => ({ ...state, nomor_job: event.target.value }))} />
-          </label>
           <div className="grid gap-1.5 text-sm">
             <span className="font-medium">Unit kolaborasi RO</span>
             <div className="flex gap-2">

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Eye, LoaderCircle, Plus, Trash2, FilePenLine, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
@@ -21,7 +21,7 @@ import { envelopeRows, unwrapEnvelope, apiErrorMessage, requestHrisApi, uploadHr
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { CreateProyekDto, ProyekItemDto } from "@/lib/api/generated/api-generated";
-import type { JobDraft, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
+import type { JobDraft, JobMetadataField, KategoriJob, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
 
 type LookupRow = { id: string; [key: string]: unknown };
 type UnitOption = LookupRow & { kode_unit?: string; nama_unit?: string; status_aktif?: string };
@@ -73,7 +73,7 @@ const blankRo = (unitId = ""): RoDraft => ({
   pj: "",
   unit_kolaborasi_ids: [],
 });
-const blankJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nomor_job: "", ros: [blankRo(unitId)] });
+const blankJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nama_job: "", kategori_job: "", ros: [blankRo(unitId)] });
 const blankTermin = (persentase = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(persentase) || 0, persentaseText: persentase });
 
 function restoreJobDrafts(draft: ProjectLocalDraft, defaultUnitId: string): JobDraft[] {
@@ -81,6 +81,8 @@ function restoreJobDrafts(draft: ProjectLocalDraft, defaultUnitId: string): JobD
     return draft.jobs.map((job) => ({
       ...job,
       key: job.key || crypto.randomUUID(),
+      nama_job: job.nama_job ?? "",
+      kategori_job: job.kategori_job ?? "",
       ros: job.ros.map((row) => ({ ...blankRo(defaultUnitId), ...row, key: row.key || crypto.randomUUID() })),
     }));
   }
@@ -93,7 +95,7 @@ function restoreJobDrafts(draft: ProjectLocalDraft, defaultUnitId: string): JobD
     const existing = grouped.get(groupKey);
     const row = { ...blankRo(defaultUnitId), ...roFields, key: legacyRow.key || crypto.randomUUID() };
     if (existing) existing.ros.push(row);
-    else grouped.set(groupKey, { key: crypto.randomUUID(), nomor_job: nomorJob, ros: [row] });
+    else grouped.set(groupKey, { key: crypto.randomUUID(), nama_job: "", kategori_job: "", ros: [row] });
   });
   return grouped.size ? [...grouped.values()] : [blankJob(defaultUnitId)];
 }
@@ -128,6 +130,7 @@ export default function ProyekClientPage() {
   const [sk, setSk] = useState<File | null>(null);
   const [rab, setRab] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
+  const jobNumberRequests = useRef(new Set<string>());
   const [localDrafts, setLocalDrafts] = useState<ProjectLocalDraft[]>([]);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [validationProject, setValidationProject] = useState<ProyekItemDto | null>(null);
@@ -135,6 +138,25 @@ export default function ProyekClientPage() {
   const [validationRevision, setValidationRevision] = useState(false);
   const [validationNote, setValidationNote] = useState("");
   const [validationError, setValidationError] = useState("");
+
+  async function reserveJobNumber(jobKey: string) {
+    if (jobNumberRequests.current.has(jobKey)) return;
+    jobNumberRequests.current.add(jobKey);
+    try {
+      setBrowserToken();
+      const response = await requestHrisApi("/api/proyek/job-number/reserve", { method: "POST" });
+      const reservationResult = unwrapEnvelope<{ id: string; nomor_job: string }>(response);
+      const reservation = (reservationResult.data ?? reservationResult) as { id?: string; nomor_job?: string };
+      if (!reservation?.id || !reservation.nomor_job) throw new Error("Nomor Job tidak diterima dari server.");
+      setJobs((current) => current.map((job) => job.key === jobKey && !job.id
+        ? { ...job, nomor_job: reservation.nomor_job, nomor_job_reservasi_id: reservation.id }
+        : job));
+    } catch (error) {
+      setFormError(apiErrorMessage(error, "Nomor Job belum dapat disiapkan. Tutup lalu buka kembali form untuk mencoba lagi."));
+    } finally {
+      jobNumberRequests.current.delete(jobKey);
+    }
+  }
 
   useEffect(() => {
     const activeIdentity = browserIdentity();
@@ -148,6 +170,13 @@ export default function ProyekClientPage() {
       setLocalDrafts([]);
     }
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    for (const job of jobs) {
+      if (!job.id && !job.nomor_job_reservasi_id) void reserveJobNumber(job.key);
+    }
+  }, [open, jobs]);
 
   const list = use_query({
     tag: "masterProyek",
@@ -245,8 +274,7 @@ export default function ProyekClientPage() {
       label: canCreate ? "Ajukan proyek" : "Lihat daftar proyek",
       onClick: () => {
         if (!canCreate) return showProjectQueue("__all");
-        resetForm();
-        setOpen(true);
+        openNewApplication();
       },
     },
     {
@@ -289,11 +317,8 @@ export default function ProyekClientPage() {
   // Unit pengusul may coordinate the project without owning an RO; only project collaborators must be assigned to an RO.
   const unassignedCollaboratorIds = unitKolaborasiIds.filter((unitId) => !assignedRoUnitIds.has(normalizeUnitId(unitId)));
   const collaborationAssigned = unassignedCollaboratorIds.length === 0;
-  const jobNumbers = jobs.map((job) => job.nomor_job.trim());
-  const filledJobNumbers = jobNumbers.filter(Boolean).map((number) => number.toLocaleUpperCase("id-ID"));
-  const jobNumbersUnique = new Set(filledJobNumbers).size === filledJobNumbers.length;
   const allocationsValid = jobs.length > 0 && jobs.every((job) =>
-    job.nomor_job.trim() && job.ros.length > 0 && job.ros.every((row) =>
+    job.nama_job.trim() && job.kategori_job && job.nomor_job && (job.id || job.nomor_job_reservasi_id) && job.ros.length > 0 && job.ros.every((row) =>
       row.mak_id && projectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) &&
       (row.unit_kolaborasi_ids ?? []).every((unitId) => projectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator)) &&
       Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()),
@@ -315,7 +340,6 @@ export default function ProyekClientPage() {
     unitPengusulId &&
     collaborationAssigned &&
     allocationsValid &&
-    jobNumbersUnique &&
     roTotal === numeric("total_direct_cost") &&
     terms.length &&
     terms.every((term) => Number(term.persentaseText) > 0) &&
@@ -323,8 +347,9 @@ export default function ProyekClientPage() {
   );
 
   function resetForm() {
+    const initialJob = blankJob(identity.unitKerjaId);
     setForm(blankForm());
-    setJobs([blankJob(identity.unitKerjaId)]);
+    setJobs([initialJob]);
     setUnitPengusulId(identity.unitKerjaId);
     setUnitKolaborasiIds([]);
     setTerms([blankTermin("100")]);
@@ -332,6 +357,12 @@ export default function ProyekClientPage() {
     setRab(null);
     setFormError("");
     setEditingDraftId(null);
+    return initialJob;
+  }
+  function openNewApplication() {
+    const initialJob = resetForm();
+    void reserveJobNumber(initialJob.key);
+    setOpen(true);
   }
   function persistDrafts(drafts: ProjectLocalDraft[]) {
     setLocalDrafts(drafts);
@@ -342,7 +373,7 @@ export default function ProyekClientPage() {
       key === "tahun_fiscal" ? value !== String(currentYear) : Boolean(value.trim()),
     );
     const allocationChanged = jobs.length > 1 || jobs.some((job) =>
-      Boolean(job.nomor_job.trim()) || job.ros.length > 1 || job.ros.some((row) =>
+      Boolean(job.nama_job.trim() || job.kategori_job) || job.ros.length > 1 || job.ros.some((row) =>
         Boolean(
           row.mak_id ||
           row.rekening_id ||
@@ -412,8 +443,8 @@ export default function ProyekClientPage() {
       } : row)),
     })));
   }
-  function updateJob(key: string, nomorJob: string) {
-    setJobs((currentJobs) => currentJobs.map((job) => job.key === key ? { ...job, nomor_job: nomorJob } : job));
+  function updateJob(key: string, field: JobMetadataField, value: string) {
+    setJobs((currentJobs) => currentJobs.map((job) => job.key === key ? { ...job, [field]: value } : job));
   }
   function addJob() {
     setJobs((currentJobs) => [...currentJobs, blankJob(unitPengusulId)]);
@@ -515,10 +546,8 @@ export default function ProyekClientPage() {
         ? "Pilih unit pengusul proyek."
         : !collaborationAssigned
           ? `Unit kolaborator berikut belum ditugaskan ke RO: ${unassignedCollaboratorIds.map((unitId) => unitComboboxOptions.find((option) => normalizeUnitId(option.value) === normalizeUnitId(unitId))?.label ?? unitId).join(", ")}. Pilih sebagai pemilik RO atau tambahkan sebagai kolaborator RO.`
-          : !jobNumbersUnique
-            ? "Nomor Job hanya boleh digunakan pada satu card Job. Tambahkan RO split di dalam card Job yang sama."
-            : !allocationsValid
-              ? "Lengkapi nomor Job dan seluruh alokasi RO di dalamnya."
+          : !allocationsValid
+            ? "Lengkapi nomor Job otomatis, nama, kategori, dan seluruh alokasi RO di dalamnya."
           : "Lengkapi data. Kontrak = direct cost + margin, plafon RO = direct cost, termin = 100%."
       );
       return;
@@ -537,7 +566,9 @@ export default function ProyekClientPage() {
         unit_pengusul_id: normalizeUnitId(unitPengusulId),
         unit_kolaborasi_ids: unitKolaborasiIds.map(normalizeUnitId),
         job_list: jobs.map((job) => ({
-          nomor_job: job.nomor_job.trim(),
+          nama_job: job.nama_job.trim(),
+          kategori_job: job.kategori_job as KategoriJob,
+          ...(!job.id && job.nomor_job_reservasi_id ? { nomor_job_reservasi_id: job.nomor_job_reservasi_id } : {}),
           ro_list: job.ros.map((row) => ({
             mak_id: row.mak_id,
             id_unit_koordinator: normalizeUnitId(row.id_unit_koordinator),
@@ -581,10 +612,7 @@ export default function ProyekClientPage() {
         </div>
         {canCreate && (
           <Button
-            onClick={() => {
-              resetForm();
-              setOpen(true);
-            }}
+            onClick={openNewApplication}
           >
             <Plus size={16} /> Ajukan Proyek
           </Button>

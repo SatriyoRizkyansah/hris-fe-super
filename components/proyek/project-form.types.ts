@@ -16,7 +16,10 @@ export type ProjectForm = {
   total_margin: string;
 };
 
-export type RoDraft = Omit<RoInputDto, "nomor_job"> & {
+export type KategoriJob = "LABORATORIUM" | "STUDI" | "KAJIAN" | "DOMINAN_LAB" | "DOMINAN_STUDI";
+export type JobMetadataField = "nama_job" | "kategori_job";
+
+export type RoDraft = RoInputDto & {
   id?: string;
   key: string;
   plafonText: string;
@@ -25,5 +28,14 @@ export type RoDraft = Omit<RoInputDto, "nomor_job"> & {
   pj: string;
 };
 
-export type JobDraft = { id?: string; key: string; nomor_job: string; ros: RoDraft[] };
+export type JobDraft = {
+  id?: string;
+  key: string;
+  /** Existing number is displayed read-only; new numbers are issued by the backend. */
+  nomor_job?: string;
+  nomor_job_reservasi_id?: string;
+  nama_job: string;
+  kategori_job: KategoriJob | "";
+  ros: RoDraft[];
+};
 export type TerminDraft = TerminInputDto & { id?: string; key: string; persentaseText: string };

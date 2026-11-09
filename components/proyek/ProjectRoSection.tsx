@@ -73,7 +73,8 @@ export function ProjectRoSection({ roGroups, roRows, project, roDetails, roLoadi
                       <span className="mt-1 block text-xs text-muted-foreground">
                         {text(row.nama_unit_koordinator)} · Tahun fiskal {text(row.tahun_fiscal)}
                       </span>
-                      <span className="mt-1 block text-xs text-muted-foreground">Nomor Job: {text(row.nomor_job)}</span>
+                      <span className="mt-1 block text-xs text-muted-foreground">Nomor Job: {text(row.nomor_job)}{row.nama_job ? ` · ${String(row.nama_job)}` : ""}</span>
+                      {row.kategori_job ? <span className="block text-xs text-muted-foreground">{text(row.kategori_job).replaceAll("_", " ")}</span> : null}
                       {splitParts > 1 ? <span className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">RO split · {splitParts} bagian</span> : null}
                       {collaborationUnits.length ? <span className="mt-1 block text-xs text-violet-700">Kolaborasi dengan: {collaborationUnits.join(", ")}</span> : null}
                     </span>

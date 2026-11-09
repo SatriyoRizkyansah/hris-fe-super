@@ -23,7 +23,7 @@ import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { CreatePengajuanBelanjaDto, RoItemDto, UpdateRoDto } from "@/lib/api/generated/api-generated";
 import type { AnyRow, EditForm, SpendRequestForm, TransactionDirection, TransactionForm } from "@/components/ro/ro-detail.types";
-const emptyEdit = (): EditForm => ({ total_plafon: "", no_kontrak: "", nomor_job: "", unit_kolaborasi_ids: [], pj: "", status_ro: "AKTIF" });
+const emptyEdit = (): EditForm => ({ total_plafon: "", no_kontrak: "", unit_kolaborasi_ids: [], pj: "", status_ro: "AKTIF" });
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
 const emptySpendRequest = (): SpendRequestForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), jumlah: "", keterangan: "" });
 function missing(row: RoItemDto) {
@@ -189,7 +189,6 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     setEdit({
       total_plafon: String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro.total_plafon ?? ""),
       no_kontrak: String(ro.no_kontrak ?? ""),
-      nomor_job: String(ro.nomor_job ?? ""),
       unit_kolaborasi_ids: (ro.unit_kolaborasi as Array<{ id: string }> | undefined ?? []).map((unit) => unit.id),
       pj: String(ro.pj ?? ""),
       status_ro: (ro.status_ro as EditForm["status_ro"]) ?? "AKTIF",
@@ -208,7 +207,6 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       await update.mutateAsync({
         ...metadata,
         no_kontrak: edit.no_kontrak || undefined,
-        nomor_job: edit.nomor_job || undefined,
         unit_kolaborasi_ids: edit.unit_kolaborasi_ids,
         pj: edit.pj || undefined,
       });

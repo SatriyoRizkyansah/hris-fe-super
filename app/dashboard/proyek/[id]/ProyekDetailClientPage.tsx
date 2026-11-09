@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, Clock3, FileClock, LoaderCircle, Pencil, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
@@ -22,7 +22,7 @@ import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, envelopeData, envelopeRows, requestHrisApi, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
-import type { JobDraft, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
+import type { JobDraft, JobMetadataField, KategoriJob, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
 import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
 
 type Workflow = "layanan" | "umum" | "pimpinan" | "notulen" | "bast" | null;
@@ -50,8 +50,8 @@ type ProjectDetail = ProyekItemDto & {
   riwayat_revisi?: ProjectRevisionRow[];
   catatan_layanan?: string | null;
   divalidasi_layanan_pada?: string | null;
-  job_list?: Array<{ id: string; nomor_job: string; ro_list: Array<{ id: string; nama_ro: string; mak_id?: string | null; mak?: { id?: string; kode_mak?: string; nama_mak?: string } | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }> }>;
-  ro_list?: Array<{ id: string; job_proyek_id?: string | null; nomor_job?: string | null; nama_ro: string; mak_id?: string | null; mak?: { id?: string; kode_mak?: string; nama_mak?: string } | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }>;
+  job_list?: Array<{ id: string; nomor_job: string; nama_job?: string | null; kategori_job?: JobDraft["kategori_job"] | null; ro_list: Array<{ id: string; nama_ro: string; mak_id?: string | null; mak?: { id?: string; kode_mak?: string; nama_mak?: string } | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }> }>;
+  ro_list?: Array<{ id: string; job_proyek_id?: string | null; nomor_job?: string | null; nama_job?: string | null; kategori_job?: JobDraft["kategori_job"] | null; nama_ro: string; mak_id?: string | null; mak?: { id?: string; kode_mak?: string; nama_mak?: string } | null; id_unit_koordinator: string; rekening_id?: string | null; plafon: number; no_kontrak?: string | null; pj?: string | null; unit_kolaborasi_ids?: string[] }>;
   termin_list?: Array<{ id: string; nomor_termin: number; persentase: number; nilai_termin: number; has_invoice?: boolean }>;
   unit_terlibat?: Array<{ id: string; peran?: string }>;
 };
@@ -59,7 +59,7 @@ type LookupRow = { id: string; [key: string]: unknown };
 type Option = { value: string; label: string };
 const blankProjectForm = (): ProjectForm => ({ kode_proyek: "", nama_proyek: "", tahun_fiscal: String(new Date().getFullYear()), mulai_kontrak: "", berakhir_kontrak: "", sumber_pendanaan: "", nama_client: "", no_kontrak: "", pj_1: "", pj_2: "", nilai_kontrak: "", total_direct_cost: "", total_margin: "" });
 const blankRevisionRo = (unitId = ""): RoDraft => ({ key: crypto.randomUUID(), mak_id: "", id_unit_koordinator: unitId, rekening_id: "", plafon: 0, plafonText: "", detailMode: "later", no_kontrak: "", pj: "", unit_kolaborasi_ids: [] });
-const blankRevisionJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nomor_job: "", ros: [blankRevisionRo(unitId)] });
+const blankRevisionJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nama_job: "", kategori_job: "", ros: [blankRevisionRo(unitId)] });
 const blankRevisionTerm = (percentage = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(percentage) || 0, persentaseText: percentage });
 const normalizeUnitId = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("en-US");
 const text = (value: unknown, fallback = "—") => (value === null || value === undefined || value === "" ? fallback : String(value));
@@ -96,6 +96,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [revisionForm, setRevisionForm] = useState<ProjectForm>(blankProjectForm);
   const [revisionJobs, setRevisionJobs] = useState<JobDraft[]>([blankRevisionJob()]);
+  const reservationRequests = useRef(new Set<string>());
   const [revisionLeadUnitId, setRevisionLeadUnitId] = useState("");
   const [revisionCollaboratorIds, setRevisionCollaboratorIds] = useState<string[]>([]);
   const [revisionTerms, setRevisionTerms] = useState<TerminDraft[]>([blankRevisionTerm("100")]);
@@ -227,9 +228,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const revisionTermsTotal = revisionTerms.reduce((total, term) => total + (Number(term.persentaseText) || 0), 0);
   const assignedRoUnitIds = new Set(revisionRoRows.flatMap((row) => [row.id_unit_koordinator, ...(row.unit_kolaborasi_ids ?? [])]).map(normalizeUnitId).filter(Boolean));
   const revisionCollaboratorsAssigned = revisionCollaboratorIds.every((unitId) => assignedRoUnitIds.has(normalizeUnitId(unitId)));
-  const revisionJobNumbers = revisionJobs.map((job) => job.nomor_job.trim().toLocaleUpperCase("id-ID")).filter(Boolean);
-  const revisionJobsUnique = new Set(revisionJobNumbers).size === revisionJobNumbers.length;
-  const revisionAllocationsValid = revisionJobs.length > 0 && revisionJobs.every((job) => job.nomor_job.trim() && job.ros.length > 0 && job.ros.every((row) => row.mak_id && revisionProjectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) && Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()) && (row.unit_kolaborasi_ids ?? []).every((unitId) => revisionProjectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator))));
+  const revisionAllocationsValid = revisionJobs.length > 0 && revisionJobs.every((job) => job.nama_job.trim() && job.kategori_job && job.nomor_job && (job.id || job.nomor_job_reservasi_id) && job.ros.length > 0 && job.ros.every((row) => row.mak_id && revisionProjectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) && Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()) && (row.unit_kolaborasi_ids ?? []).every((unitId) => revisionProjectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator))));
   const revisionContractDatesRequired = revisionRoRows.some((row) => row.detailMode === "detail");
   const revisionContractDatesValid = (!revisionForm.mulai_kontrak && !revisionForm.berakhir_kontrak && !revisionContractDatesRequired) || Boolean(revisionForm.mulai_kontrak && revisionForm.berakhir_kontrak && revisionForm.berakhir_kontrak >= revisionForm.mulai_kontrak);
   const serviceUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_LAYANAN ?? "").trim().toLocaleUpperCase("id-ID");
@@ -238,6 +237,31 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const isLayanan = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(serviceUnitCode) && currentUnitCode === serviceUnitCode);
   const isUmum = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(umumUnitCode) && currentUnitCode === umumUnitCode);
   const isSubmitter = identity.role === "superadmin" || (identity.role === "koordinator" && identity.userId === String(project?.diajukan_oleh_id ?? ""));
+
+  async function reserveRevisionJobNumber(jobKey: string) {
+    if (reservationRequests.current.has(jobKey)) return;
+    reservationRequests.current.add(jobKey);
+    try {
+      setBrowserToken();
+      const response = await requestHrisApi("/api/proyek/job-number/reserve", { method: "POST" });
+      const reservation = unwrapEnvelope<{ id: string; nomor_job: string }>(response).data;
+      if (!reservation?.id || !reservation.nomor_job) throw new Error("Nomor Job tidak diterima dari server.");
+      setRevisionJobs((current) => current.map((job) => job.key === jobKey && !job.id
+        ? { ...job, nomor_job: reservation.nomor_job, nomor_job_reservasi_id: reservation.id }
+        : job));
+    } catch (error) {
+      setRevisionError(apiErrorMessage(error, "Nomor Job belum dapat disiapkan. Tutup lalu buka kembali form untuk mencoba lagi."));
+    } finally {
+      reservationRequests.current.delete(jobKey);
+    }
+  }
+
+  useEffect(() => {
+    if (!revisionOpen) return;
+    for (const job of revisionJobs) {
+      if (!job.id && !job.nomor_job_reservasi_id) void reserveRevisionJobNumber(job.key);
+    }
+  }, [revisionOpen, revisionJobs]);
   const isKarwas = identity.role === "keu_karwas" || identity.role === "superadmin";
   const extensionRows = project?.perpanjangan_list ?? [];
   const pendingExtension = extensionRows.find((item) => item.status === "DIAJUKAN");
@@ -292,8 +316,8 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       }),
     })));
   }
-  function updateRevisionJob(key: string, nomor_job: string) {
-    setRevisionJobs((current) => current.map((job) => job.key === key ? { ...job, nomor_job } : job));
+  function updateRevisionJob(key: string, field: JobMetadataField, value: string) {
+    setRevisionJobs((current) => current.map((job) => job.key === key ? { ...job, [field]: value } : job));
   }
   function addRevisionJob() { setRevisionJobs((current) => [...current, blankRevisionJob(revisionLeadUnitId)]); }
   function removeRevisionJob(key: string) { setRevisionJobs((current) => current.length > 1 ? current.filter((job) => job.key !== key) : current); }
@@ -364,7 +388,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           unit_kolaborasi_ids: revisionCollaboratorIds,
           job_list: revisionJobs.map((job) => ({
             ...(job.id ? { id: job.id } : {}),
-            nomor_job: job.nomor_job.trim(),
+            ...(!job.id && job.nomor_job_reservasi_id ? { nomor_job_reservasi_id: job.nomor_job_reservasi_id } : {}),
+            nama_job: job.nama_job.trim(),
+            kategori_job: job.kategori_job as KategoriJob,
             ro_list: job.ros.map((row) => ({
               ...(row.id ? { id: row.id } : {}),
               mak_id: row.mak_id,
@@ -469,7 +495,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       const nomorJob = String(ro.nomor_job ?? "").trim() || `JOB-${ro.id.slice(0, 8)}`;
       let group = existingJobs.find((job) => job.nomor_job === nomorJob);
       if (!group) {
-        group = { id: "", nomor_job: nomorJob, ro_list: [] };
+        group = { id: "", nomor_job: nomorJob, nama_job: ro.nama_job ?? "", kategori_job: ro.kategori_job ?? null, ro_list: [] };
         existingJobs.push(group);
       }
       group.ro_list.push(ro);
@@ -477,7 +503,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     setRevisionJobs(existingJobs.length ? existingJobs.map((job) => ({
       id: job.id,
       key: crypto.randomUUID(),
-      nomor_job: job.nomor_job,
+      nomor_job: job.id ? job.nomor_job : undefined,
+      nama_job: job.nama_job ?? "",
+      kategori_job: job.kategori_job ?? "",
       ros: job.ro_list.map((row) => ({
         ...blankRevisionRo(lead),
         id: row.id,
@@ -520,8 +548,8 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       setRevisionError("Isi tanggal kontrak berpasangan dan pastikan tanggal akhir tidak sebelum tanggal mulai.");
       return;
     }
-    if (!revisionLeadUnitId || !revisionCollaboratorsAssigned || !revisionAllocationsValid || !revisionJobsUnique) {
-      setRevisionError("Lengkapi unit terlibat, nomor Job, dan seluruh detail RO. Setiap unit kolaborator harus digunakan pada minimal satu RO.");
+    if (!revisionLeadUnitId || !revisionCollaboratorsAssigned || !revisionAllocationsValid) {
+      setRevisionError("Lengkapi unit terlibat, nama, kategori, tipe Job, dan seluruh detail RO. Setiap unit kolaborator harus digunakan pada minimal satu RO.");
       return;
     }
     if (!revisionTerms.length || revisionTerms.some((term) => !(Number(term.persentaseText) > 0)) || revisionTermsTotal !== 100) {
