@@ -16,7 +16,7 @@ export type ProjectForm = {
   total_margin: string;
 };
 
-export type RoDraft = Omit<RoInputDto, "nomor_job" | "nama_ro"> & {
+export type RoDraft = Omit<RoInputDto, "nomor_job"> & {
   id?: string;
   key: string;
   plafonText: string;

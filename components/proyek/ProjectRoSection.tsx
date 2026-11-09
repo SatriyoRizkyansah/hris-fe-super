@@ -55,7 +55,7 @@ export function ProjectRoSection({ roGroups, roRows, project, roDetails, roLoadi
               const jobNumber = String(row.nomor_job ?? "").trim();
               const splitParts = jobNumber ? roRows.filter((item) => String(item.nomor_job ?? "").trim() === jobNumber).length : 0;
               const collaborationUnits = Array.isArray(row.unit_kolaborasi) ? (row.unit_kolaborasi as Row[]).map((unit) => String(unit.nama_unit ?? "")).filter(Boolean) : [];
-              const missing = [!(row.no_kontrak ?? project.no_kontrak) && "No Kontrak", !row.pj && "PJ", !row.nomor_job && !row.no_sk && "Nomor Job", !project.mulai_kontrak && "Mulai kontrak proyek", !project.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean) as string[];
+              const missing = [!(row.no_kontrak ?? project.no_kontrak) && "No Kontrak", !row.pj && "PJ", !row.nomor_job && "Nomor Job", !project.mulai_kontrak && "Mulai kontrak proyek", !project.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean) as string[];
               const allocations = Array.isArray(detailRow?.alokasi_list) ? (detailRow.alokasi_list as Row[]) : [];
               const ledger = Array.isArray(detailRow?.transaksi_list) ? (detailRow.transaksi_list as Row[]) : [];
               return (
@@ -136,7 +136,7 @@ export function ProjectRoSection({ roGroups, roRows, project, roDetails, roLoadi
                             <p><span className="text-muted-foreground">Periode SK:</span> mengikuti periode SK proyek.</p>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            No. kontrak proyek: {text(row.no_kontrak ?? project.no_kontrak)} · No. Job RO: {text(row.nomor_job)} · No. SK: {text(row.no_sk)}
+                            No. kontrak proyek: {text(row.no_kontrak ?? project.no_kontrak)} · No. Job RO: {text(row.nomor_job)}
                           </p>
                           {collaborationUnits.length ? <p className="text-xs text-violet-700">Unit kolaborasi RO: {collaborationUnits.join(", ")}</p> : <p className="text-xs text-muted-foreground">RO ini tidak mencatat unit kolaborasi.</p>}
                           <div className="grid gap-4 xl:grid-cols-2">

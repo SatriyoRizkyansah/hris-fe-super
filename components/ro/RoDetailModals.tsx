@@ -88,10 +88,6 @@ export function RoDetailModals(props: Props) {
             </Alert>
           )}
           <label className="grid gap-1 text-sm">
-            Nama RO
-            <Input value={edit.nama_ro} onChange={(event) => setEdit((state) => ({ ...state, nama_ro: event.target.value }))} />
-          </label>
-          <label className="grid gap-1 text-sm">
             Plafon awal proyek (terkunci)
             <Input type="number" value={String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro?.total_plafon ?? edit.total_plafon)} readOnly aria-readonly="true" />
             <span className="text-xs text-muted-foreground">Pencairan termin dapat menambah saldo; nilai awal tidak dapat diubah.</span>
@@ -125,10 +121,6 @@ export function RoDetailModals(props: Props) {
           <label className="grid gap-1 text-sm">
             PJ
             <Input value={edit.pj} onChange={(event) => setEdit((state) => ({ ...state, pj: event.target.value }))} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            No SK
-            <Input value={edit.no_sk} onChange={(event) => setEdit((state) => ({ ...state, no_sk: event.target.value }))} />
           </label>
           {ro.id_proyek && <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">Periode kontrak mengikuti proyek: {formatDate(ro.mulai_kontrak)} – {formatDate(ro.berakhir_kontrak)}. Ubah periode dari detail proyek.</p>}
         </div>

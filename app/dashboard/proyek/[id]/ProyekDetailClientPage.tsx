@@ -367,7 +367,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
             nomor_job: job.nomor_job.trim(),
             ro_list: job.ros.map((row) => ({
               ...(row.id ? { id: row.id } : {}),
-              nama_ro: makNameById[row.mak_id] ?? "",
               mak_id: row.mak_id,
               id_unit_koordinator: row.id_unit_koordinator,
               rekening_id: row.rekening_id || null,

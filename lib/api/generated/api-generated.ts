@@ -285,8 +285,6 @@ export interface ProyekItemDto {
 }
 
 export interface RoInputDto {
-  /** @example "Operasional Pengeboran" */
-  nama_ro: string;
   /** ID Master MAK untuk RO */
   mak_id: string;
   /** ID unit koordinator pemilik RO */
@@ -302,8 +300,6 @@ export interface RoInputDto {
   unit_kolaborasi_ids?: string[];
   /** @example "Budi Santoso" */
   pj?: string;
-  /** @example "SK-RO-001" */
-  no_sk?: string;
 }
 
 export interface JobProyekInputDto {
@@ -455,7 +451,6 @@ export interface RoItemDto {
   pj?: object | null;
   file_rab?: object | null;
   status_ro?: string;
-  no_sk?: object | null;
   mulai_kontrak?: object | null;
   berakhir_kontrak?: object | null;
   /** @format date-time */
@@ -517,7 +512,6 @@ export interface RoDetailDto {
   pj?: object | null;
   file_rab?: object | null;
   status_ro?: string;
-  no_sk?: object | null;
   mulai_kontrak?: object | null;
   berakhir_kontrak?: object | null;
   /** @format date-time */
@@ -534,8 +528,6 @@ export interface RoDetailDto {
 export interface CreateRoDto {
   /** ID Master MAK */
   id_mak: string;
-  /** @example "RO Infrastruktur 2026" */
-  nama_ro: string;
   /** ID proyek sumber RO */
   id_proyek: string;
   /** ID unit koordinator pemilik RO */
@@ -557,14 +549,11 @@ export interface CreateRoDto {
   unit_kolaborasi_ids?: string[];
   /** @example "Budi Santoso" */
   pj?: string;
-  /** @example "SK-RO-001" */
-  no_sk?: string;
   /** @default "AKTIF" */
   status_ro?: "AKTIF" | "NONAKTIF" | "SELESAI";
 }
 
 export interface UpdateRoDto {
-  nama_ro?: string;
   /** ID Master MAK */
   id_mak?: string;
   /** ID rekening fisik sumber saldo RO */
@@ -575,7 +564,6 @@ export interface UpdateRoDto {
   /** Unit kerja lain yang terlibat pada RO ini */
   unit_kolaborasi_ids?: string[];
   pj?: string;
-  no_sk?: string;
   status_ro?: "AKTIF" | "NONAKTIF" | "SELESAI";
 }
 

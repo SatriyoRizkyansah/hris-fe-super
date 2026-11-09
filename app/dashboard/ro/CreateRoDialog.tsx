@@ -17,7 +17,6 @@ import type { CreateRoDto, ProyekItemDto } from "@/lib/api/generated/api-generat
 
 type Row = Record<string, unknown>;
 type Form = {
-  nama_ro: string;
   id_mak: string;
   id_proyek: string;
   id_unit_koordinator: string;
@@ -27,10 +26,8 @@ type Form = {
   no_kontrak: string;
   nomor_job: string;
   pj: string;
-  no_sk: string;
 };
 const blank = (): Form => ({
-  nama_ro: "",
   id_mak: "",
   id_proyek: "",
   id_unit_koordinator: "",
@@ -40,7 +37,6 @@ const blank = (): Form => ({
   no_kontrak: "",
   nomor_job: "",
   pj: "",
-  no_sk: "",
 });
 
 export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: () => Promise<unknown> | void }) {
@@ -114,14 +110,13 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
     if (key === "id_unit_koordinator") setCollaboratorIds((ids) => ids.filter((id) => id !== value));
   };
   async function submit() {
-    if (!form.nama_ro || !form.id_mak || !form.id_proyek || !form.id_unit_koordinator || !form.tahun_fiscal || !form.nomor_job || Number(form.total_plafon) <= 0) {
-      setError("MAK, nama, proyek, unit pemilik, tahun fiskal, nomor Job, dan plafon wajib diisi.");
+    if (!form.id_mak || !form.id_proyek || !form.id_unit_koordinator || !form.tahun_fiscal || !form.nomor_job || Number(form.total_plafon) <= 0) {
+      setError("MAK, proyek, unit pemilik, tahun fiskal, nomor Job, dan plafon wajib diisi.");
       return;
     }
     try {
       setError("");
       await create.mutateAsync({
-        nama_ro: form.nama_ro,
         id_mak: form.id_mak,
         id_proyek: form.id_proyek,
         id_unit_koordinator: form.id_unit_koordinator,
@@ -132,7 +127,6 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
         nomor_job: form.nomor_job,
         unit_kolaborasi_ids: collaboratorIds,
         pj: form.pj || undefined,
-        no_sk: form.no_sk || undefined,
       });
     } catch (cause) {
       setError(apiErrorMessage(cause, "Gagal membuat RO."));
@@ -158,9 +152,6 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">
-          Nama RO *<Input value={form.nama_ro} onChange={(event) => field("nama_ro", event.target.value)} />
-        </label>
         <label className="grid gap-1 text-sm">
           Tahun fiskal *<Input type="number" value={form.tahun_fiscal} onChange={(event) => field("tahun_fiscal", event.target.value)} />
         </label>
@@ -254,10 +245,6 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
         <label className="grid gap-1 text-sm">
           PJ
           <Input value={form.pj} onChange={(event) => field("pj", event.target.value)} />
-        </label>
-        <label className="grid gap-1 text-sm">
-          No SK
-          <Input value={form.no_sk} onChange={(event) => field("no_sk", event.target.value)} />
         </label>
         {selectedProject && (
           <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">

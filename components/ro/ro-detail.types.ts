@@ -1,13 +1,11 @@
 export type AnyRow = Record<string, unknown>;
 
 export type EditForm = {
-  nama_ro: string;
   total_plafon: string;
   no_kontrak: string;
   nomor_job: string;
   unit_kolaborasi_ids: string[];
   pj: string;
-  no_sk: string;
   status_ro: "AKTIF" | "NONAKTIF" | "SELESAI";
 };
 

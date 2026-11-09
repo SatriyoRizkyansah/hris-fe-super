@@ -23,11 +23,11 @@ import { formatDate, formatRupiah, roStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import type { CreatePengajuanBelanjaDto, RoItemDto, UpdateRoDto } from "@/lib/api/generated/api-generated";
 import type { AnyRow, EditForm, SpendRequestForm, TransactionDirection, TransactionForm } from "@/components/ro/ro-detail.types";
-const emptyEdit = (): EditForm => ({ nama_ro: "", total_plafon: "", no_kontrak: "", nomor_job: "", unit_kolaborasi_ids: [], pj: "", no_sk: "", status_ro: "AKTIF" });
+const emptyEdit = (): EditForm => ({ total_plafon: "", no_kontrak: "", nomor_job: "", unit_kolaborasi_ids: [], pj: "", status_ro: "AKTIF" });
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
 const emptySpendRequest = (): SpendRequestForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), jumlah: "", keterangan: "" });
 function missing(row: RoItemDto) {
-  return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", (row.id_proyek ? !row.nomor_job && !row.no_sk : !row.no_sk) && (row.id_proyek ? "Nomor Job" : "No SK"), row.id_proyek && !row.mulai_kontrak && "Mulai kontrak proyek", row.id_proyek && !row.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean);
+  return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", row.id_proyek && !row.nomor_job && "Nomor Job", row.id_proyek && !row.mulai_kontrak && "Mulai kontrak proyek", row.id_proyek && !row.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean);
 }
 
 export default function RoDetailClientPage({ id }: { id: string }) {
@@ -187,13 +187,11 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   function openEdit() {
     if (!ro) return;
     setEdit({
-      nama_ro: ro.nama_ro ?? "",
       total_plafon: String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro.total_plafon ?? ""),
       no_kontrak: String(ro.no_kontrak ?? ""),
       nomor_job: String(ro.nomor_job ?? ""),
       unit_kolaborasi_ids: (ro.unit_kolaborasi as Array<{ id: string }> | undefined ?? []).map((unit) => unit.id),
       pj: String(ro.pj ?? ""),
-      no_sk: String(ro.no_sk ?? ""),
       status_ro: (ro.status_ro as EditForm["status_ro"]) ?? "AKTIF",
     });
     setNotice("");
@@ -201,8 +199,8 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   }
   async function saveEdit() {
     const plannedAmount = Number((ro as (RoItemDto & { nilai_rencana?: number }) | undefined)?.nilai_rencana ?? ro?.total_plafon ?? 0);
-    if (!edit.nama_ro.trim() || plannedAmount <= 0) {
-      setNotice("Nama RO wajib diisi dan plafon awal proyek harus lebih dari Rp0.");
+    if (plannedAmount <= 0) {
+      setNotice("Plafon awal proyek harus lebih dari Rp0.");
       return;
     }
     try {
@@ -213,7 +211,6 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         nomor_job: edit.nomor_job || undefined,
         unit_kolaborasi_ids: edit.unit_kolaborasi_ids,
         pj: edit.pj || undefined,
-        no_sk: edit.no_sk || undefined,
       });
     } catch (error) {
       setNotice(apiErrorMessage(error, "Gagal memperbarui RO. RO dari proyek dapat ditolak backend; periksa pesan ini."));
@@ -408,8 +405,8 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           {ro.unit_kolaborasi?.length ? (ro.unit_kolaborasi as Array<{ nama_unit?: string }>).map((unit) => unit.nama_unit).join(", ") : "Tidak ada"}
         </p>
         <p>
-          <span className="block text-xs text-muted-foreground">SK</span>
-          {String(ro.no_sk ?? "—")} · Periode kontrak proyek {formatDate(ro.mulai_kontrak)} – {formatDate(ro.berakhir_kontrak)}
+          <span className="block text-xs text-muted-foreground">Periode kontrak proyek</span>
+          {formatDate(ro.mulai_kontrak)} – {formatDate(ro.berakhir_kontrak)}
         </p>
       </section>
       {canManage && (

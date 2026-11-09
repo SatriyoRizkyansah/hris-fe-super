@@ -539,7 +539,6 @@ export default function ProyekClientPage() {
         job_list: jobs.map((job) => ({
           nomor_job: job.nomor_job.trim(),
           ro_list: job.ros.map((row) => ({
-            nama_ro: makNameById[row.mak_id] ?? "",
             mak_id: row.mak_id,
             id_unit_koordinator: normalizeUnitId(row.id_unit_koordinator),
             ...(row.rekening_id ? { rekening_id: row.rekening_id } : {}),
