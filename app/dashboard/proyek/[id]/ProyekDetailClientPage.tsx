@@ -22,6 +22,7 @@ import { use_query } from "@/lib/api/use_query";
 import { apiErrorMessage, envelopeData, envelopeRows, requestHrisApi, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
+import { createClientId } from "@/lib/utils/client-id";
 import type { JobDraft, JobMetadataField, KategoriJob, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
 import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
 
@@ -58,9 +59,9 @@ type ProjectDetail = ProyekItemDto & {
 type LookupRow = { id: string; [key: string]: unknown };
 type Option = { value: string; label: string };
 const blankProjectForm = (): ProjectForm => ({ kode_proyek: "", nama_proyek: "", tahun_fiscal: String(new Date().getFullYear()), mulai_kontrak: "", berakhir_kontrak: "", sumber_pendanaan: "", nama_client: "", no_kontrak: "", pj_1: "", pj_2: "", nilai_kontrak: "", total_direct_cost: "", total_margin: "" });
-const blankRevisionRo = (unitId = ""): RoDraft => ({ key: crypto.randomUUID(), mak_id: "", id_unit_koordinator: unitId, rekening_id: "", plafon: 0, plafonText: "", detailMode: "later", no_kontrak: "", pj: "", unit_kolaborasi_ids: [] });
-const blankRevisionJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nama_job: "", kategori_job: "", ros: [blankRevisionRo(unitId)] });
-const blankRevisionTerm = (percentage = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(percentage) || 0, persentaseText: percentage });
+const blankRevisionRo = (unitId = ""): RoDraft => ({ key: createClientId(), mak_id: "", id_unit_koordinator: unitId, rekening_id: "", plafon: 0, plafonText: "", detailMode: "later", no_kontrak: "", pj: "", unit_kolaborasi_ids: [] });
+const blankRevisionJob = (unitId = ""): JobDraft => ({ key: createClientId(), nama_job: "", kategori_job: "", ros: [blankRevisionRo(unitId)] });
+const blankRevisionTerm = (percentage = ""): TerminDraft => ({ key: createClientId(), nomor_termin: 1, persentase: Number(percentage) || 0, persentaseText: percentage });
 const normalizeUnitId = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("en-US");
 const text = (value: unknown, fallback = "—") => (value === null || value === undefined || value === "" ? fallback : String(value));
 const financeOf = (row: Row): Row => (row.balance && typeof row.balance === "object" ? (row.balance as Row) : {});
@@ -502,14 +503,14 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     }
     setRevisionJobs(existingJobs.length ? existingJobs.map((job) => ({
       id: job.id,
-      key: crypto.randomUUID(),
+      key: createClientId(),
       nomor_job: job.id ? job.nomor_job : undefined,
       nama_job: job.nama_job ?? "",
       kategori_job: job.kategori_job ?? "",
       ros: job.ro_list.map((row) => ({
         ...blankRevisionRo(lead),
         id: row.id,
-        key: crypto.randomUUID(),
+        key: createClientId(),
         mak_id: String(row.mak_id ?? ""),
         id_unit_koordinator: row.id_unit_koordinator,
         rekening_id: String(row.rekening_id ?? ""),
@@ -524,7 +525,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     const existingTerms = [...(project.termin_list ?? [])].sort((left, right) => left.nomor_termin - right.nomor_termin);
     setRevisionTerms(existingTerms.length ? existingTerms.map((term) => ({
       id: term.id,
-      key: crypto.randomUUID(),
+      key: createClientId(),
       nomor_termin: term.nomor_termin,
       persentase: term.persentase,
       persentaseText: String(term.persentase),

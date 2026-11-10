@@ -20,6 +20,7 @@ import { use_query } from "@/lib/api/use_query";
 import { envelopeRows, unwrapEnvelope, apiErrorMessage, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
+import { createClientId } from "@/lib/utils/client-id";
 import type { CreateProyekDto, ProyekItemDto } from "@/lib/api/generated/api-generated";
 import type { JobDraft, JobMetadataField, KategoriJob, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
 
@@ -62,7 +63,7 @@ const blankForm = (): ProjectForm => ({
   total_margin: "",
 });
 const blankRo = (unitId = ""): RoDraft => ({
-  key: crypto.randomUUID(),
+  key: createClientId(),
   mak_id: "",
   id_unit_koordinator: unitId,
   rekening_id: "",
@@ -73,17 +74,17 @@ const blankRo = (unitId = ""): RoDraft => ({
   pj: "",
   unit_kolaborasi_ids: [],
 });
-const blankJob = (unitId = ""): JobDraft => ({ key: crypto.randomUUID(), nama_job: "", kategori_job: "", ros: [blankRo(unitId)] });
-const blankTermin = (persentase = ""): TerminDraft => ({ key: crypto.randomUUID(), nomor_termin: 1, persentase: Number(persentase) || 0, persentaseText: persentase });
+const blankJob = (unitId = ""): JobDraft => ({ key: createClientId(), nama_job: "", kategori_job: "", ros: [blankRo(unitId)] });
+const blankTermin = (persentase = ""): TerminDraft => ({ key: createClientId(), nomor_termin: 1, persentase: Number(persentase) || 0, persentaseText: persentase });
 
 function restoreJobDrafts(draft: ProjectLocalDraft, defaultUnitId: string): JobDraft[] {
   if (draft.jobs?.length) {
     return draft.jobs.map((job) => ({
       ...job,
-      key: job.key || crypto.randomUUID(),
+      key: job.key || createClientId(),
       nama_job: job.nama_job ?? "",
       kategori_job: job.kategori_job ?? "",
-      ros: job.ros.map((row) => ({ ...blankRo(defaultUnitId), ...row, key: row.key || crypto.randomUUID() })),
+      ros: job.ros.map((row) => ({ ...blankRo(defaultUnitId), ...row, key: row.key || createClientId() })),
     }));
   }
 
@@ -93,9 +94,9 @@ function restoreJobDrafts(draft: ProjectLocalDraft, defaultUnitId: string): JobD
     const groupKey = nomorJob || `__legacy_blank_${index}`;
     const { nomor_job: _legacyNumber, ...roFields } = legacyRow;
     const existing = grouped.get(groupKey);
-    const row = { ...blankRo(defaultUnitId), ...roFields, key: legacyRow.key || crypto.randomUUID() };
+    const row = { ...blankRo(defaultUnitId), ...roFields, key: legacyRow.key || createClientId() };
     if (existing) existing.ros.push(row);
-    else grouped.set(groupKey, { key: crypto.randomUUID(), nama_job: "", kategori_job: "", ros: [row] });
+    else grouped.set(groupKey, { key: createClientId(), nama_job: "", kategori_job: "", ros: [row] });
   });
   return grouped.size ? [...grouped.values()] : [blankJob(defaultUnitId)];
 }
@@ -395,7 +396,7 @@ export default function ProyekClientPage() {
   }
   function saveCurrentDraft() {
     if (!hasDraftContent()) return;
-    const draft: ProjectLocalDraft = { id: editingDraftId ?? crypto.randomUUID(), savedAt: new Date().toISOString(), form, jobs, terms, unitPengusulId, unitKolaborasiIds };
+    const draft: ProjectLocalDraft = { id: editingDraftId ?? createClientId(), savedAt: new Date().toISOString(), form, jobs, terms, unitPengusulId, unitKolaborasiIds };
     persistDrafts([draft, ...localDrafts.filter((item) => item.id !== draft.id)]);
     setEditingDraftId(draft.id);
     setFormError("");

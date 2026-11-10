@@ -14,7 +14,7 @@ import { use_query } from "@/lib/api/use_query";
 import { EmptyData } from "@/components/loading/EmptyData";
 import { Button } from "@/components/ui/Button";
 import { formatDate, formatRupiah, humanizeStatus } from "@/lib/hris/format";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 
 type Row = Record<string, any>;
 type MonevPayload = {
@@ -42,6 +42,10 @@ const compactAmount = (value: number) => new Intl.NumberFormat("id-ID", {
   notation: "compact",
   maximumFractionDigits: 1,
 }).format(value);
+const compactChartValue = (value: unknown) => new Intl.NumberFormat("id-ID", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+}).format(Number(value) || 0);
 const compactLabel = (value: unknown, maxLength = 22) => {
   const label = String(value ?? "");
   return label.length > maxLength ? `${label.slice(0, maxLength - 1)}…` : label;
@@ -115,8 +119,8 @@ function MonthlyCashChart({ rows, selectedMonth, onSelectMonth }: { rows: Row[];
   const selectedRow = rows.find((row) => String(row.bulan) === selectedMonth);
   return (
     <ChartSection title="Arus kas bulanan" description="Penerimaan invoice tervalidasi dibanding pengeluaran ledger. Klik grafik atau pilih bulan untuk melihat rinciannya.">
-      <ChartContainer config={cashChartConfig} className="h-[280px]">
-        <BarChart data={rows} margin={{ top: 8, right: 8, left: 4, bottom: 0 }} onClick={(event: any) => {
+      <ChartContainer config={cashChartConfig} className="h-[300px]">
+        <BarChart data={rows} margin={{ top: 22, right: 8, left: 4, bottom: 0 }} onClick={(event: any) => {
           const row = event?.activePayload?.[0]?.payload;
           if (row?.bulan) onSelectMonth?.(String(row.bulan));
         }}>
@@ -125,8 +129,12 @@ function MonthlyCashChart({ rows, selectedMonth, onSelectMonth }: { rows: Row[];
           <YAxis tickLine={false} axisLine={false} tickMargin={8} width={54} tickFormatter={(value) => compactAmount(Number(value))} />
           <ChartTooltip cursor={false} content={<ChartTooltipContent valueFormatter={amount} />} />
           <ChartLegend content={<ChartLegendContent />} />
-          <Bar dataKey="penerimaan_invoice" fill="var(--color-penerimaan_invoice)" radius={[4, 4, 0, 0]} maxBarSize={30} />
-          <Bar dataKey="pengeluaran_ledger" fill="var(--color-pengeluaran_ledger)" radius={[4, 4, 0, 0]} maxBarSize={30} />
+          <Bar dataKey="penerimaan_invoice" fill="var(--color-penerimaan_invoice)" radius={[4, 4, 0, 0]} maxBarSize={30}>
+            <LabelList dataKey="penerimaan_invoice" position="top" formatter={compactChartValue} fill="#0369a1" fontSize={9} />
+          </Bar>
+          <Bar dataKey="pengeluaran_ledger" fill="var(--color-pengeluaran_ledger)" radius={[4, 4, 0, 0]} maxBarSize={30}>
+            <LabelList dataKey="pengeluaran_ledger" position="top" formatter={compactChartValue} fill="#b45309" fontSize={9} />
+          </Bar>
         </BarChart>
       </ChartContainer>
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground sm:justify-end">
@@ -381,12 +389,14 @@ function ReceivableChart({ projectAmount, retailAmount }: { projectAmount: numbe
   return (
     <ChartSection title="Komposisi piutang" description="Sisa invoice yang belum lunas saat ini.">
       <ChartContainer config={receivableChartConfig} className="h-[280px]">
-        <BarChart data={rows} layout="vertical" margin={{ top: 10, right: 18, left: 4, bottom: 0 }}>
+        <BarChart data={rows} layout="vertical" margin={{ top: 10, right: 56, left: 4, bottom: 0 }}>
           <CartesianGrid horizontal={false} strokeDasharray="3 3" />
           <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(value) => compactAmount(Number(value))} />
           <YAxis type="category" dataKey="jenis" tickLine={false} axisLine={false} width={56} />
           <ChartTooltip cursor={false} content={<ChartTooltipContent valueFormatter={amount} />} />
-          <Bar dataKey="piutang" fill="var(--color-piutang)" radius={[0, 5, 5, 0]} maxBarSize={34} />
+          <Bar dataKey="piutang" fill="var(--color-piutang)" radius={[0, 5, 5, 0]} maxBarSize={34}>
+            <LabelList dataKey="piutang" position="right" formatter={compactChartValue} fill="#92400e" fontSize={10} />
+          </Bar>
         </BarChart>
       </ChartContainer>
     </ChartSection>
@@ -400,14 +410,18 @@ function UnitBudgetChart({ rows }: { rows: Row[] }) {
   return (
     <ChartSection title="Pagu dan realisasi RO per unit" description="Delapan unit dengan pagu RO terbesar pada tahun fiskal terpilih.">
       <ChartContainer config={unitChartConfig} className="h-[320px]">
-        <BarChart data={chartRows} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 0 }}>
+        <BarChart data={chartRows} layout="vertical" margin={{ top: 4, right: 58, left: 4, bottom: 0 }}>
           <CartesianGrid horizontal={false} strokeDasharray="3 3" />
           <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(value) => compactAmount(Number(value))} />
           <YAxis type="category" dataKey="nama_unit" tickLine={false} axisLine={false} width={170} tick={{ fontSize: 11 }} tickFormatter={(value) => compactLabel(value, 24)} />
           <ChartTooltip cursor={false} content={<ChartTooltipContent valueFormatter={amount} />} />
           <ChartLegend content={<ChartLegendContent />} />
-          <Bar dataKey="pagu_ro_disetujui_saat_ini" fill="var(--color-pagu_ro_disetujui_saat_ini)" radius={[0, 4, 4, 0]} maxBarSize={18} />
-          <Bar dataKey="realisasi_ro_saat_ini" fill="var(--color-realisasi_ro_saat_ini)" radius={[0, 4, 4, 0]} maxBarSize={18} />
+          <Bar dataKey="pagu_ro_disetujui_saat_ini" fill="var(--color-pagu_ro_disetujui_saat_ini)" radius={[0, 4, 4, 0]} maxBarSize={18}>
+            <LabelList dataKey="pagu_ro_disetujui_saat_ini" position="right" formatter={compactChartValue} fill="#475569" fontSize={9} />
+          </Bar>
+          <Bar dataKey="realisasi_ro_saat_ini" fill="var(--color-realisasi_ro_saat_ini)" radius={[0, 4, 4, 0]} maxBarSize={18}>
+            <LabelList dataKey="realisasi_ro_saat_ini" position="right" formatter={compactChartValue} fill="#0369a1" fontSize={9} />
+          </Bar>
         </BarChart>
       </ChartContainer>
     </ChartSection>
@@ -421,15 +435,21 @@ function ProjectPlanChart({ rows }: { rows: Row[] }) {
   return (
     <ChartSection title="Rencana nilai proyek" description="Enam proyek dengan nilai kontrak terbesar. Direct cost dan margin adalah rencana, bukan realisasi laba.">
       <ChartContainer config={projectChartConfig} className="h-[330px]">
-        <BarChart data={chartRows} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 0 }}>
+        <BarChart data={chartRows} layout="vertical" margin={{ top: 4, right: 58, left: 4, bottom: 0 }}>
           <CartesianGrid horizontal={false} strokeDasharray="3 3" />
           <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(value) => compactAmount(Number(value))} />
           <YAxis type="category" dataKey="nama_proyek" tickLine={false} axisLine={false} width={150} tick={{ fontSize: 11 }} tickFormatter={(value) => compactLabel(value, 21)} />
           <ChartTooltip cursor={false} content={<ChartTooltipContent valueFormatter={amount} />} />
           <ChartLegend content={<ChartLegendContent />} />
-          <Bar dataKey="nilai_kontrak" fill="var(--color-nilai_kontrak)" radius={[0, 4, 4, 0]} maxBarSize={16} />
-          <Bar dataKey="direct_cost_rencana" fill="var(--color-direct_cost_rencana)" radius={[0, 4, 4, 0]} maxBarSize={16} />
-          <Bar dataKey="margin_rencana" fill="var(--color-margin_rencana)" radius={[0, 4, 4, 0]} maxBarSize={16} />
+          <Bar dataKey="nilai_kontrak" fill="var(--color-nilai_kontrak)" radius={[0, 4, 4, 0]} maxBarSize={16}>
+            <LabelList dataKey="nilai_kontrak" position="right" formatter={compactChartValue} fill="#0369a1" fontSize={9} />
+          </Bar>
+          <Bar dataKey="direct_cost_rencana" fill="var(--color-direct_cost_rencana)" radius={[0, 4, 4, 0]} maxBarSize={16}>
+            <LabelList dataKey="direct_cost_rencana" position="right" formatter={compactChartValue} fill="#475569" fontSize={9} />
+          </Bar>
+          <Bar dataKey="margin_rencana" fill="var(--color-margin_rencana)" radius={[0, 4, 4, 0]} maxBarSize={16}>
+            <LabelList dataKey="margin_rencana" position="right" formatter={compactChartValue} fill="#b45309" fontSize={9} />
+          </Bar>
         </BarChart>
       </ChartContainer>
     </ChartSection>
