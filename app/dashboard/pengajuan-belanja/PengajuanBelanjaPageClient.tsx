@@ -64,15 +64,19 @@ function formatDateTime(value: unknown) {
 const statusLabels: Record<string, string> = {
   DRAFT: "Draft",
   DIAJUKAN: "Diajukan",
-  DISETUJUI_KARWAS: "Direservasi KARWAS",
+  DISETUJUI_KARWAS: "Menunggu Keuangan",
   DITOLAK_KARWAS: "Ditolak KARWAS",
-  DIBAYAR: "Dibayar Bendahara",
+  DISETUJUI_KEUANGAN: "Menunggu Kabag",
+  DITOLAK_KEUANGAN: "Ditolak Keuangan",
+  DISETUJUI_KABAG: "Menunggu Bendahara Pengeluaran",
+  DITOLAK_KABAG: "Ditolak Kabag",
+  DIBAYAR: "Dibayar Bendahara Pengeluaran",
   DIBATALKAN: "Dibatalkan",
 };
 const statusTone = (status?: string): "ok" | "warn" | "danger" | "neutral" => {
-  if (status === "DIBAYAR" || status === "DISETUJUI_KARWAS") return "ok";
+  if (["DIBAYAR", "DISETUJUI_KARWAS", "DISETUJUI_KEUANGAN", "DISETUJUI_KABAG"].includes(status ?? "")) return "ok";
   if (status === "DIAJUKAN") return "warn";
-  if (status === "DITOLAK_KARWAS" || status === "DIBATALKAN") return "danger";
+  if (["DITOLAK_KARWAS", "DITOLAK_KEUANGAN", "DITOLAK_KABAG", "DIBATALKAN"].includes(status ?? "")) return "danger";
   return "neutral";
 };
 
@@ -96,13 +100,31 @@ const purchaseWorkflowStages: WorkflowStage[] = [
     next: "Jika disetujui, dana direservasi dan pengajuan diteruskan ke Bendahara. Jika ditolak, proses dihentikan dengan catatan pemeriksa.",
   },
   {
-    title: "Pembayaran",
-    owner: "KEU_BENDAHARA",
+    title: "Validasi Keuangan",
+    owner: "UNIT_KODE_KEUANGAN",
     icon: WalletCards,
     color: "emerald",
+    summary: "Periksa kelengkapan administrasi dan kesesuaian pembiayaan.",
+    result: "Disetujui atau ditolak",
+    next: "Pengajuan yang disetujui diteruskan ke Kabag.",
+  },
+  {
+    title: "Persetujuan Kabag",
+    owner: "UNIT_KODE_KABAG",
+    icon: ShieldCheck,
+    color: "amber",
+    summary: "Kabag memberi persetujuan akhir sebelum pembayaran.",
+    result: "Siap dibayar",
+    next: "Setelah disetujui Kabag, pengajuan diteruskan ke Bendahara Pengeluaran.",
+  },
+  {
+    title: "Pembayaran",
+    owner: "BENDAHARA PENGELUARAN",
+    icon: CircleDollarSign,
+    color: "sky",
     summary: "Catat nomor, tanggal, nominal, dan bukti pembayaran.",
     result: "Pembayaran tercatat",
-    next: "Pembayaran dicatat ke ledger sumber dana terkait dan pengajuan ditandai selesai.",
+    next: "Belanja dibukukan ke ledger sumber dana terkait.",
   },
 ];
 
@@ -155,13 +177,20 @@ export default function PengajuanBelanjaPageClient() {
   const role = user.data?.role?.toLowerCase() ?? "";
   const canViewRetail = user.data?.canViewRetail === true;
   const canCreate = ["superadmin", "koordinator", "subkoor"].includes(role);
-  const canReview = ["superadmin", "keu_karwas"].includes(role);
-  const canPay = ["superadmin", "keu_bendahara"].includes(role);
+  const isSuperadmin = role === "superadmin";
+  const unitCode = user.data?.unitKerjaKode?.trim().toLocaleUpperCase("id-ID") ?? "";
+  const canReviewKarwas = isSuperadmin || role === "keu_karwas";
+  const financeUnit = (process.env.NEXT_PUBLIC_UNIT_KODE_KEUANGAN ?? "").trim().toLocaleUpperCase("id-ID");
+  const kabagUnit = (process.env.NEXT_PUBLIC_UNIT_KODE_KABAG ?? "").trim().toLocaleUpperCase("id-ID");
+  const canReviewKeuangan = isSuperadmin || ((role === "koordinator" || role === "keuangan") && !!financeUnit && unitCode === financeUnit);
+  const canReviewKabag = isSuperadmin || ((role === "koordinator" || role === "keuangan") && !!kabagUnit && unitCode === kabagUnit);
+  const canReview = canReviewKarwas || canReviewKeuangan || canReviewKabag;
+  const canPay = isSuperadmin || role === "keu_bendahara_pengeluaran";
   const detailStatus = String(detailRequest?.status ?? "");
-  const detailRejected = detailStatus === "DITOLAK_KARWAS";
+  const detailRejected = detailStatus.startsWith("DITOLAK_");
   const detailCanceled = detailStatus === "DIBATALKAN";
   const detailPaid = detailStatus === "DIBAYAR";
-  const detailApproved = detailStatus === "DISETUJUI_KARWAS" || detailPaid;
+  const detailApproved = ["DISETUJUI_KARWAS", "DISETUJUI_KEUANGAN", "DISETUJUI_KABAG", "DIBAYAR"].includes(detailStatus);
   const detailReviewed = Boolean(detailRequest?.diperiksa_pada) || detailApproved || detailRejected;
   const detailSubmitted = detailStatus !== "DRAFT" && Boolean(detailStatus);
   const detailSteps = detailRequest
@@ -185,25 +214,35 @@ export default function PengajuanBelanjaPageClient() {
                   : "Menunggu pengajuan dikirim.",
         },
         {
-          title: "Pembayaran Bendahara",
-          state: detailPaid ? "done" : detailRejected || detailCanceled ? "skipped" : detailApproved ? "active" : "waiting",
+          title: "Validasi Keuangan",
+          state: detailStatus === "DITOLAK_KEUANGAN" ? "rejected" : ["DISETUJUI_KEUANGAN", "DISETUJUI_KABAG", "DIBAYAR"].includes(detailStatus) ? "done" : detailRejected || detailCanceled ? "skipped" : detailStatus === "DISETUJUI_KARWAS" ? "active" : "waiting",
+          description: detailRequest.validator_keuangan?.nama ? `Diproses oleh ${detailRequest.validator_keuangan.nama} Â· ${formatDateTime(detailRequest.divalidasi_keuangan_pada)}${detailRequest.catatan_keuangan ? ` Â· ${detailRequest.catatan_keuangan}` : ""}` : "Menunggu validasi Keuangan.",
+        },
+        {
+          title: "Persetujuan Kabag",
+          state: detailStatus === "DITOLAK_KABAG" ? "rejected" : ["DISETUJUI_KABAG", "DIBAYAR"].includes(detailStatus) ? "done" : detailRejected || detailCanceled ? "skipped" : detailStatus === "DISETUJUI_KEUANGAN" ? "active" : "waiting",
+          description: detailRequest.validator_kabag?.nama ? `Diproses oleh ${detailRequest.validator_kabag.nama} Â· ${formatDateTime(detailRequest.divalidasi_kabag_pada)}${detailRequest.catatan_kabag ? ` Â· ${detailRequest.catatan_kabag}` : ""}` : "Menunggu persetujuan Kabag.",
+        },
+        {
+          title: "Pembayaran Bendahara Pengeluaran",
+          state: detailPaid ? "done" : detailRejected || detailCanceled ? "skipped" : detailStatus === "DISETUJUI_KABAG" ? "active" : "waiting",
           description: detailPaid
             ? `${detailRequest.pembayaran?.nomor_pembayaran ?? "Pembayaran tercatat"} · ${formatRupiah(detailRequest.pembayaran?.nominal ?? detailRequest.jumlah)} · ${formatDateTime(detailRequest.pembayaran?.tanggal_bayar)}${detailRequest.pembayaran?.pembayar?.nama ? ` · ${detailRequest.pembayaran.pembayar.nama}` : ""}`
             : detailRejected
               ? "Tidak dilanjutkan karena pengajuan ditolak."
               : detailCanceled
                 ? "Tidak dilanjutkan karena pengajuan dibatalkan."
-                : detailApproved
-                  ? "Disetujui KARWAS dan menunggu pembayaran Bendahara."
-                  : "Menunggu persetujuan KARWAS.",
+                : detailStatus === "DISETUJUI_KABAG"
+                  ? "Disetujui Kabag dan menunggu pembayaran Bendahara Pengeluaran."
+                  : "Menunggu persetujuan berjenjang.",
         },
       ]
     : [];
   const retailDetailStatus = String(retailDetailRequest?.status ?? "");
-  const retailDetailRejected = retailDetailStatus === "DITOLAK_KARWAS";
+  const retailDetailRejected = retailDetailStatus.startsWith("DITOLAK_");
   const retailDetailCanceled = retailDetailStatus === "DIBATALKAN";
   const retailDetailPaid = retailDetailStatus === "DIBAYAR";
-  const retailDetailApproved = retailDetailStatus === "DISETUJUI_KARWAS" || retailDetailPaid;
+  const retailDetailApproved = ["DISETUJUI_KARWAS", "DISETUJUI_KEUANGAN", "DISETUJUI_KABAG", "DIBAYAR"].includes(retailDetailStatus);
   const retailDetailSteps = retailDetailRequest
     ? [
         {
@@ -223,17 +262,27 @@ export default function PengajuanBelanjaPageClient() {
                 : "Menunggu pemeriksaan KARWAS dan reservasi saldo OPS_KANTOR.",
         },
         {
-          title: "Pembayaran Bendahara",
-          state: retailDetailPaid ? "done" : retailDetailRejected || retailDetailCanceled ? "skipped" : retailDetailApproved ? "active" : "waiting",
+          title: "Validasi Keuangan",
+          state: retailDetailStatus === "DITOLAK_KEUANGAN" ? "rejected" : ["DISETUJUI_KEUANGAN", "DISETUJUI_KABAG", "DIBAYAR"].includes(retailDetailStatus) ? "done" : retailDetailRejected || retailDetailCanceled ? "skipped" : retailDetailStatus === "DISETUJUI_KARWAS" ? "active" : "waiting",
+          description: retailDetailRequest.validator_keuangan?.nama ? `Diproses oleh ${retailDetailRequest.validator_keuangan.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_keuangan_pada)}${retailDetailRequest.catatan_keuangan ? ` Â· ${retailDetailRequest.catatan_keuangan}` : ""}` : "Menunggu validasi Keuangan.",
+        },
+        {
+          title: "Persetujuan Kabag",
+          state: retailDetailStatus === "DITOLAK_KABAG" ? "rejected" : ["DISETUJUI_KABAG", "DIBAYAR"].includes(retailDetailStatus) ? "done" : retailDetailRejected || retailDetailCanceled ? "skipped" : retailDetailStatus === "DISETUJUI_KEUANGAN" ? "active" : "waiting",
+          description: retailDetailRequest.validator_kabag?.nama ? `Diproses oleh ${retailDetailRequest.validator_kabag.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_kabag_pada)}${retailDetailRequest.catatan_kabag ? ` Â· ${retailDetailRequest.catatan_kabag}` : ""}` : "Menunggu persetujuan Kabag.",
+        },
+        {
+          title: "Pembayaran Bendahara Pengeluaran",
+          state: retailDetailPaid ? "done" : retailDetailRejected || retailDetailCanceled ? "skipped" : retailDetailStatus === "DISETUJUI_KABAG" ? "active" : "waiting",
           description: retailDetailPaid
             ? `${retailDetailRequest.nomor_pembayaran ?? "Pembayaran tercatat"} · ${formatRupiah(retailDetailRequest.jumlah)} · ${formatDateTime(retailDetailRequest.tanggal_bayar)}${retailDetailRequest.pembayar?.nama ? ` · ${retailDetailRequest.pembayar.nama}` : ""}`
             : retailDetailRejected
               ? "Tidak dilanjutkan karena pengajuan ditolak."
               : retailDetailCanceled
                 ? "Tidak dilanjutkan karena pengajuan dibatalkan."
-                : retailDetailApproved
-                  ? "Disetujui KARWAS dan menunggu pembayaran Bendahara."
-                  : "Menunggu persetujuan KARWAS.",
+                : retailDetailStatus === "DISETUJUI_KABAG"
+                  ? "Disetujui Kabag dan menunggu pembayaran Bendahara Pengeluaran."
+                  : "Menunggu persetujuan berjenjang.",
         },
       ]
     : [];
@@ -319,7 +368,7 @@ export default function PengajuanBelanjaPageClient() {
     tag: "keuanganPengajuanBelanjaReviewContext",
     method: "pengajuanBelanjaReviewContextControllerReviewContext",
     params: { id: String(reviewing?.id ?? "") },
-    enabled: Boolean(reviewing && canReview),
+    enabled: Boolean(reviewing && canReviewKarwas && reviewing.status === "DIAJUKAN"),
     queryFn: async ({ id }) => {
       setBrowserToken();
       return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaReviewContextControllerReviewContext(id, { format: "json" }));
@@ -390,13 +439,14 @@ export default function PengajuanBelanjaPageClient() {
       setError("");
     },
   });
-  const reviewMutation = use_mutation<unknown, Error, { id: string; data: ReviewPengajuanBelanjaDto }>({
+  const reviewMutation = use_mutation<unknown, Error, { id: string; data: ReviewPengajuanBelanjaDto; stage: "karwas" | "keuangan" | "kabag" }>({
     tag: "keuanganPengajuanBelanja",
     method: "pengajuanBelanjaReviewControllerReview",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja")],
-    mutationFn: async ({ id, data }) => {
+    mutationFn: async ({ id, data, stage }) => {
       setBrowserToken();
-      return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaReviewControllerReview(id, data, { format: "json" }));
+      const path = stage === "karwas" ? "review" : stage === "keuangan" ? "validasi-keuangan" : "validasi-kabag";
+      return requestHrisApi(`/api/pengajuan-belanja/${id}/${path}`, { method: "POST", body: JSON.stringify(data) });
     },
     onSuccess: () => {
       setReviewing(null);
@@ -420,13 +470,14 @@ export default function PengajuanBelanjaPageClient() {
       setError("");
     },
   });
-  const retailReviewMutation = use_mutation<unknown, Error, { id: string; disetujui: boolean }>({
+  const retailReviewMutation = use_mutation<unknown, Error, { id: string; disetujui: boolean; stage: "karwas" | "keuangan" | "kabag" }>({
     tag: "keuanganPengajuanBelanja",
     method: "reviewRetailExpense",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("retail"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: async ({ id, disetujui }) => {
+    mutationFn: async ({ id, disetujui, stage }) => {
       setBrowserToken();
-      return requestHrisApi(`/api/retail/pengajuan-belanja/${id}/review`, {
+      const path = stage === "karwas" ? "review" : stage === "keuangan" ? "validasi-keuangan" : "validasi-kabag";
+      return requestHrisApi(`/api/retail/pengajuan-belanja/${id}/${path}`, {
         method: "POST",
         body: JSON.stringify({ disetujui, catatan: retailReviewNote.trim() || undefined }),
       });
@@ -490,9 +541,10 @@ export default function PengajuanBelanjaPageClient() {
   }
   async function review(disetujui: boolean) {
     if (!reviewing) return;
+    const stage = reviewing.status === "DIAJUKAN" ? "karwas" : reviewing.status === "DISETUJUI_KARWAS" ? "keuangan" : "kabag";
     try {
       setError("");
-      await reviewMutation.mutateAsync({ id: String(reviewing.id), data: { disetujui, catatan: note.trim() || undefined } });
+      await reviewMutation.mutateAsync({ id: String(reviewing.id), stage, data: { disetujui, catatan: note.trim() || undefined } });
     } catch (cause) {
       setError(apiErrorMessage(cause, "Review pengajuan gagal disimpan."));
     }
@@ -531,7 +583,8 @@ export default function PengajuanBelanjaPageClient() {
     }
     try {
       setRetailReviewError("");
-      await retailReviewMutation.mutateAsync({ id: String(retailDetailRequest.id), disetujui });
+      const stage = retailDetailStatus === "DIAJUKAN" ? "karwas" : retailDetailStatus === "DISETUJUI_KARWAS" ? "keuangan" : "kabag";
+      await retailReviewMutation.mutateAsync({ id: String(retailDetailRequest.id), disetujui, stage });
     } catch (cause) {
       setRetailReviewError(apiErrorMessage(cause, "Review pengajuan retail gagal disimpan."));
     }
@@ -773,7 +826,7 @@ export default function PengajuanBelanjaPageClient() {
                                   <Eye size={15} /> Detail
                                 </Button>
                               )}
-                              {canReview && row.jenis_sumber !== "LAYANAN_RETAIL" && row.status === "DIAJUKAN" && (
+                              {((canReviewKarwas && row.status === "DIAJUKAN") || (canReviewKeuangan && row.status === "DISETUJUI_KARWAS") || (canReviewKabag && row.status === "DISETUJUI_KEUANGAN")) && row.jenis_sumber !== "LAYANAN_RETAIL" && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -786,7 +839,7 @@ export default function PengajuanBelanjaPageClient() {
                                   Review
                                 </Button>
                               )}
-                              {canPay && row.jenis_sumber !== "LAYANAN_RETAIL" && row.status === "DISETUJUI_KARWAS" && (
+                              {canPay && row.jenis_sumber !== "LAYANAN_RETAIL" && row.status === "DISETUJUI_KABAG" && (
                                 <Button
                                   size="sm"
                                   onClick={() => {
@@ -827,6 +880,9 @@ export default function PengajuanBelanjaPageClient() {
         retailDetailDocuments={retailDetailDocuments}
         hasRetailDetailDocuments={hasRetailDetailDocuments}
         canReview={canReview}
+        canReviewKarwas={canReviewKarwas}
+        canReviewKeuangan={canReviewKeuangan}
+        canReviewKabag={canReviewKabag}
         canPay={canPay}
         retailReviewPending={retailReviewMutation.isPending}
         reviewRetail={reviewRetail}
@@ -1008,6 +1064,7 @@ export default function PengajuanBelanjaPageClient() {
         reviewLedger={reviewLedger}
         reviewContextQuery={reviewContextQuery}
         reviewMutation={reviewMutation}
+        reviewStage={reviewing?.status === "DIAJUKAN" ? "karwas" : reviewing?.status === "DISETUJUI_KARWAS" ? "keuangan" : "kabag"}
         review={review}
         note={note}
         setNote={setNote}

@@ -229,6 +229,60 @@ export interface ProyekUnitDto {
   peran: "PENGUSUL" | "KOLABORATOR";
 }
 
+export interface ProyekRoAlokasiDto {
+  id: string;
+  job_proyek_id?: object | null;
+  nomor_job?: object | null;
+  nama_job?: object | null;
+  kategori_job?:
+    | "LABORATORIUM"
+    | "STUDI"
+    | "KAJIAN"
+    | "DOMINAN_LAB"
+    | "DOMINAN_STUDI"
+    | null;
+  nama_ro?: object | null;
+  mak_id?: object | null;
+  mak?: Record<string, any> | null;
+  id_unit_koordinator?: string;
+  rekening_id?: object | null;
+  plafon?: number;
+  no_kontrak?: object | null;
+  pj?: object | null;
+  unit_kolaborasi_ids?: string[];
+}
+
+export interface ProyekJobDto {
+  id: string;
+  nomor_job: string;
+  nama_job?: object | null;
+  kategori_job?:
+    | "LABORATORIUM"
+    | "STUDI"
+    | "KAJIAN"
+    | "DOMINAN_LAB"
+    | "DOMINAN_STUDI"
+    | null;
+  ro_list?: ProyekRoAlokasiDto[];
+}
+
+export interface ProyekExtensionItemDto {
+  id: string;
+  /** @format date-time */
+  berakhir_sk_sebelumnya: string;
+  /** @format date-time */
+  berakhir_sk_baru: string;
+  alasan: string;
+  file_dokumen: string;
+  status: "DIAJUKAN" | "DISETUJUI_KARWAS" | "DITOLAK_KARWAS";
+  /** @format date-time */
+  diajukan_pada: string;
+  diajukan_oleh?: object | null;
+  diperiksa_pada?: object | null;
+  diperiksa_oleh?: object | null;
+  catatan_pemeriksa?: object | null;
+}
+
 export interface ProyekItemDto {
   id: string;
   kode_proyek: string;
@@ -240,12 +294,14 @@ export interface ProyekItemDto {
   nama_client?: object | null;
   no_kontrak?: object | null;
   unit_terlibat?: ProyekUnitDto[];
+  job_list?: ProyekJobDto[];
+  ro_list?: ProyekRoAlokasiDto[];
   file_sk?: object | null;
   file_rab?: object | null;
   file_notulen?: object | null;
-  file_bast?: string | null;
-  selesai_oleh_id?: string | null;
-  selesai_pada?: string | null;
+  file_bast?: object | null;
+  selesai_oleh_id?: object | null;
+  selesai_pada?: object | null;
   /** @example 1000000000 */
   nilai_kontrak?: number;
   /** @example 750000000 */
@@ -253,14 +309,24 @@ export interface ProyekItemDto {
   /** @example 250000000 */
   total_margin?: number;
   status_proyek:
+    | "MENUNGGU_VALIDASI_LAYANAN"
     | "MENUNGGU_VALIDASI_UMUM"
     | "MENUNGGU_NOTULEN"
     | "MENUNGGU_VALIDASI_PIMPINAN"
+    | "PERLU_REVISI_LAYANAN"
+    | "PERLU_REVISI_UMUM"
+    | "PERLU_REVISI_PIMPINAN"
     | "DISETUJUI_PIMPINAN"
     | "SELESAI"
+    | "DITOLAK_LAYANAN"
     | "DITOLAK_UMUM"
     | "DITOLAK_PIMPINAN";
   catatan_validasi?: object | null;
+  catatan_layanan?: object | null;
+  divalidasi_layanan_pada?: object | null;
+  divalidasi_layanan_oleh_id?: object | null;
+  alur_proyek_version?: number;
+  riwayat_revisi?: object[];
   diajukan_oleh_id?: object | null;
   nama_pengaju?: object | null;
   nama_unit_pengaju?: object | null;
@@ -274,10 +340,11 @@ export interface ProyekItemDto {
   total_realisasi_ro?: number;
   total_komitmen_ro?: number;
   total_sisa_hak_belanja_ro?: number;
-  /** Tanggal mulai kontrak proyek */
+  /** Tanggal mulai kontrak proyek, diwariskan oleh seluruh RO */
   mulai_kontrak?: object | null;
-  /** Tanggal akhir kontrak proyek */
+  /** Tanggal akhir kontrak proyek, diwariskan oleh seluruh RO */
   berakhir_kontrak?: object | null;
+  perpanjangan_list?: ProyekExtensionItemDto[];
   /** @format date-time */
   created_at?: string;
   /** @format date-time */
@@ -285,6 +352,8 @@ export interface ProyekItemDto {
 }
 
 export interface RoInputDto {
+  /** ID RO untuk mempertahankan data saat revisi */
+  id?: string;
   /** ID Master MAK untuk RO */
   mak_id: string;
   /** ID unit koordinator pemilik RO */
@@ -307,12 +376,19 @@ export interface JobProyekInputDto {
   nomor_job_reservasi_id?: string;
   /** @example "Pengujian Rheology" */
   nama_job: string;
-  kategori_job: "LABORATORIUM" | "STUDI" | "KAJIAN" | "DOMINAN_LAB" | "DOMINAN_STUDI";
+  kategori_job:
+    | "LABORATORIUM"
+    | "STUDI"
+    | "KAJIAN"
+    | "DOMINAN_LAB"
+    | "DOMINAN_STUDI";
   /** Alokasi RO milik Job ini */
   ro_list: RoInputDto[];
 }
 
 export interface TerminInputDto {
+  /** ID termin untuk mempertahankan data saat revisi */
+  id?: string;
   /** @example 1 */
   nomor_termin: number;
   /**
@@ -329,9 +405,15 @@ export interface CreateProyekDto {
   nama_proyek: string;
   /** @example 2026 */
   tahun_fiscal: number;
-  /** Tanggal mulai kontrak proyek yang berlaku untuk seluruh RO */
+  /**
+   * Tanggal mulai kontrak proyek yang berlaku untuk seluruh RO
+   * @example "2026-01-01"
+   */
   mulai_kontrak?: string;
-  /** Tanggal akhir kontrak proyek yang berlaku untuk seluruh RO */
+  /**
+   * Tanggal akhir kontrak proyek yang berlaku untuk seluruh RO
+   * @example "2026-12-31"
+   */
   berakhir_kontrak?: string;
   /** @example "APBN 2026" */
   sumber_pendanaan?: string;
@@ -371,24 +453,47 @@ export interface CreateProyekDto {
 }
 
 export interface UpdateProyekDto {
+  /** @example "PRJ-2026-001" */
+  kode_proyek?: string;
   nama_proyek?: string;
   /** @example 2026 */
   tahun_fiscal?: number;
-  /** @example "2026-01-01" */
+  /**
+   * Tanggal mulai kontrak proyek
+   * @example "2026-01-01"
+   */
   mulai_kontrak?: string;
-  /** @example "2026-12-31" */
+  /**
+   * Tanggal akhir kontrak proyek
+   * @example "2026-12-31"
+   */
   berakhir_kontrak?: string;
   sumber_pendanaan?: string;
   pj_1?: string;
   pj_2?: string;
   nama_client?: string;
   no_kontrak?: string;
+  /** Unit pengusul proyek */
+  unit_pengusul_id?: string;
+  /** Unit koordinator kolaborator proyek */
+  unit_kolaborasi_ids?: string[];
   /** @example 1000000000 */
   nilai_kontrak?: number;
   /** @example 750000000 */
   total_direct_cost?: number;
   /** @example 250000000 */
   total_margin?: number;
+  /** Penggantian lengkap Job dan alokasi RO saat revisi proyek */
+  job_list?: JobProyekInputDto[];
+  /** Penggantian lengkap rencana termin saat revisi proyek */
+  termin_list?: TerminInputDto[];
+}
+
+export interface JobProyekNumberReservationDto {
+  /** @format uuid */
+  id: string;
+  /** @example "2026110001" */
+  nomor_job: string;
 }
 
 export interface ProyekValidationDto {
@@ -397,7 +502,28 @@ export interface ProyekValidationDto {
    * @example true
    */
   disetujui: boolean;
+  /**
+   * True untuk mengembalikan pengajuan agar diperbaiki, bukan menolak
+   * @example false
+   */
+  minta_revisi?: boolean;
   /** @example "Dokumen sudah sesuai" */
+  catatan?: string;
+}
+
+export interface CreateProyekExtensionDto {
+  /**
+   * Tanggal akhir SK baru
+   * @example "2027-03-31"
+   */
+  berakhir_sk_baru: string;
+  /** @example "Pekerjaan pengujian belum selesai dan mendapat persetujuan perpanjangan dari klien." */
+  alasan: string;
+}
+
+export interface ReviewProyekExtensionDto {
+  disetujui: boolean;
+  /** @maxLength 1000 */
   catatan?: string;
 }
 
@@ -444,16 +570,24 @@ export interface RoItemDto {
   no_kontrak?: object | null;
   nomor_job?: object | null;
   job_proyek_id?: object | null;
+  nama_job?: object | null;
+  kategori_job?:
+    | "LABORATORIUM"
+    | "STUDI"
+    | "KAJIAN"
+    | "DOMINAN_LAB"
+    | "DOMINAN_STUDI"
+    | null;
   job_proyek?: object | null;
-  nama_job?: string | null;
-  kategori_job?: "LABORATORIUM" | "STUDI" | "KAJIAN" | "DOMINAN_LAB" | "DOMINAN_STUDI" | null;
   /** Jumlah RO proyek yang memakai nomor Job sama */
   jumlah_ro_split_nomor_job?: number;
   unit_kolaborasi?: object[];
   pj?: object | null;
   file_rab?: object | null;
   status_ro?: string;
+  /** Tanggal mulai kontrak proyek yang menaungi RO */
   mulai_kontrak?: object | null;
+  /** Tanggal akhir kontrak proyek yang menaungi RO */
   berakhir_kontrak?: object | null;
   /** @format date-time */
   created_at?: string;
@@ -507,6 +641,14 @@ export interface RoDetailDto {
   no_kontrak?: object | null;
   nomor_job?: object | null;
   job_proyek_id?: object | null;
+  nama_job?: object | null;
+  kategori_job?:
+    | "LABORATORIUM"
+    | "STUDI"
+    | "KAJIAN"
+    | "DOMINAN_LAB"
+    | "DOMINAN_STUDI"
+    | null;
   job_proyek?: object | null;
   /** Jumlah RO proyek yang memakai nomor Job sama */
   jumlah_ro_split_nomor_job?: number;
@@ -514,7 +656,9 @@ export interface RoDetailDto {
   pj?: object | null;
   file_rab?: object | null;
   status_ro?: string;
+  /** Tanggal mulai kontrak proyek yang menaungi RO */
   mulai_kontrak?: object | null;
+  /** Tanggal akhir kontrak proyek yang menaungi RO */
   berakhir_kontrak?: object | null;
   /** @format date-time */
   created_at?: string;
@@ -543,11 +687,20 @@ export interface CreateRoDto {
    * @example 500000000
    */
   total_plafon: number;
-  /** Pilih Job yang telah terdaftar pada proyek untuk menambah RO split */
+  /** Gunakan Job yang sudah ada pada proyek ini untuk menambah alokasi RO split */
   job_proyek_id?: string;
-  /** Wajib jika membuat Job baru bersama RO ini */
+  /**
+   * Wajib diisi jika RO membuat Job baru
+   * @example "Pengujian Rheology"
+   */
   nama_job?: string;
-  kategori_job?: "LABORATORIUM" | "STUDI" | "KAJIAN" | "DOMINAN_LAB" | "DOMINAN_STUDI";
+  /** Wajib diisi jika RO membuat Job baru */
+  kategori_job?:
+    | "LABORATORIUM"
+    | "STUDI"
+    | "KAJIAN"
+    | "DOMINAN_LAB"
+    | "DOMINAN_STUDI";
   /** ID reservasi nomor Job otomatis untuk Job baru */
   nomor_job_reservasi_id?: string;
   /** @example "KONTRAK/2026/001" */
@@ -874,6 +1027,8 @@ export interface CreateUserDto {
     | "KEUANGAN"
     | "KEU_BILLING"
     | "KEU_BENDAHARA"
+    | "KEU_BENDAHARA_PENGELUARAN"
+    | "KEU_BENDAHARA_PENDAPATAN"
     | "KEU_KARWAS"
     | "PIMPINAN"
     | "SPI";
@@ -886,6 +1041,8 @@ export interface CreateUserDto {
     | "KEUANGAN"
     | "KEU_BILLING"
     | "KEU_BENDAHARA"
+    | "KEU_BENDAHARA_PENGELUARAN"
+    | "KEU_BENDAHARA_PENDAPATAN"
     | "KEU_KARWAS"
     | "PIMPINAN"
     | "SPI"
@@ -909,6 +1066,8 @@ export interface UpdateUserDto {
     | "KEUANGAN"
     | "KEU_BILLING"
     | "KEU_BENDAHARA"
+    | "KEU_BENDAHARA_PENGELUARAN"
+    | "KEU_BENDAHARA_PENDAPATAN"
     | "KEU_KARWAS"
     | "PIMPINAN"
     | "SPI";
@@ -921,6 +1080,8 @@ export interface UpdateUserDto {
     | "KEUANGAN"
     | "KEU_BILLING"
     | "KEU_BENDAHARA"
+    | "KEU_BENDAHARA_PENGELUARAN"
+    | "KEU_BENDAHARA_PENDAPATAN"
     | "KEU_KARWAS"
     | "PIMPINAN"
     | "SPI"
@@ -1026,14 +1187,6 @@ export interface CreatePengajuanBelanjaDto {
 
 export interface ReviewPengajuanBelanjaDto {
   disetujui: boolean;
-  catatan?: string;
-}
-
-export interface BayarPengajuanBelanjaDto {
-  /** @example "BAYAR-PB-2026-001" */
-  nomor_pembayaran: string;
-  /** @example "2026-10-27" */
-  tanggal_bayar: string;
   catatan?: string;
 }
 
@@ -1638,6 +1791,8 @@ export class Api<
         /** @default 1 */
         page?: number;
         tipe_unit?: "KOORDINATOR" | "SUB_KOORDINATOR";
+        /** Mengambil daftar unit koordinator untuk kolaborasi proyek */
+        konteks?: "PROYEK_KOLABORASI";
         /** Filter parent unit */
         id_parent_unit?: string;
       },
@@ -1691,6 +1846,55 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Unit Kerja
+     * @name UnitKerjaGetProjectCollaboratorsControllerGetProjectCollaborators
+     * @summary Get unit koordinator untuk kolaborasi proyek (Superadmin, Koordinator)
+     * @request GET:/api/unit-kerja/kolaborator-proyek
+     * @secure
+     */
+    unitKerjaGetProjectCollaboratorsControllerGetProjectCollaborators: (
+      query?: {
+        /** Pencarian / filter bebas */
+        query?: string;
+        /** @default 10 */
+        limit?: number;
+        /** @default 1 */
+        page?: number;
+        tipe_unit?: "KOORDINATOR" | "SUB_KOORDINATOR";
+        /** Mengambil daftar unit koordinator untuk kolaborasi proyek */
+        konteks?: "PROYEK_KOLABORASI";
+        /** Filter parent unit */
+        id_parent_unit?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        StandartResponse & {
+          data?: UnitKerjaItemDto[];
+          pagination?: {
+            /** @example 10 */
+            limit?: number;
+            /** @example 1 */
+            page?: number;
+            /** @example 1 */
+            total_pages?: number;
+            /** @example 1 */
+            total_datas?: number;
+          };
+        },
+        void
+      >({
+        path: `/api/unit-kerja/kolaborator-proyek`,
+        method: "GET",
+        query: query,
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -1770,7 +1974,7 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekGetDataControllerGetData
-     * @summary Get daftar proyek (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Pimpinan)
+     * @summary Get daftar proyek (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Keuangan - KARWAS, Pimpinan)
      * @request GET:/api/proyek
      * @secure
      */
@@ -1787,11 +1991,16 @@ export class Api<
         /** Filter proyek berdasarkan unit koordinator RO */
         id_unit_koordinator?: string;
         status_proyek?:
-          | "MENUNGGU_VALIDASI_UMUM"
+          | "MENUNGGU_VALIDASI_LAYANAN"
           | "MENUNGGU_NOTULEN"
+          | "MENUNGGU_VALIDASI_UMUM"
           | "MENUNGGU_VALIDASI_PIMPINAN"
+          | "PERLU_REVISI_LAYANAN"
+          | "PERLU_REVISI_UMUM"
+          | "PERLU_REVISI_PIMPINAN"
           | "DISETUJUI_PIMPINAN"
           | "SELESAI"
+          | "DITOLAK_LAYANAN"
           | "DITOLAK_UMUM"
           | "DITOLAK_PIMPINAN";
       },
@@ -1873,7 +2082,7 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekGetDetailControllerGetDetail
-     * @summary Get detail proyek (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Pimpinan)
+     * @summary Get detail proyek (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Keuangan - KARWAS, Pimpinan)
      * @request GET:/api/proyek/{id}
      * @secure
      */
@@ -1899,7 +2108,7 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekUpdateControllerUpdate
-     * @summary Update proyek (Superadmin)
+     * @summary Update proyek atau kirim revisi yang diminta pemeriksa (Superadmin, Koordinator)
      * @request PUT:/api/proyek/{id}
      * @secure
      */
@@ -1993,8 +2202,31 @@ export class Api<
      * No description
      *
      * @tags Master - Proyek
+     * @name ProyekReserveJobNumberControllerReserve
+     * @summary Siapkan nomor Job otomatis (Superadmin, Koordinator)
+     * @request POST:/api/proyek/job-number/reserve
+     * @secure
+     */
+    proyekReserveJobNumberControllerReserve: (params: RequestParams = {}) =>
+      this.request<
+        StandartResponseCreate & {
+          data?: JobProyekNumberReservationDto;
+        },
+        void
+      >({
+        path: `/api/proyek/job-number/reserve`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
      * @name ProyekUploadSkControllerUploadSk
-     * @summary Upload SK proyek (Superadmin)
+     * @summary Upload kontrak proyek (Superadmin, Koordinator)
      * @request POST:/api/proyek/{id}/sk
      * @secure
      */
@@ -2014,7 +2246,7 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekUploadRabControllerUploadRab
-     * @summary Upload RAB proyek (Superadmin)
+     * @summary Upload RAB proyek (Superadmin, Koordinator)
      * @request POST:/api/proyek/{id}/rab
      * @secure
      */
@@ -2050,9 +2282,11 @@ export class Api<
       }),
 
     /**
+     * No description
+     *
      * @tags Master - Proyek
      * @name ProyekUploadBastControllerUploadBast
-     * @summary Upload BAST dan selesaikan proyek (Superadmin, Koordinator pemilik)
+     * @summary Upload BAST dan selesaikan proyek (Superadmin, Koordinator)
      * @request POST:/api/proyek/{id}/bast
      * @secure
      */
@@ -2064,6 +2298,35 @@ export class Api<
         path: `/api/proyek/${id}/bast`,
         method: "POST",
         secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
+     * @name ProyekValidasiLayananControllerValidasiLayanan
+     * @summary Validasi Koordinator Layanan proyek (Superadmin, Koordinator)
+     * @request POST:/api/proyek/{id}/validasi-layanan
+     * @secure
+     */
+    proyekValidasiLayananControllerValidasiLayanan: (
+      id: string,
+      data: ProyekValidationDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        StandartResponse & {
+          data?: ProyekItemDto;
+        },
+        void
+      >({
+        path: `/api/proyek/${id}/validasi-layanan`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 
@@ -2124,6 +2387,82 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
+     * @name ProyekExtensionCreateControllerCreate
+     * @summary Ajukan perpanjangan masa SK proyek (Superadmin, Koordinator)
+     * @request POST:/api/proyek/{id}/perpanjangan
+     * @secure
+     */
+    proyekExtensionCreateControllerCreate: (
+      id: string,
+      data: CreateProyekExtensionDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/proyek/${id}/perpanjangan`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.FormData,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
+     * @name ProyekExtensionReviewControllerReview
+     * @summary Tinjau perpanjangan masa SK proyek (Superadmin, Keuangan - KARWAS)
+     * @request PATCH:/api/proyek/{id}/perpanjangan/{perpanjanganId}/review
+     * @secure
+     */
+    proyekExtensionReviewControllerReview: (
+      id: string,
+      perpanjanganId: string,
+      data: ReviewProyekExtensionDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/proyek/${id}/perpanjangan/${perpanjanganId}/review`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
+     * @name ProyekExtensionQueueControllerGetQueue
+     * @summary Daftar antrean perpanjangan masa SK proyek (Superadmin, Keuangan - KARWAS)
+     * @request GET:/api/proyek/perpanjangan/antrean
+     * @secure
+     */
+    proyekExtensionQueueControllerGetQueue: (
+      query?: {
+        /** Pencarian / filter bebas */
+        query?: string;
+        /** @default 10 */
+        limit?: number;
+        /** @default 1 */
+        page?: number;
+        status?: "DIAJUKAN" | "DISETUJUI_KARWAS" | "DITOLAK_KARWAS";
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/proyek/perpanjangan/antrean`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
   };
   masterRo = {
     /**
@@ -2143,6 +2482,8 @@ export class Api<
         limit?: number;
         /** @default 1 */
         page?: number;
+        /** Paginate seluruh RO dalam satu Nomor Job sebagai satu grup */
+        group_by_job?: "true" | "false";
         /** Filter proyek */
         id_proyek?: string;
         /** Filter unit koordinator */
@@ -3310,6 +3651,8 @@ export class Api<
           | "KEUANGAN"
           | "KEU_BILLING"
           | "KEU_BENDAHARA"
+          | "KEU_BENDAHARA_PENGELUARAN"
+          | "KEU_BENDAHARA_PENDAPATAN"
           | "KEU_KARWAS"
           | "PIMPINAN"
           | "SPI";
@@ -3595,7 +3938,7 @@ export class Api<
      *
      * @tags Master - Rekening Bank
      * @name MasterRekeningFindAllControllerFindAll
-     * @summary Get daftar rekening bank (Superadmin, Keuangan (Legacy), Keuangan - Bendahara)
+     * @summary Get daftar rekening bank (Superadmin, Koordinator, Keuangan (Legacy), Keuangan - Bendahara)
      * @request GET:/api/master-rekening
      * @secure
      */
@@ -3873,7 +4216,7 @@ export class Api<
      *
      * @tags Keuangan - Pengajuan Belanja
      * @name PengajuanBelanjaListControllerList
-     * @summary Daftar pengajuan belanja (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Keuangan - KARWAS, Keuangan - Bendahara, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @summary Daftar pengajuan belanja (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Keuangan - KARWAS, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI))
      * @request GET:/api/pengajuan-belanja
      * @secure
      */
@@ -3931,7 +4274,7 @@ export class Api<
      *
      * @tags Keuangan - Pengajuan Belanja
      * @name PengajuanBelanjaFilterOptionsControllerFilterOptions
-     * @summary Opsi filter pengajuan belanja (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Keuangan - KARWAS, Keuangan - Bendahara, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @summary Opsi filter pengajuan belanja (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Keuangan - KARWAS, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI))
      * @request GET:/api/pengajuan-belanja/filter-options
      * @secure
      */
@@ -3950,7 +4293,7 @@ export class Api<
      *
      * @tags Keuangan - Pengajuan Belanja
      * @name PengajuanBelanjaReviewContextControllerReviewContext
-     * @summary Konteks finansial untuk review KARWAS (Superadmin, Keuangan - KARWAS)
+     * @summary Konteks finansial untuk review KARWAS (Superadmin, Keuangan - KARWAS, Keuangan (Legacy), Koordinator)
      * @request GET:/api/pengajuan-belanja/{id}/review-context
      * @secure
      */
@@ -3960,6 +4303,26 @@ export class Api<
     ) =>
       this.request<void, any>({
         path: `/api/pengajuan-belanja/${id}/review-context`,
+        method: "GET",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaDetailControllerGetDetail
+     * @summary Detail pengajuan belanja (Superadmin, Koordinator, Subkoordinator, Keuangan (Legacy), Keuangan - KARWAS, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @request GET:/api/pengajuan-belanja/{id}
+     * @secure
+     */
+    pengajuanBelanjaDetailControllerGetDetail: (
+      id: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}`,
         method: "GET",
         secure: true,
         ...params,
@@ -3993,17 +4356,75 @@ export class Api<
      *
      * @tags Keuangan - Pengajuan Belanja
      * @name PengajuanBelanjaBayarControllerBayar
-     * @summary Bayar pengajuan belanja (Superadmin, Keuangan - Bendahara)
+     * @summary Bayar pengajuan belanja (Superadmin, Bendahara Pengeluaran)
      * @request POST:/api/pengajuan-belanja/{id}/bayar
      * @secure
      */
     pengajuanBelanjaBayarControllerBayar: (
       id: string,
-      data: BayarPengajuanBelanjaDto,
+      data: {
+        /** @maxLength 100 */
+        nomor_pembayaran: string;
+        /** @format date */
+        tanggal_bayar: string;
+        /** @maxLength 500 */
+        catatan?: string;
+        /**
+         * Bukti pembayaran PDF, maksimal 10 MB
+         * @format binary
+         */
+        file: File;
+      },
       params: RequestParams = {},
     ) =>
       this.request<void, any>({
         path: `/api/pengajuan-belanja/${id}/bayar`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.FormData,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaValidasiKeuanganControllerValidate
+     * @summary Validasi pengajuan oleh Keuangan (Superadmin, Keuangan (Legacy), Koordinator)
+     * @request POST:/api/pengajuan-belanja/{id}/validasi-keuangan
+     * @secure
+     */
+    pengajuanBelanjaValidasiKeuanganControllerValidate: (
+      id: string,
+      data: ReviewPengajuanBelanjaDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/validasi-keuangan`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PengajuanBelanjaValidasiKabagControllerValidate
+     * @summary Validasi pengajuan oleh Kabag (Superadmin, Keuangan (Legacy), Koordinator)
+     * @request POST:/api/pengajuan-belanja/{id}/validasi-kabag
+     * @secure
+     */
+    pengajuanBelanjaValidasiKabagControllerValidate: (
+      id: string,
+      data: ReviewPengajuanBelanjaDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/validasi-kabag`,
         method: "POST",
         body: data,
         secure: true,
@@ -4017,7 +4438,7 @@ export class Api<
      *
      * @tags Keuangan - Invoice dan Settlement
      * @name InvoiceListControllerList
-     * @summary Daftar invoice (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @summary Daftar invoice (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI))
      * @request GET:/api/keuangan/invoice
      * @secure
      */
@@ -4068,7 +4489,7 @@ export class Api<
      *
      * @tags Keuangan - Invoice dan Settlement
      * @name InvoiceCreateMutasiControllerCreateMutasi
-     * @summary Catat mutasi bank (Superadmin, Keuangan (Legacy), Keuangan - Bendahara)
+     * @summary Catat mutasi bank (Superadmin, Bendahara Pendapatan)
      * @request POST:/api/keuangan/mutasi-bank
      * @secure
      */
@@ -4101,7 +4522,7 @@ export class Api<
      *
      * @tags Keuangan - Invoice dan Settlement
      * @name InvoiceBayarControllerBayar
-     * @summary Validasi pembayaran invoice (Superadmin, Keuangan (Legacy), Keuangan - Bendahara)
+     * @summary Validasi pembayaran invoice (Superadmin, Bendahara Pendapatan)
      * @request POST:/api/keuangan/invoice/{id}/bayar
      * @secure
      */
@@ -4125,7 +4546,7 @@ export class Api<
      *
      * @tags Layanan Retail Non-RO
      * @name RetailUnitsControllerUnits
-     * @summary Daftar unit pelaksana retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Keuangan - KARWAS)
+     * @summary Daftar unit pelaksana retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Keuangan - KARWAS)
      * @request GET:/api/retail/units
      * @secure
      */
@@ -4142,7 +4563,7 @@ export class Api<
      *
      * @tags Layanan Retail Non-RO
      * @name RetailListJobsControllerListJobs
-     * @summary Daftar job layanan retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Keuangan - KARWAS)
+     * @summary Daftar job layanan retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Keuangan - KARWAS)
      * @request GET:/api/retail/jobs
      * @secure
      */
@@ -4197,7 +4618,7 @@ export class Api<
      *
      * @tags Layanan Retail Non-RO
      * @name RetailGetJobControllerGetJob
-     * @summary Detail job layanan retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Keuangan - KARWAS)
+     * @summary Detail job layanan retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Keuangan - KARWAS)
      * @request GET:/api/retail/jobs/{id}
      * @secure
      */
@@ -4237,7 +4658,7 @@ export class Api<
      *
      * @tags Layanan Retail Non-RO
      * @name RetailSummaryControllerSummary
-     * @summary Ringkasan tagihan dan penerimaan layanan retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Keuangan - KARWAS)
+     * @summary Ringkasan tagihan dan penerimaan layanan retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Keuangan - KARWAS)
      * @request GET:/api/retail/summary
      * @secure
      */
@@ -4311,7 +4732,7 @@ export class Api<
      *
      * @tags Layanan Retail Non-RO
      * @name RetailListExpensesControllerListExpenses
-     * @summary Daftar pengajuan belanja retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Keuangan - KARWAS)
+     * @summary Daftar pengajuan belanja retail (Superadmin, Koordinator, Subkoordinator, Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Keuangan - KARWAS)
      * @request GET:/api/retail/pengajuan-belanja
      * @secure
      */
@@ -4436,7 +4857,7 @@ export class Api<
      *
      * @tags Layanan Retail Non-RO
      * @name RetailPayExpenseControllerPayExpense
-     * @summary Bayar pengajuan belanja retail (Superadmin, Keuangan - Bendahara)
+     * @summary Bayar pengajuan belanja retail (Superadmin, Bendahara Pengeluaran)
      * @request POST:/api/retail/pengajuan-belanja/{id}/bayar
      * @secure
      */
@@ -4458,6 +4879,52 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.FormData,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Layanan Retail Non-RO
+     * @name RetailValidasiKeuanganControllerValidate
+     * @summary Validasi pengajuan retail oleh Keuangan (Superadmin, Keuangan (Legacy), Koordinator)
+     * @request POST:/api/retail/pengajuan-belanja/{id}/validasi-keuangan
+     * @secure
+     */
+    retailValidasiKeuanganControllerValidate: (
+      id: string,
+      data: ReviewRetailExpenseDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/retail/pengajuan-belanja/${id}/validasi-keuangan`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Layanan Retail Non-RO
+     * @name RetailValidasiKabagControllerValidate
+     * @summary Validasi pengajuan retail oleh Kabag (Superadmin, Keuangan (Legacy), Koordinator)
+     * @request POST:/api/retail/pengajuan-belanja/{id}/validasi-kabag
+     * @secure
+     */
+    retailValidasiKabagControllerValidate: (
+      id: string,
+      data: ReviewRetailExpenseDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/retail/pengajuan-belanja/${id}/validasi-kabag`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
   };

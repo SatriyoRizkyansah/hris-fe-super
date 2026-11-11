@@ -49,7 +49,7 @@ export function useUserRoles() {
     queryFn: async () => ({
       status: 200,
       message: "Daftar role HRIS",
-      data: ["SUPERADMIN", "KOORDINATOR", "SUBKOOR", "KARYAWAN", "KEUANGAN", "KEU_BILLING", "KEU_BENDAHARA", "KEU_KARWAS", "PIMPINAN", "SPI"].map((kode) => ({ id: kode, kode, nama: kode })),
+      data: ["SUPERADMIN", "KOORDINATOR", "SUBKOOR", "KARYAWAN", "KEUANGAN", "KEU_BILLING", "KEU_BENDAHARA", "KEU_BENDAHARA_PENGELUARAN", "KEU_BENDAHARA_PENDAPATAN", "KEU_KARWAS", "PIMPINAN", "SPI"].map((kode) => ({ id: kode, kode, nama: kode })),
     }),
   });
 }

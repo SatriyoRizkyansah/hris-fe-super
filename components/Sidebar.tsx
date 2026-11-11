@@ -32,10 +32,11 @@ import { selectSessionRole, type RoleAccess } from "@/lib/auth";
 import { browserApi } from "@/lib/api/browser-client";
 import { useCurrentUser } from "@/lib/api/hooks";
 
-const all = ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas", "pimpinan", "spi", "karyawan"];
+const all = ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas", "pimpinan", "spi", "karyawan"];
 const finance = ["superadmin", "keuangan"];
 const billing = [...finance, "keu_billing"];
-const treasury = [...finance, "keu_bendahara"];
+const treasury = [...finance, "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan"];
+const incomingTreasury = [...finance, "keu_bendahara_pendapatan"];
 const coordinators = ["superadmin", "koordinator"];
 const sections = [
   { title: "Ringkasan", items: [{ href: "/dashboard", label: "Dashboard", icon: Gauge, roles: all }] },
@@ -66,18 +67,18 @@ const sections = [
       { href: "/dashboard/retail", label: "Proyek Retail", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"] },
       { href: "/dashboard/karwas/perpanjangan-proyek", label: "Perpanjangan SK Proyek", icon: FileClock, roles: ["superadmin", "keu_karwas"] },
       { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"] },
-      { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"] },
+      { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_karwas", "pimpinan", "spi"] },
     ],
   },
   {
     title: "Keuangan",
     items: [
       { href: "/dashboard/termin", label: "Penagihan", icon: ClipboardCheck, roles: billing },
-      { href: "/dashboard/invoice", label: "Invoice", icon: FileText, roles: ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "pimpinan", "spi"] },
+      { href: "/dashboard/invoice", label: "Invoice", icon: FileText, roles: [...billing, "keu_bendahara", "keu_bendahara_pendapatan", "pimpinan", "spi"] },
       { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"] },
       { href: "/dashboard/rekening", label: "Rekening Bank", icon: Landmark, roles: treasury },
       { href: "/dashboard/mak", label: "MAK", icon: FileText, roles: finance },
-      { href: "/dashboard/rekonsiliasi-bank", label: "Rekonsiliasi Bank", icon: ClipboardCheck, roles: treasury },
+      { href: "/dashboard/rekonsiliasi-bank", label: "Rekonsiliasi Bank", icon: ClipboardCheck, roles: [...incomingTreasury, "keu_bendahara"] },
       { href: "/dashboard/pengaturan-margin", label: "Pengaturan Margin", icon: Settings, roles: ["superadmin"] },
     ],
   },
@@ -92,6 +93,8 @@ const roleLabels: Record<string, string> = {
   keuangan: "Keuangan (Legacy)",
   keu_billing: "Keuangan Billing",
   keu_bendahara: "Keuangan Bendahara",
+  keu_bendahara_pengeluaran: "Bendahara Pengeluaran",
+  keu_bendahara_pendapatan: "Bendahara Pendapatan",
   keu_karwas: "Keuangan KARWAS",
   pimpinan: "Pimpinan",
   spi: "SPI",
@@ -102,9 +105,9 @@ const allowedPath: Record<string, string[]> = {
   "/dashboard/unit-kerja": ["superadmin", "koordinator"],
   "/dashboard/proyek": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_karwas", "pimpinan"],
   "/dashboard/termin": ["superadmin", "keuangan", "keu_billing"],
-  "/dashboard/invoice": ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "pimpinan", "spi"],
+  "/dashboard/invoice": ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pendapatan", "pimpinan", "spi"],
   "/dashboard/retail": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"],
-  "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"],
+  "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_karwas", "pimpinan", "spi"],
   "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"],
   "/dashboard/karwas": ["superadmin", "keu_karwas"],
   "/dashboard/karwas/perpanjangan-proyek": ["superadmin", "keu_karwas"],
@@ -113,7 +116,7 @@ const allowedPath: Record<string, string[]> = {
   "/dashboard/mak": ["superadmin", "keuangan"],
   "/dashboard/sk": ["superadmin", "koordinator", "keuangan"],
   "/dashboard/alokasi-gaji": ["superadmin", "koordinator", "keuangan"],
-  "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan", "keu_bendahara"],
+  "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan", "keu_bendahara", "keu_bendahara_pendapatan"],
   "/dashboard/pengguna": ["superadmin"],
   "/dashboard/pengaturan-margin": ["superadmin"],
   "/dashboard/profil": all,
@@ -127,7 +130,11 @@ const homeForRole = (value: string) =>
         ? "/dashboard/termin"
         : value === "keuangan"
           ? "/dashboard/invoice"
-          : value === "keu_bendahara"
+          : value === "keu_bendahara_pengeluaran"
+            ? "/dashboard/pengajuan-belanja"
+            : value === "keu_bendahara_pendapatan"
+              ? "/dashboard/invoice"
+              : value === "keu_bendahara"
             ? "/dashboard/pengajuan-belanja"
             : ["subkoor", "spi", "karyawan"].includes(value)
               ? "/dashboard/profil"
@@ -139,7 +146,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
   const currentUser = useCurrentUser();
   const isGeneralCoordinator = role === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM";
   const canViewRetail = currentUser.data?.canViewRetail === true;
-  const canSeeOperationalFunds = isGeneralCoordinator || ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"].includes(role);
+  const canSeeOperationalFunds = isGeneralCoordinator || ["superadmin", "keuangan", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas"].includes(role);
   const [switching, setSwitching] = useState(false);
   const [accessPanelOpen, setAccessPanelOpen] = useState(false);
   const [accessPanelPosition, setAccessPanelPosition] = useState({ left: 12, mobile: false });
@@ -186,7 +193,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
       .find((path) => pathname === path || pathname.startsWith(`${path}/`));
     if (match === "/dashboard/dana-operasional" && nextRole === "koordinator") return isGeneralCoordinator;
     if (match === "/dashboard/retail") {
-      if (["superadmin", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"].includes(nextRole)) return true;
+      if (["superadmin", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas"].includes(nextRole)) return true;
       if (nextRole === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM") return true;
       return ["koordinator", "subkoor"].includes(nextRole) && currentUser.data?.role?.toLowerCase() !== "superadmin" && currentUser.data?.canManageRetail === true;
     }

@@ -80,8 +80,12 @@ function statusInfo(status: string): { label: string; tone: "ok" | "warn" | "dan
 function expenseStatus(status: string): { label: string; tone: "ok" | "warn" | "danger" | "neutral" } {
   const map: Record<string, { label: string; tone: "ok" | "warn" | "danger" | "neutral" }> = {
     DIAJUKAN: { label: "Menunggu KARWAS", tone: "warn" },
-    DISETUJUI_KARWAS: { label: "Menunggu pembayaran", tone: "ok" },
+    DISETUJUI_KARWAS: { label: "Menunggu Keuangan", tone: "ok" },
+    DISETUJUI_KEUANGAN: { label: "Menunggu Kabag", tone: "ok" },
+    DISETUJUI_KABAG: { label: "Menunggu Bendahara Pengeluaran", tone: "ok" },
     DITOLAK_KARWAS: { label: "Ditolak", tone: "danger" },
+    DITOLAK_KEUANGAN: { label: "Ditolak Keuangan", tone: "danger" },
+    DITOLAK_KABAG: { label: "Ditolak Kabag", tone: "danger" },
     DIBAYAR: { label: "Dibayar", tone: "ok" },
     DIBATALKAN: { label: "Dibatalkan", tone: "neutral" },
   };
@@ -135,9 +139,13 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   const canManage = user.data?.canManageRetail === true;
   const canRecordHandover = canManage;
   const canBill = ["superadmin", "keu_billing"].includes(role);
-  const canSettle = ["superadmin", "keu_bendahara"].includes(role);
-  const canReviewExpense = ["superadmin", "keu_karwas"].includes(role);
-  const canPayExpense = ["superadmin", "keu_bendahara"].includes(role);
+  const unitCode = user.data?.unitKerjaKode?.trim().toLocaleUpperCase("id-ID") ?? "";
+  const canSettle = ["superadmin", "keu_bendahara_pendapatan", "keu_bendahara"].includes(role);
+  const canReviewKarwas = ["superadmin", "keu_karwas"].includes(role);
+  const canReviewKeuangan = role === "superadmin" || ((role === "koordinator" || role === "keuangan") && !!process.env.NEXT_PUBLIC_UNIT_KODE_KEUANGAN && unitCode === process.env.NEXT_PUBLIC_UNIT_KODE_KEUANGAN.trim().toLocaleUpperCase("id-ID"));
+  const canReviewKabag = role === "superadmin" || ((role === "koordinator" || role === "keuangan") && !!process.env.NEXT_PUBLIC_UNIT_KODE_KABAG && unitCode === process.env.NEXT_PUBLIC_UNIT_KODE_KABAG.trim().toLocaleUpperCase("id-ID"));
+  const canReviewExpense = canReviewKarwas || canReviewKeuangan || canReviewKabag;
+  const canPayExpense = ["superadmin", "keu_bendahara_pengeluaran"].includes(role);
   const invalidate = [apiQueryKeys.resource("retail")];
   const detail = use_query({
     tag: "retail",
@@ -179,7 +187,7 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     tag: "retail",
     method: "reviewRetailExpense",
     invalidateKeys: invalidate,
-    mutationFn: async ({ id: expenseId, disetujui, catatan }) => requestHrisApi(`/api/retail/pengajuan-belanja/${expenseId}/review`, {
+    mutationFn: async ({ id: expenseId, disetujui, catatan }) => requestHrisApi(`/api/retail/pengajuan-belanja/${expenseId}/${expenseDetail?.status === "DIAJUKAN" ? "review" : expenseDetail?.status === "DISETUJUI_KARWAS" ? "validasi-keuangan" : "validasi-kabag"}`, {
       method: "POST",
       body: JSON.stringify({ disetujui, catatan }),
     }),
@@ -470,7 +478,7 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
         <div><h2 className="font-semibold">Pengajuan belanja bahan</h2><p className="mt-1 text-sm text-muted-foreground">Riwayat kebutuhan bahan untuk order ini dan status pemeriksaan/pembayarannya.</p></div>
         {canManage && status === "PENGUJIAN" && <Button onClick={() => { setExpenseForm(blankExpense()); setExpenseError(""); setExpenseOpen(true); }}><Wallet size={15} /> Ajukan Belanja</Button>}
       </div>
-      {expenses.length ? <div className="overflow-x-auto p-4 sm:p-5"><table className="w-full min-w-[54rem] text-left text-sm"><thead><tr className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground"><th className="rounded-l-lg p-3">Pengajuan</th><th className="p-3">Kebutuhan</th><th className="p-3 text-right">Nominal</th><th className="p-3">Status</th><th className="rounded-r-lg p-3">Aksi</th></tr></thead><tbody>{expenses.map((expense) => { const value = expenseStatus(String(expense.status ?? "")); return <tr key={String(expense.id)} className="border-b last:border-0"><td className="p-3"><p className="font-medium">{expense.nomor_pengajuan}</p><p className="text-xs text-muted-foreground">{dateLabel(expense.tanggal)}</p></td><td className="p-3"><p>{expense.nama_kegiatan}</p>{expense.keterangan && <p className="mt-0.5 text-xs text-muted-foreground">{expense.keterangan}</p>}</td><td className="p-3 text-right font-medium tabular-nums">{formatRupiah(expense.jumlah)}</td><td className="p-3"><StatusBadge status={value.tone}>{value.label}</StatusBadge></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => { setExpenseDetail(expense); setReviewMode(false); setReviewNote(""); setReviewError(""); }}><Eye size={14} /> Rincian</Button>{canReviewExpense && expense.status === "DIAJUKAN" && <Button size="sm" onClick={() => { setExpenseDetail(expense); setReviewMode(true); setReviewNote(""); setReviewError(""); }}><Check size={14} /> Review</Button>}{canPayExpense && expense.status === "DISETUJUI_KARWAS" && <Button size="sm" onClick={() => { setPaymentExpense(expense); setPaymentForm(blankPayment()); setPaymentFile(null); setPaymentError(""); }}><CircleDollarSign size={14} /> Catat Bayar</Button>}</div></td></tr>; })}</tbody></table></div> : <div className="px-5 py-10 text-center text-sm text-muted-foreground">Belum ada pengajuan belanja bahan untuk order ini.</div>}
+      {expenses.length ? <div className="overflow-x-auto p-4 sm:p-5"><table className="w-full min-w-[54rem] text-left text-sm"><thead><tr className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground"><th className="rounded-l-lg p-3">Pengajuan</th><th className="p-3">Kebutuhan</th><th className="p-3 text-right">Nominal</th><th className="p-3">Status</th><th className="rounded-r-lg p-3">Aksi</th></tr></thead><tbody>{expenses.map((expense) => { const value = expenseStatus(String(expense.status ?? "")); return <tr key={String(expense.id)} className="border-b last:border-0"><td className="p-3"><p className="font-medium">{expense.nomor_pengajuan}</p><p className="text-xs text-muted-foreground">{dateLabel(expense.tanggal)}</p></td><td className="p-3"><p>{expense.nama_kegiatan}</p>{expense.keterangan && <p className="mt-0.5 text-xs text-muted-foreground">{expense.keterangan}</p>}</td><td className="p-3 text-right font-medium tabular-nums">{formatRupiah(expense.jumlah)}</td><td className="p-3"><StatusBadge status={value.tone}>{value.label}</StatusBadge></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => { setExpenseDetail(expense); setReviewMode(false); setReviewNote(""); setReviewError(""); }}><Eye size={14} /> Rincian</Button>{((canReviewKarwas && expense.status === "DIAJUKAN") || (canReviewKeuangan && expense.status === "DISETUJUI_KARWAS") || (canReviewKabag && expense.status === "DISETUJUI_KEUANGAN")) && <Button size="sm" onClick={() => { setExpenseDetail(expense); setReviewMode(true); setReviewNote(""); setReviewError(""); }}><Check size={14} /> Review</Button>}{canPayExpense && expense.status === "DISETUJUI_KABAG" && <Button size="sm" onClick={() => { setPaymentExpense(expense); setPaymentForm(blankPayment()); setPaymentFile(null); setPaymentError(""); }}><CircleDollarSign size={14} /> Catat Bayar</Button>}</div></td></tr>; })}</tbody></table></div> : <div className="px-5 py-10 text-center text-sm text-muted-foreground">Belum ada pengajuan belanja bahan untuk order ini.</div>}
     </section>
 
     <Modal open={expenseOpen} onClose={() => setExpenseOpen(false)} title="Ajukan Belanja Layanan Retail" description={`${job.nomor_job} · ${job.nama_pelanggan} · sumber dana OPS_KANTOR`} size="md" bodyClassName="space-y-4" footer={<><Button variant="outline" onClick={() => setExpenseOpen(false)}>Batal</Button><Button disabled={createExpenseMutation.isPending} onClick={submitExpense}>{createExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Wallet size={15} />} Kirim ke KARWAS</Button></>}>
@@ -495,9 +503,9 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
         <Button variant="outline" onClick={() => { setExpenseDetail(null); setReviewMode(false); }}>Tutup</Button>
         {expenseDetail && !reviewMode && canManage && expenseDetail.status === "DIAJUKAN" && <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm hover:bg-muted"><Paperclip size={14} />{supportFile ? supportFile.name : "Lampirkan dokumen"}<input className="sr-only" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => { setSupportFile(event.target.files?.[0] ?? null); setSupportError(""); }} /></label>}
         {expenseDetail && !reviewMode && supportFile && <Button variant="outline" disabled={uploadSupportMutation.isPending} onClick={() => uploadSupportMutation.mutate({ id: String(expenseDetail.id), file: supportFile })}>{uploadSupportMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Paperclip size={15} />} Unggah</Button>}
-        {expenseDetail && reviewMode && canReviewExpense && expenseDetail.status === "DIAJUKAN" && <>
+        {expenseDetail && reviewMode && canReviewExpense && ((canReviewKarwas && expenseDetail.status === "DIAJUKAN") || (canReviewKeuangan && expenseDetail.status === "DISETUJUI_KARWAS") || (canReviewKabag && expenseDetail.status === "DISETUJUI_KEUANGAN")) && <>
           <Button variant="destructive" disabled={reviewExpenseMutation.isPending} onClick={() => reviewExpense(false)}>{reviewExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <X size={15} />} Tolak</Button>
-          <Button disabled={reviewExpenseMutation.isPending} onClick={() => reviewExpense(true)}>{reviewExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Check size={15} />} Setujui & Reservasi</Button>
+          <Button disabled={reviewExpenseMutation.isPending} onClick={() => reviewExpense(true)}>{reviewExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Check size={15} />} {expenseDetail.status === "DIAJUKAN" ? "Setujui & Reservasi" : expenseDetail.status === "DISETUJUI_KARWAS" ? "Setujui Validasi Keuangan" : "Setujui sebagai Kabag"}</Button>
         </>}
       </>}
     >

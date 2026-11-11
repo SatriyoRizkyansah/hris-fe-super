@@ -48,6 +48,8 @@ export function PenggunaResourcePage() {
               { label: "Keuangan (Legacy)", value: "KEUANGAN" },
               { label: "Keuangan Billing", value: "KEU_BILLING" },
               { label: "Keuangan Bendahara", value: "KEU_BENDAHARA" },
+              { label: "Bendahara Pengeluaran", value: "KEU_BENDAHARA_PENGELUARAN" },
+              { label: "Bendahara Pendapatan", value: "KEU_BENDAHARA_PENDAPATAN" },
               { label: "Keuangan KARWAS", value: "KEU_KARWAS" },
               { label: "Pimpinan", value: "PIMPINAN" },
               { label: "SPI", value: "SPI" },

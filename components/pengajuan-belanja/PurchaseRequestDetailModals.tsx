@@ -28,6 +28,9 @@ type Props = {
   retailDetailDocuments: Array<{ label: string; path?: any }>;
   hasRetailDetailDocuments: boolean;
   canReview: boolean;
+  canReviewKarwas: boolean;
+  canReviewKeuangan: boolean;
+  canReviewKabag: boolean;
   canPay: boolean;
   retailReviewPending: boolean;
   reviewRetail: (approved: boolean) => void;
@@ -45,7 +48,7 @@ export function PurchaseRequestDetailModals(props: Props) {
     detailRequest, setDetailRequest, detailStatus, detailSteps, retailDetailRequest,
     setRetailDetailRequest, retailDetailStatus, retailDetailRejected, retailDetailCanceled,
     retailDetailPaid, retailDetailApproved, retailDetailSteps, retailDetailJob,
-    retailDetailDocuments, hasRetailDetailDocuments, canReview, canPay,
+    retailDetailDocuments, hasRetailDetailDocuments, canReview, canReviewKarwas, canReviewKeuangan, canReviewKabag, canPay,
     retailReviewPending, reviewRetail, retailReviewNote, setRetailReviewNote,
     retailReviewError, onStartRetailPayment, formatDateTime, statusLabels, statusTone,
   } = props;
@@ -187,17 +190,17 @@ export function PurchaseRequestDetailModals(props: Props) {
         bodyClassName="space-y-4 bg-slate-50/60"
         footer={
           <>
-            {canReview && retailDetailStatus === "DIAJUKAN" && (
+            {((canReviewKarwas && retailDetailStatus === "DIAJUKAN") || (canReviewKeuangan && retailDetailStatus === "DISETUJUI_KARWAS") || (canReviewKabag && retailDetailStatus === "DISETUJUI_KEUANGAN")) && (
               <>
                 <Button variant="destructive" disabled={retailReviewPending} onClick={() => reviewRetail(false)}>
                   {retailReviewPending && <LoaderCircle className="animate-spin" size={15} />} Tolak
                 </Button>
                 <Button disabled={retailReviewPending} onClick={() => reviewRetail(true)}>
-                  {retailReviewPending && <LoaderCircle className="animate-spin" size={15} />} Setujui &amp; Reservasi OPS_KANTOR
+                  {retailReviewPending && <LoaderCircle className="animate-spin" size={15} />} {retailDetailStatus === "DIAJUKAN" ? "Setujui & Reservasi OPS_KANTOR" : retailDetailStatus === "DISETUJUI_KARWAS" ? "Setujui Validasi Keuangan" : "Setujui sebagai Kabag"}
                 </Button>
               </>
             )}
-            {canPay && retailDetailStatus === "DISETUJUI_KARWAS" && retailDetailRequest && (
+            {canPay && retailDetailStatus === "DISETUJUI_KABAG" && retailDetailRequest && (
               <Button
                 onClick={() => onStartRetailPayment(retailDetailRequest)}
               >
@@ -260,7 +263,7 @@ export function PurchaseRequestDetailModals(props: Props) {
                         ? "Pengajuan dibatalkan"
                         : retailDetailPaid
                           ? "Validasi selesai · pembayaran tercatat"
-                          : "Disetujui KARWAS · menunggu pembayaran Bendahara"}
+                          : retailDetailStatus === "DISETUJUI_KARWAS" ? "Disetujui KARWAS · menunggu validasi Keuangan" : retailDetailStatus === "DISETUJUI_KEUANGAN" ? "Disetujui Keuangan · menunggu persetujuan Kabag" : retailDetailStatus === "DISETUJUI_KABAG" ? "Disetujui Kabag · menunggu pembayaran Bendahara Pengeluaran" : "Proses pengajuan belanja"}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed">
                   {retailDetailStatus === "DIAJUKAN"
@@ -274,7 +277,7 @@ export function PurchaseRequestDetailModals(props: Props) {
                           : `Disetujui${retailDetailRequest.pemeriksa?.nama ? ` oleh ${retailDetailRequest.pemeriksa.nama}` : " oleh KARWAS"} pada ${formatDateTime(retailDetailRequest.diperiksa_pada)}. Bendahara dapat melanjutkan pencatatan pembayaran.`}
                 </p>
               </div>
-              {canReview && retailDetailStatus === "DIAJUKAN" && (
+              {((canReviewKarwas && retailDetailStatus === "DIAJUKAN") || (canReviewKeuangan && retailDetailStatus === "DISETUJUI_KARWAS") || (canReviewKabag && retailDetailStatus === "DISETUJUI_KEUANGAN")) && (
                 <>
                   <label className="grid gap-1.5 text-sm">
                     Catatan pemeriksa

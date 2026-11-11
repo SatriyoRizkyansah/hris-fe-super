@@ -25,6 +25,7 @@ type Props = {
   reviewLedger: Row[];
   reviewContextQuery: { isLoading: boolean; isError: boolean; refetch: () => unknown };
   reviewMutation: { isPending: boolean };
+  reviewStage: "karwas" | "keuangan" | "kabag";
   review: (approved: boolean) => void;
   note: string;
   setNote: Dispatch<SetStateAction<string>>;
@@ -34,7 +35,7 @@ type Props = {
 export function PurchaseRequestReviewModal({
   reviewing, setReviewing, reviewRequest, reviewProject, reviewRoBalance,
   reviewCashFlow, reviewChecks, reviewProjectRos, reviewTerms, reviewLedger,
-  reviewContextQuery, reviewMutation, review, note, setNote, error,
+  reviewContextQuery, reviewMutation, reviewStage, review, note, setNote, error,
 }: Props) {
   return (
     <Modal
@@ -53,23 +54,23 @@ export function PurchaseRequestReviewModal({
               <X size={16} /> Tolak
             </Button>
             <Button
-              disabled={reviewMutation.isPending || reviewContextQuery.isLoading || reviewContextQuery.isError || !reviewChecks.ro_reguler || !reviewChecks.proyek_disetujui || !reviewChecks.pagu_mencukupi}
+              disabled={reviewMutation.isPending || (reviewStage === "karwas" && (reviewContextQuery.isLoading || reviewContextQuery.isError || !reviewChecks.ro_reguler || !reviewChecks.proyek_disetujui || !reviewChecks.pagu_mencukupi))}
               onClick={() => review(true)}
             >
-              {reviewMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Check size={16} />} Reservasi Pagu
+              {reviewMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Check size={16} />} {reviewStage === "karwas" ? "Setujui & Reservasi Pagu" : reviewStage === "keuangan" ? "Setujui Validasi Keuangan" : "Setujui sebagai Kabag"}
             </Button>
           </>
         }
       >
-        {reviewContextQuery.isLoading && (
+        {reviewStage === "karwas" && reviewContextQuery.isLoading && (
           <Card>
             <CardContent className="flex items-center gap-3 p-5 text-sm text-muted-foreground">
               <LoaderCircle size={18} className="animate-spin" /> Memuat data RO, proyek, dan arus kas…
             </CardContent>
           </Card>
         )}
-        {reviewContextQuery.isError && <EmptyData label="Konteks keuangan untuk review belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void reviewContextQuery.refetch()}>Coba lagi</Button>} />}
-        {!reviewContextQuery.isLoading && !reviewContextQuery.isError && (
+        {reviewStage === "karwas" && reviewContextQuery.isError && <EmptyData label="Konteks keuangan untuk review belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void reviewContextQuery.refetch()}>Coba lagi</Button>} />}
+        {(reviewStage !== "karwas" || (!reviewContextQuery.isLoading && !reviewContextQuery.isError)) && (
           <>
             <ModalSection title="Rincian pengajuan" description="Periksa kegiatan, pemohon, dokumen, dan sumber anggaran sebelum memberi keputusan.">
               <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
