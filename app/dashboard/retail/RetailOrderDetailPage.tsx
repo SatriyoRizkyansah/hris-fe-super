@@ -142,7 +142,7 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   const unitCode = user.data?.unitKerjaKode?.trim().toLocaleUpperCase("id-ID") ?? "";
   const canSettle = ["superadmin", "keu_bendahara_pendapatan", "keu_bendahara"].includes(role);
   const canReviewKarwas = ["superadmin", "keu_karwas"].includes(role);
-  const canReviewKeuangan = role === "superadmin" || ((role === "koordinator" || role === "keuangan") && !!process.env.NEXT_PUBLIC_UNIT_KODE_KEUANGAN && unitCode === process.env.NEXT_PUBLIC_UNIT_KODE_KEUANGAN.trim().toLocaleUpperCase("id-ID"));
+  const canReviewKeuangan = role === "superadmin" || (role === "subkoor" && !!process.env.NEXT_PUBLIC_UNIT_KODE_KEUANGAN && unitCode === process.env.NEXT_PUBLIC_UNIT_KODE_KEUANGAN.trim().toLocaleUpperCase("id-ID"));
   const canReviewKabag = role === "superadmin" || ((role === "koordinator" || role === "keuangan") && !!process.env.NEXT_PUBLIC_UNIT_KODE_KABAG && unitCode === process.env.NEXT_PUBLIC_UNIT_KODE_KABAG.trim().toLocaleUpperCase("id-ID"));
   const canReviewExpense = canReviewKarwas || canReviewKeuangan || canReviewKabag;
   const canPayExpense = ["superadmin", "keu_bendahara_pengeluaran"].includes(role);
@@ -495,7 +495,7 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     <Modal
       open={Boolean(expenseDetail)}
       onClose={() => { setExpenseDetail(null); setReviewMode(false); setReviewError(""); }}
-      title={reviewMode ? "Review Pengajuan Belanja Retail" : "Rincian Pengajuan Belanja Retail"}
+      title={reviewMode ? expenseDetail?.status === "DIAJUKAN" ? "Validasi KARWAS" : expenseDetail?.status === "DISETUJUI_KARWAS" ? "Validasi Keuangan" : "Persetujuan Kabag" : "Rincian Pengajuan Belanja Retail"}
       description={expenseDetail ? `${expenseDetail.nomor_pengajuan} · ${job.nomor_job} · ${job.nama_pelanggan}` : undefined}
       size="lg"
       bodyClassName="space-y-4"
@@ -526,10 +526,11 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
             ].map(([label, value]) => <div key={String(label)} className="border-b py-2.5"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium tabular-nums">{value}</dd></div>)}
           </dl>
         </ModalSection>
-        <ModalSection title="Pemeriksaan dan pembayaran">
+        <ModalSection title="Riwayat persetujuan dan pembayaran" description="Rincian pemeriksa, catatan keputusan, dan pembayaran untuk setiap tahap.">
           <dl className="grid gap-x-6 sm:grid-cols-2">
-            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Pemeriksa KARWAS</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.pemeriksa?.nama ?? "Belum diperiksa"}</dd></div>
-            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Catatan pemeriksa</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.catatan_pemeriksa ?? "—"}</dd></div>
+            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Validasi KARWAS</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.pemeriksa?.nama ? `${expenseDetail.pemeriksa.nama} · ${dateLabel(expenseDetail.diperiksa_pada)}` : "Belum diproses"}</dd><dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_pemeriksa || "Tidak ada catatan."}</dd></div>
+            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Validasi Keuangan</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.validator_keuangan?.nama ? `${expenseDetail.validator_keuangan.nama} · ${dateLabel(expenseDetail.divalidasi_keuangan_pada)}` : "Belum diproses"}</dd><dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_keuangan || "Tidak ada catatan."}</dd></div>
+            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Persetujuan Kabag</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.validator_kabag?.nama ? `${expenseDetail.validator_kabag.nama} · ${dateLabel(expenseDetail.divalidasi_kabag_pada)}` : "Belum diproses"}</dd><dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_kabag || "Tidak ada catatan."}</dd></div>
             <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Nomor pembayaran</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.nomor_pembayaran ?? "Belum dibayar"}</dd></div>
             <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Tanggal bayar / Bendahara</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.tanggal_bayar ? `${dateLabel(expenseDetail.tanggal_bayar)} · ${expenseDetail.pembayar?.nama ?? "—"}` : "—"}</dd></div>
           </dl>
@@ -540,7 +541,7 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
           </div>
           {supportError && <Alert variant="destructive"><AlertDescription>{supportError}</AlertDescription></Alert>}
         </ModalSection>
-        {reviewMode && <label className="grid gap-1 text-sm">Catatan KARWAS <span className="text-xs text-muted-foreground">Wajib diisi jika pengajuan ditolak.</span><textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Catatan pemeriksaan atau alasan penolakan" /></label>}
+        {reviewMode && <label className="grid gap-1 text-sm">{expenseDetail.status === "DIAJUKAN" ? "Catatan KARWAS" : expenseDetail.status === "DISETUJUI_KARWAS" ? "Catatan validasi Keuangan" : "Catatan persetujuan Kabag"}<span className="text-xs text-muted-foreground">Wajib diisi jika pengajuan ditolak.</span><textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Catatan pemeriksaan atau alasan penolakan" /></label>}
         {reviewError && <Alert variant="destructive"><AlertDescription>{reviewError}</AlertDescription></Alert>}
       </>}
     </Modal>

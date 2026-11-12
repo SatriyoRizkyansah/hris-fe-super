@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal, ModalDetailGrid, ModalDetailItem, ModalSection } from "@/components/modal/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentLinks } from "@/components/common/DocumentLinks";
+import { MoneyFlow } from "@/components/common/MoneyFlow";
 import { formatRupiah } from "@/lib/hris/format";
 
 type Row = Record<string, any>;
@@ -250,7 +251,7 @@ export function PurchaseRequestDetailModals(props: Props) {
               )}
             </ModalSection>
 
-            <ModalSection title="Validasi KARWAS" description="Status pemeriksaan kebutuhan belanja dan reservasi saldo OPS_KANTOR.">
+            <ModalSection title={retailDetailStatus === "DIAJUKAN" ? "Validasi KARWAS" : retailDetailStatus === "DISETUJUI_KARWAS" ? "Validasi Keuangan" : retailDetailStatus === "DISETUJUI_KEUANGAN" ? "Persetujuan Kabag" : "Riwayat persetujuan"} description="Informasi dan catatan setiap tahap ditampilkan dengan format yang sama agar alur keputusan mudah ditinjau.">
               <div
                 className={`rounded-lg border px-3.5 py-3 text-sm ${retailDetailRejected ? "border-red-200 bg-red-50 text-red-900" : retailDetailStatus === "DIAJUKAN" ? "border-amber-200 bg-amber-50 text-amber-950" : retailDetailCanceled ? "border-slate-200 bg-slate-50 text-slate-700" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}
               >
@@ -280,7 +281,7 @@ export function PurchaseRequestDetailModals(props: Props) {
               {((canReviewKarwas && retailDetailStatus === "DIAJUKAN") || (canReviewKeuangan && retailDetailStatus === "DISETUJUI_KARWAS") || (canReviewKabag && retailDetailStatus === "DISETUJUI_KEUANGAN")) && (
                 <>
                   <label className="grid gap-1.5 text-sm">
-                    Catatan pemeriksa
+                    {retailDetailStatus === "DIAJUKAN" ? "Catatan KARWAS" : retailDetailStatus === "DISETUJUI_KARWAS" ? "Catatan validasi Keuangan" : "Catatan persetujuan Kabag"}
                     <span className="text-xs text-muted-foreground">Opsional saat menyetujui, wajib diisi jika menolak.</span>
                     <textarea
                       className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -297,6 +298,14 @@ export function PurchaseRequestDetailModals(props: Props) {
                   )}
                 </>
               )}
+            </ModalSection>
+
+            <ModalSection title="Posisi dana OPS_KANTOR" description="Perkiraan saldo setelah pengajuan ini disetujui. Persetujuan KARWAS akan mereservasi nominal pengajuan.">
+              <MoneyFlow items={[
+                { label: "Saldo tersedia", amount: retailDetailRequest.saldo_ops_tersedia },
+                { label: "Pengajuan ini", amount: retailDetailRequest.jumlah, operator: "−", tone: "text-amber-700" },
+                { label: "Sisa setelah pengajuan", amount: Math.max(0, Number(retailDetailRequest.saldo_ops_tersedia ?? 0) - Number(retailDetailRequest.jumlah ?? 0)), operator: "=", tone: Number(retailDetailRequest.saldo_ops_tersedia ?? 0) < Number(retailDetailRequest.jumlah ?? 0) ? "text-rose-700" : "text-emerald-700" },
+              ]} />
             </ModalSection>
 
             <ModalSection title="Progress pengajuan" description="Tahapan pemeriksaan dan pembayaran pengajuan belanja retail.">

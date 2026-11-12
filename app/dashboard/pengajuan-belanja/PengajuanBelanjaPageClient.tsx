@@ -23,12 +23,14 @@ import { use_mutation } from "@/lib/api/use_mutation";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { apiErrorMessage, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
 import { formatRupiah } from "@/lib/hris/format";
-import type { BayarPengajuanBelanjaDto, CreatePengajuanBelanjaDto, ReviewPengajuanBelanjaDto } from "@/lib/api/generated/api-generated";
+import type { CreatePengajuanBelanjaDto } from "@/lib/api/generated/api-generated";
 
 type Row = Record<string, any>;
 type Form = { ro_id: string; nama_kegiatan: string; no_kuitansi: string; tanggal: string; jumlah: string; keterangan: string };
 type ProjectRow = { id: string; kode_proyek?: string; nama_proyek?: string; tahun_fiscal?: number };
-type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan: string };
+type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string };
+type ReviewPengajuanBelanjaDto = { disetujui: boolean; catatan?: string };
+type BayarPengajuanBelanjaDto = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string };
 const today = () => new Date().toISOString().slice(0, 10);
 const blankForm = (): Form => ({ ro_id: "", nama_kegiatan: "", no_kuitansi: "", tanggal: today(), jumlah: "", keterangan: "" });
 const blankPayment = (): PaymentForm => ({ nomor_pembayaran: "", tanggal_bayar: today(), catatan: "" });
@@ -182,8 +184,8 @@ export default function PengajuanBelanjaPageClient() {
   const canReviewKarwas = isSuperadmin || role === "keu_karwas";
   const financeUnit = (process.env.NEXT_PUBLIC_UNIT_KODE_KEUANGAN ?? "").trim().toLocaleUpperCase("id-ID");
   const kabagUnit = (process.env.NEXT_PUBLIC_UNIT_KODE_KABAG ?? "").trim().toLocaleUpperCase("id-ID");
-  const canReviewKeuangan = isSuperadmin || ((role === "koordinator" || role === "keuangan") && !!financeUnit && unitCode === financeUnit);
-  const canReviewKabag = isSuperadmin || ((role === "koordinator" || role === "keuangan") && !!kabagUnit && unitCode === kabagUnit);
+  const canReviewKeuangan = isSuperadmin || (role === "subkoor" && !!financeUnit && unitCode === financeUnit);
+  const canReviewKabag = isSuperadmin || ((role === "koordinator" || role === "subkoor") && !!kabagUnit && unitCode === kabagUnit);
   const canReview = canReviewKarwas || canReviewKeuangan || canReviewKabag;
   const canPay = isSuperadmin || role === "keu_bendahara_pengeluaran";
   const detailStatus = String(detailRequest?.status ?? "");
@@ -215,13 +217,26 @@ export default function PengajuanBelanjaPageClient() {
         },
         {
           title: "Validasi Keuangan",
-          state: detailStatus === "DITOLAK_KEUANGAN" ? "rejected" : ["DISETUJUI_KEUANGAN", "DISETUJUI_KABAG", "DIBAYAR"].includes(detailStatus) ? "done" : detailRejected || detailCanceled ? "skipped" : detailStatus === "DISETUJUI_KARWAS" ? "active" : "waiting",
-          description: detailRequest.validator_keuangan?.nama ? `Diproses oleh ${detailRequest.validator_keuangan.nama} Â· ${formatDateTime(detailRequest.divalidasi_keuangan_pada)}${detailRequest.catatan_keuangan ? ` Â· ${detailRequest.catatan_keuangan}` : ""}` : "Menunggu validasi Keuangan.",
+          state:
+            detailStatus === "DITOLAK_KEUANGAN"
+              ? "rejected"
+              : ["DISETUJUI_KEUANGAN", "DISETUJUI_KABAG", "DIBAYAR"].includes(detailStatus)
+                ? "done"
+                : detailRejected || detailCanceled
+                  ? "skipped"
+                  : detailStatus === "DISETUJUI_KARWAS"
+                    ? "active"
+                    : "waiting",
+          description: detailRequest.validator_keuangan?.nama
+            ? `Diproses oleh ${detailRequest.validator_keuangan.nama} Â· ${formatDateTime(detailRequest.divalidasi_keuangan_pada)}${detailRequest.catatan_keuangan ? ` Â· ${detailRequest.catatan_keuangan}` : ""}`
+            : "Menunggu validasi Keuangan.",
         },
         {
           title: "Persetujuan Kabag",
           state: detailStatus === "DITOLAK_KABAG" ? "rejected" : ["DISETUJUI_KABAG", "DIBAYAR"].includes(detailStatus) ? "done" : detailRejected || detailCanceled ? "skipped" : detailStatus === "DISETUJUI_KEUANGAN" ? "active" : "waiting",
-          description: detailRequest.validator_kabag?.nama ? `Diproses oleh ${detailRequest.validator_kabag.nama} Â· ${formatDateTime(detailRequest.divalidasi_kabag_pada)}${detailRequest.catatan_kabag ? ` Â· ${detailRequest.catatan_kabag}` : ""}` : "Menunggu persetujuan Kabag.",
+          description: detailRequest.validator_kabag?.nama
+            ? `Diproses oleh ${detailRequest.validator_kabag.nama} Â· ${formatDateTime(detailRequest.divalidasi_kabag_pada)}${detailRequest.catatan_kabag ? ` Â· ${detailRequest.catatan_kabag}` : ""}`
+            : "Menunggu persetujuan Kabag.",
         },
         {
           title: "Pembayaran Bendahara Pengeluaran",
@@ -263,13 +278,35 @@ export default function PengajuanBelanjaPageClient() {
         },
         {
           title: "Validasi Keuangan",
-          state: retailDetailStatus === "DITOLAK_KEUANGAN" ? "rejected" : ["DISETUJUI_KEUANGAN", "DISETUJUI_KABAG", "DIBAYAR"].includes(retailDetailStatus) ? "done" : retailDetailRejected || retailDetailCanceled ? "skipped" : retailDetailStatus === "DISETUJUI_KARWAS" ? "active" : "waiting",
-          description: retailDetailRequest.validator_keuangan?.nama ? `Diproses oleh ${retailDetailRequest.validator_keuangan.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_keuangan_pada)}${retailDetailRequest.catatan_keuangan ? ` Â· ${retailDetailRequest.catatan_keuangan}` : ""}` : "Menunggu validasi Keuangan.",
+          state:
+            retailDetailStatus === "DITOLAK_KEUANGAN"
+              ? "rejected"
+              : ["DISETUJUI_KEUANGAN", "DISETUJUI_KABAG", "DIBAYAR"].includes(retailDetailStatus)
+                ? "done"
+                : retailDetailRejected || retailDetailCanceled
+                  ? "skipped"
+                  : retailDetailStatus === "DISETUJUI_KARWAS"
+                    ? "active"
+                    : "waiting",
+          description: retailDetailRequest.validator_keuangan?.nama
+            ? `Diproses oleh ${retailDetailRequest.validator_keuangan.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_keuangan_pada)}${retailDetailRequest.catatan_keuangan ? ` Â· ${retailDetailRequest.catatan_keuangan}` : ""}`
+            : "Menunggu validasi Keuangan.",
         },
         {
           title: "Persetujuan Kabag",
-          state: retailDetailStatus === "DITOLAK_KABAG" ? "rejected" : ["DISETUJUI_KABAG", "DIBAYAR"].includes(retailDetailStatus) ? "done" : retailDetailRejected || retailDetailCanceled ? "skipped" : retailDetailStatus === "DISETUJUI_KEUANGAN" ? "active" : "waiting",
-          description: retailDetailRequest.validator_kabag?.nama ? `Diproses oleh ${retailDetailRequest.validator_kabag.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_kabag_pada)}${retailDetailRequest.catatan_kabag ? ` Â· ${retailDetailRequest.catatan_kabag}` : ""}` : "Menunggu persetujuan Kabag.",
+          state:
+            retailDetailStatus === "DITOLAK_KABAG"
+              ? "rejected"
+              : ["DISETUJUI_KABAG", "DIBAYAR"].includes(retailDetailStatus)
+                ? "done"
+                : retailDetailRejected || retailDetailCanceled
+                  ? "skipped"
+                  : retailDetailStatus === "DISETUJUI_KEUANGAN"
+                    ? "active"
+                    : "waiting",
+          description: retailDetailRequest.validator_kabag?.nama
+            ? `Diproses oleh ${retailDetailRequest.validator_kabag.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_kabag_pada)}${retailDetailRequest.catatan_kabag ? ` Â· ${retailDetailRequest.catatan_kabag}` : ""}`
+            : "Menunggu persetujuan Kabag.",
         },
         {
           title: "Pembayaran Bendahara Pengeluaran",
@@ -368,7 +405,11 @@ export default function PengajuanBelanjaPageClient() {
     tag: "keuanganPengajuanBelanjaReviewContext",
     method: "pengajuanBelanjaReviewContextControllerReviewContext",
     params: { id: String(reviewing?.id ?? "") },
-    enabled: Boolean(reviewing && canReviewKarwas && reviewing.status === "DIAJUKAN"),
+    enabled: Boolean(
+      reviewing &&
+      canReview &&
+      ["DIAJUKAN", "DISETUJUI_KARWAS", "DISETUJUI_KEUANGAN"].includes(String(reviewing.status)),
+    ),
     queryFn: async ({ id }) => {
       setBrowserToken();
       return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaReviewContextControllerReviewContext(id, { format: "json" }));
@@ -433,6 +474,7 @@ export default function PengajuanBelanjaPageClient() {
       setBrowserToken();
       return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaCreateControllerCreate(data, { format: "json" }));
     },
+    successMessage: "Pengajuan belanja berhasil dibuat.",
     onSuccess: () => {
       setOpen(false);
       setForm(blankForm());
@@ -448,6 +490,7 @@ export default function PengajuanBelanjaPageClient() {
       const path = stage === "karwas" ? "review" : stage === "keuangan" ? "validasi-keuangan" : "validasi-kabag";
       return requestHrisApi(`/api/pengajuan-belanja/${id}/${path}`, { method: "POST", body: JSON.stringify(data) });
     },
+    successMessage: "Reservasi pagu berhasil disimpan.",
     onSuccess: () => {
       setReviewing(null);
       setNote("");
@@ -458,11 +501,13 @@ export default function PengajuanBelanjaPageClient() {
     tag: "keuanganPengajuanBelanja",
     method: "pengajuanBelanjaBayarControllerBayar",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: async ({ id, data, file }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/bayar`, file, {
-      nomor_pembayaran: data.nomor_pembayaran,
-      tanggal_bayar: data.tanggal_bayar,
-      ...(data.catatan ? { catatan: data.catatan } : {}),
-    }),
+    mutationFn: async ({ id, data, file }) =>
+      uploadHrisFile(`/api/pengajuan-belanja/${id}/bayar`, file, {
+        nomor_pembayaran: data.nomor_pembayaran,
+        tanggal_bayar: data.tanggal_bayar,
+        ...(data.catatan ? { catatan: data.catatan } : {}),
+      }),
+    successMessage: "Pembayaran berhasil dicatat.",
     onSuccess: () => {
       setPaying(null);
       setPayment(blankPayment());
@@ -482,21 +527,24 @@ export default function PengajuanBelanjaPageClient() {
         body: JSON.stringify({ disetujui, catatan: retailReviewNote.trim() || undefined }),
       });
     },
+    successMessage: "Review pengajuan retail berhasil disimpan.",
     onSuccess: (response, variables) => {
       const updated = objectData(response);
+      const reviewerKey = variables.stage === "karwas" ? "pemeriksa" : variables.stage === "keuangan" ? "validator_keuangan" : "validator_kabag";
       setRetailDetailRequest((current) =>
         current
           ? {
               ...current,
               ...updated,
-              pemeriksa: updated.pemeriksa ?? { nama: user.data?.nama ?? "KARWAS" },
+              [reviewerKey]: updated[reviewerKey] ?? { nama: user.data?.nama ?? "Pemeriksa" },
             }
           : current,
       );
       setRetailReviewNote("");
       setRetailReviewError("");
       const responseMessage = response && typeof response === "object" && "message" in response && typeof response.message === "string" ? response.message : "";
-      const fallbackMessage = variables.disetujui ? "Pengajuan belanja retail disetujui dan saldo OPS_KANTOR direservasi." : "Pengajuan belanja retail ditolak.";
+      const stageLabel = variables.stage === "karwas" ? "KARWAS" : variables.stage === "keuangan" ? "Keuangan" : "Kabag";
+      const fallbackMessage = variables.disetujui ? `Pengajuan belanja retail disetujui pada tahap ${stageLabel}.` : `Pengajuan belanja retail ditolak pada tahap ${stageLabel}.`;
       window.dispatchEvent(new CustomEvent("api:success", { detail: { message: responseMessage || fallbackMessage } }));
     },
     onError: (cause) => setRetailReviewError(apiErrorMessage(cause, "Review pengajuan retail gagal disimpan.")),
@@ -506,15 +554,14 @@ export default function PengajuanBelanjaPageClient() {
     method: "payRetailExpense",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("retail"), apiQueryKeys.resource("masterDanaOperasional")],
     mutationFn: async ({ id, form, file }) => uploadHrisFile(`/api/retail/pengajuan-belanja/${id}/bayar`, file, form),
+    successMessage: "Pembayaran pengajuan retail berhasil dicatat.",
     onSuccess: (response) => {
       const updated = objectData(response);
-      const responseMessage = response && typeof response === "object" && "message" in response && typeof response.message === "string" ? response.message : "";
       setRetailDetailRequest((current) => (current ? { ...current, ...updated } : current));
       setRetailPaying(null);
       setRetailPayment(blankPayment());
       setRetailPaymentFile(null);
       setRetailPaymentError("");
-      window.dispatchEvent(new CustomEvent("api:success", { detail: { message: responseMessage || "Pembayaran pengajuan retail berhasil dicatat." } }));
     },
     onError: (cause) => setRetailPaymentError(apiErrorMessage(cause, "Pembayaran pengajuan retail gagal dicatat.")),
   });
@@ -566,7 +613,7 @@ export default function PengajuanBelanjaPageClient() {
         data: {
           nomor_pembayaran: payment.nomor_pembayaran.trim(),
           tanggal_bayar: payment.tanggal_bayar,
-          catatan: payment.catatan.trim() || undefined,
+          catatan: payment.catatan?.trim() || undefined,
         },
         file: paymentFile,
       });
@@ -600,7 +647,7 @@ export default function PengajuanBelanjaPageClient() {
       setRetailPaymentError("");
       await retailPayMutation.mutateAsync({
         id: String(retailPaying.id),
-        form: { ...retailPayment, nomor_pembayaran: retailPayment.nomor_pembayaran.trim(), catatan: retailPayment.catatan.trim() },
+        form: { ...retailPayment, nomor_pembayaran: retailPayment.nomor_pembayaran.trim(), catatan: retailPayment.catatan?.trim() },
         file: retailPaymentFile,
       });
     } catch (cause) {
@@ -677,10 +724,29 @@ export default function PengajuanBelanjaPageClient() {
               Memuat pengajuan belanja…
             </p>
           )}
-          {listQuery.isError && <EmptyData label="Daftar pengajuan belanja belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void listQuery.refetch()}>Coba lagi</Button>} />}
+          {listQuery.isError && (
+            <EmptyData
+              label="Daftar pengajuan belanja belum dapat dimuat."
+              action={
+                <Button type="button" variant="outline" size="sm" onClick={() => void listQuery.refetch()}>
+                  Coba lagi
+                </Button>
+              }
+            />
+          )}
           {!listQuery.isLoading && !listQuery.isError && (
             <>
-              {filterOptionsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Opsi filter belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void filterOptionsQuery.refetch()}>Coba lagi</Button>} />}
+              {filterOptionsQuery.isError && (
+                <EmptyData
+                  className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden"
+                  label="Opsi filter belum dapat dimuat."
+                  action={
+                    <Button type="button" variant="outline" size="sm" onClick={() => void filterOptionsQuery.refetch()}>
+                      Coba lagi
+                    </Button>
+                  }
+                />
+              )}
               <DataTable
                 rows={rows}
                 rowKey={(row, index) => `${String(row.jenis_sumber ?? "PROYEK")}:${String(row.id ?? index)}`}
@@ -826,19 +892,20 @@ export default function PengajuanBelanjaPageClient() {
                                   <Eye size={15} /> Detail
                                 </Button>
                               )}
-                              {((canReviewKarwas && row.status === "DIAJUKAN") || (canReviewKeuangan && row.status === "DISETUJUI_KARWAS") || (canReviewKabag && row.status === "DISETUJUI_KEUANGAN")) && row.jenis_sumber !== "LAYANAN_RETAIL" && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setReviewing(row);
-                                    setNote("");
-                                    setError("");
-                                  }}
-                                >
-                                  Review
-                                </Button>
-                              )}
+                              {((canReviewKarwas && row.status === "DIAJUKAN") || (canReviewKeuangan && row.status === "DISETUJUI_KARWAS") || (canReviewKabag && row.status === "DISETUJUI_KEUANGAN")) &&
+                                row.jenis_sumber !== "LAYANAN_RETAIL" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setReviewing(row);
+                                      setNote("");
+                                      setError("");
+                                    }}
+                                  >
+                                    Review
+                                  </Button>
+                                )}
                               {canPay && row.jenis_sumber !== "LAYANAN_RETAIL" && row.status === "DISETUJUI_KABAG" && (
                                 <Button
                                   size="sm"
@@ -893,7 +960,8 @@ export default function PengajuanBelanjaPageClient() {
         formatDateTime={formatDateTime}
         statusLabels={statusLabels}
         statusTone={statusTone}
-      />      <Modal
+      />{" "}
+      <Modal
         open={Boolean(retailPaying)}
         onClose={() => {
           setRetailPaying(null);
@@ -1000,7 +1068,17 @@ export default function PengajuanBelanjaPageClient() {
                   </div>
                 )}
                 {projectsQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar proyek…</p>}
-                {projectsQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar proyek belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void projectsQuery.refetch()}>Coba lagi</Button>} />}
+                {projectsQuery.isError && (
+                  <EmptyData
+                    className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden"
+                    label="Daftar proyek belum dapat dimuat."
+                    action={
+                      <Button type="button" variant="outline" size="sm" onClick={() => void projectsQuery.refetch()}>
+                        Coba lagi
+                      </Button>
+                    }
+                  />
+                )}
               </CardContent>
             </Card>
             {selectedProjectId && (
@@ -1021,7 +1099,17 @@ export default function PengajuanBelanjaPageClient() {
                     </div>
                   )}
                   {rosQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar RO…</p>}
-                  {rosQuery.isError && <EmptyData className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden" label="Daftar RO belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void rosQuery.refetch()}>Coba lagi</Button>} />}
+                  {rosQuery.isError && (
+                    <EmptyData
+                      className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden"
+                      label="Daftar RO belum dapat dimuat."
+                      action={
+                        <Button type="button" variant="outline" size="sm" onClick={() => void rosQuery.refetch()}>
+                          Coba lagi
+                        </Button>
+                      }
+                    />
+                  )}
                   {!rosQuery.isLoading && !rosQuery.isError && !ros.length && <p className="text-xs text-amber-700">Belum ada RO pada proyek ini.</p>}
                 </CardContent>
               </Card>
@@ -1083,11 +1171,14 @@ export default function PengajuanBelanjaPageClient() {
         bodyClassName="space-y-4"
         footer={
           <>
-            <Button variant="outline" onClick={() => {
-              setPaying(null);
-              setPaymentFile(null);
-              setError("");
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPaying(null);
+                setPaymentFile(null);
+                setError("");
+              }}
+            >
               Batal
             </Button>
             <Button disabled={payMutation.isPending || !paymentFile} onClick={pay}>
@@ -1123,14 +1214,7 @@ export default function PengajuanBelanjaPageClient() {
           </div>
         </section>
         <div>
-          <DocumentUploadField
-            label="Bukti pembayaran (PDF) *"
-            accept=".pdf"
-            value={paymentFile}
-            onChange={setPaymentFile}
-            disabled={payMutation.isPending}
-            className="p-3 sm:p-3"
-          />
+          <DocumentUploadField label="Bukti pembayaran (PDF) *" accept=".pdf" value={paymentFile} onChange={setPaymentFile} disabled={payMutation.isPending} className="p-3 sm:p-3" />
           <p className="mt-1 text-xs text-muted-foreground">Unggah bukti transfer atau dokumen pembayaran dalam format PDF, maksimal 10 MB.</p>
         </div>
         <label className="grid gap-1 text-sm">
