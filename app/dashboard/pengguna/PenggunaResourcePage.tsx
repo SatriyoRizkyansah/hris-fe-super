@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { HrisResourcePage } from "@/components/hris/HrisResourcePage";
 import { Button } from "@/components/ui/Button";
@@ -9,11 +9,13 @@ import { useUsers, type UserRecord } from "./user-api";
 import UserForm from "./UserForm";
 
 export function PenggunaResourcePage() {
+  const [mounted, setMounted] = useState(false);
   const currentUser = useCurrentUser();
   const [formOpen, setFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | undefined>();
   const [refreshKey, setRefreshKey] = useState(0);
-  const canManage = currentUser.data?.role?.toUpperCase() === "SUPERADMIN";
+  useEffect(() => setMounted(true), []);
+  const canManage = mounted && currentUser.data?.role?.toUpperCase() === "SUPERADMIN";
   const users = useUsers({ query: undefined, page: 1, limit: 10 });
   return (
     <>

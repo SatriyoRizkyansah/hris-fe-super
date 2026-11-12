@@ -1,4 +1,5 @@
 export const SESSION_COOKIE = "lemigas_session";
+const ACCESS_STORAGE_KEY = "lemigas_accesses";
 
 export const HRIS_ROLES = ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas", "pimpinan", "spi", "karyawan"] as const;
 export type HrisRole = (typeof HRIS_ROLES)[number];
@@ -25,12 +26,32 @@ export type Session = { token: string; user: User; accesses?: RoleAccess[]; reme
 
 export function setSession(token: string, user: Omit<User, "initials">, remember: boolean, accesses: RoleAccess[] = []) {
   const maxAge = remember ? `; max-age=${60 * 60 * 24 * 30}` : "";
-  const session: Session = { token, user: { ...user, initials: makeInitials(user.name) }, accesses, remember };
+  // Keep the cookie small enough for browsers and middleware; role JWTs can make
+  // a multi-role session exceed the per-cookie size limit.
+  try {
+    window.localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(accesses));
+  } catch {
+    // Authentication should still work if browser storage is unavailable.
+  }
+  const session: Session = { token, user: { ...user, initials: makeInitials(user.name) }, accesses: [], remember };
   document.cookie = `${SESSION_COOKIE}=${encodeURIComponent(JSON.stringify(session))}; path=/; samesite=lax${maxAge}`;
 }
 
 export function clearSession() {
+  if (typeof window !== "undefined") window.localStorage.removeItem(ACCESS_STORAGE_KEY);
   document.cookie = `${SESSION_COOKIE}=; path=/; max-age=0; samesite=lax`;
+}
+
+export function readStoredAccesses(): RoleAccess[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ACCESS_STORAGE_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((access): access is RoleAccess => Boolean(access && typeof access.token === "string" && typeof access.akses === "string" && typeof access.role === "string"))
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export function selectSessionRole(access: RoleAccess) {
@@ -41,7 +62,7 @@ export function selectSessionRole(access: RoleAccess) {
     ?.slice(SESSION_COOKIE.length + 1);
   const current = readSession(cookie);
   if (!current) return false;
-  const session: Session = { ...current, token: access.token, user: { ...current.user, role: access.role } };
+  const session: Session = { ...current, token: access.token, user: { ...current.user, role: access.role }, accesses: [] };
   const maxAge = current.remember ? `; max-age=${60 * 60 * 24 * 30}` : "";
   document.cookie = `${SESSION_COOKIE}=${encodeURIComponent(JSON.stringify(session))}; path=/; samesite=lax${maxAge}`;
   return true;

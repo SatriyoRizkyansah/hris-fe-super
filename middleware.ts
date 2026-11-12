@@ -7,7 +7,7 @@ const roleAccess: Record<string, string[]> = {
   "/dashboard/proyek": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_karwas", "pimpinan"],
   "/dashboard/termin": ["superadmin", "keuangan", "keu_billing"],
   "/dashboard/invoice": ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "pimpinan", "spi"],
-  "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"],
+  "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_karwas", "pimpinan", "spi"],
   "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"],
   "/dashboard/karwas": ["superadmin", "keu_karwas"],
   "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan", "keu_bendahara", "keu_karwas"],
@@ -18,7 +18,7 @@ const roleAccess: Record<string, string[]> = {
   "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan", "keu_bendahara"],
   "/dashboard/pengguna": ["superadmin"],
   "/dashboard/pengaturan-margin": ["superadmin"],
-  "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas", "pimpinan", "spi", "karyawan"],
+  "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas", "pimpinan", "spi", "karyawan"],
 };
 const protectedPrefixes = ["/dashboard", ...Object.keys(roleAccess)];
 const roleHome = (role: string) =>
@@ -30,6 +30,8 @@ const roleHome = (role: string) =>
         ? "/dashboard/invoice"
         : role === "keu_bendahara"
           ? "/dashboard/pengajuan-belanja"
+          : role === "keu_bendahara_pengeluaran"
+            ? "/dashboard/pengajuan-belanja"
           : ["subkoor", "spi", "karyawan"].includes(role)
             ? "/dashboard/profil"
             : "/dashboard";

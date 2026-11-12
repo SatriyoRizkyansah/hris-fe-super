@@ -131,6 +131,7 @@ const purchaseWorkflowStages: WorkflowStage[] = [
 ];
 
 export default function PengajuanBelanjaPageClient() {
+  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [detailRequest, setDetailRequest] = useState<Row | null>(null);
   const [retailDetailRequest, setRetailDetailRequest] = useState<Row | null>(null);
@@ -156,6 +157,7 @@ export default function PengajuanBelanjaPageClient() {
   const [sourceFilter, setSourceFilter] = useState("__all");
   const [unitPelaksanaFilter, setUnitPelaksanaFilter] = useState("__all");
   const user = useCurrentUser();
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     const requestId = new URLSearchParams(window.location.search).get("pengajuan_id");
     if (!requestId) return;
@@ -178,7 +180,7 @@ export default function PengajuanBelanjaPageClient() {
   }, []);
   const role = user.data?.role?.toLowerCase() ?? "";
   const canViewRetail = user.data?.canViewRetail === true;
-  const canCreate = ["superadmin", "koordinator", "subkoor"].includes(role);
+  const canCreate = mounted && ["superadmin", "koordinator", "subkoor"].includes(role);
   const isSuperadmin = role === "superadmin";
   const unitCode = user.data?.unitKerjaKode?.trim().toLocaleUpperCase("id-ID") ?? "";
   const canReviewKarwas = isSuperadmin || role === "keu_karwas";

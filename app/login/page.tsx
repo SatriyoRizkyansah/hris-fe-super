@@ -46,7 +46,10 @@ export default function LoginPage() {
       router.replace(destination);
       router.refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Login gagal. Periksa email dan kata sandi.");
+      setError("");
+      window.dispatchEvent(new CustomEvent("api:error", {
+        detail: { error: cause instanceof Error ? cause : new Error("Login gagal. Periksa email dan kata sandi.") },
+      }));
     }
   }
 

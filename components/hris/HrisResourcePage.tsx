@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_query } from "@/lib/api/use_query";
@@ -57,6 +57,7 @@ function extractRows(value: unknown, depth = 0): { rows: Record<string, any>[]; 
 }
 
 export function HrisResourcePage({ title, description, group, method, requestStyle = "query", searchPlaceholder, columns: configuredColumns, filters = [], query: initialQuery = {}, create, headerAction }: Props) {
+  const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [createOpen, setCreateOpen] = useState(false);
@@ -64,7 +65,8 @@ export function HrisResourcePage({ title, description, group, method, requestSty
   const [formError, setFormError] = useState("");
   const currentUser = useCurrentUser();
   const role = currentUser.data?.role?.toLowerCase();
-  const canCreate = role === "superadmin" || role === "keuangan";
+  useEffect(() => setMounted(true), []);
+  const canCreate = mounted && (role === "superadmin" || role === "keuangan");
   const createMutation = use_mutation<unknown, Error, Record<string, string>>({
     tag: group,
     method: create?.method ?? "create",

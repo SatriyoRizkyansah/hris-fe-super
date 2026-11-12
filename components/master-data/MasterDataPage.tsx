@@ -101,11 +101,13 @@ function unwrapList(value: unknown): ListPayload {
 }
 
 export default function MasterDataPage({ kind, formColumns = 1, modalSize = "md" }: { kind: keyof typeof config; formColumns?: 1 | 2; modalSize?: "sm" | "md" }) {
+  const [mounted, setMounted] = useState(false);
   const cfg = config[kind];
   const currentUser = useCurrentUser();
   const role = currentUser.data?.role.toLowerCase();
-  const canEdit = kind === "kategori" ? role === "admin" : role === "admin" || role === "operator";
-  const canDelete = role === "admin";
+  useEffect(() => setMounted(true), []);
+  const canEdit = mounted && (kind === "kategori" ? role === "admin" : role === "admin" || role === "operator");
+  const canDelete = mounted && role === "admin";
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Entity | null>(null);

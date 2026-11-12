@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UserRoundPlus, Eye, Pencil, UserRoundX } from "lucide-react";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
@@ -17,6 +17,7 @@ import { EmptyData } from "@/components/loading/EmptyData";
 const unwrap = (v: any) => v?.data ?? v;
 
 export default function PegawaiPage() {
+  const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState("");
   const [tipe, setTipe] = useState("");
   const [status, setStatus] = useState("");
@@ -26,7 +27,8 @@ export default function PegawaiPage() {
   const [form, setForm] = useState({ nip_nik: "", nama: "", tipe_pegawai: "TA", ta_kategori: "BIASA", jabatan: "", email: "", telepon: "", tanggal_mulai: "" });
   const currentUser = useCurrentUser();
   const role = currentUser.data?.role?.toLowerCase() ?? "";
-  const canEdit = role === "superadmin";
+  useEffect(() => setMounted(true), []);
+  const canEdit = mounted && role === "superadmin";
   const params = useMemo(() => ({ query: search || undefined, page, limit: 10, tipe_pegawai: tipe || undefined, status_aktif: status || undefined }) as any, [search, page, tipe, status]);
   const list = use_query({
     tag: "masterPegawai",

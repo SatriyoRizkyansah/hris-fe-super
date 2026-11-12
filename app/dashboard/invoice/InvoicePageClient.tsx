@@ -75,6 +75,7 @@ const sourceLabel = (row: Row) => {
 };
 
 export default function InvoicePageClient() {
+  const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("__all");
   const [creating, setCreating] = useState(false);
@@ -87,7 +88,8 @@ export default function InvoicePageClient() {
   const [error, setError] = useState("");
   const user = useCurrentUser();
   const role = user.data?.role?.toLowerCase() ?? "";
-  const canCreate = ["superadmin", "keuangan", "keu_billing"].includes(role);
+  useEffect(() => setMounted(true), []);
+  const canCreate = mounted && ["superadmin", "keuangan", "keu_billing"].includes(role);
   const canSettle = ["superadmin", "keuangan", "keu_bendahara"].includes(role);
   useEffect(() => {
     if (!canCreate) return;

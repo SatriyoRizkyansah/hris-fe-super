@@ -28,14 +28,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/legacy-button";
 import { LoadingCard } from "@/components/loading";
-import { selectSessionRole, type RoleAccess } from "@/lib/auth";
+import { readStoredAccesses, selectSessionRole, type RoleAccess } from "@/lib/auth";
 import { browserApi } from "@/lib/api/browser-client";
 import { useCurrentUser } from "@/lib/api/hooks";
 
 const all = ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas", "pimpinan", "spi", "karyawan"];
 const finance = ["superadmin", "keuangan"];
 const billing = [...finance, "keu_billing"];
-const treasury = [...finance, "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan"];
+const treasury = [...finance, "keu_bendahara", "keu_bendahara_pendapatan"];
 const incomingTreasury = [...finance, "keu_bendahara_pendapatan"];
 const coordinators = ["superadmin", "koordinator"];
 const sections = [
@@ -67,12 +67,13 @@ const sections = [
       { href: "/dashboard/retail", label: "Proyek Retail", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"] },
       { href: "/dashboard/karwas/perpanjangan-proyek", label: "Perpanjangan SK Proyek", icon: FileClock, roles: ["superadmin", "keu_karwas"] },
       { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"] },
-      { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_karwas", "pimpinan", "spi"] },
+      { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"] },
     ],
   },
   {
     title: "Keuangan",
     items: [
+      { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["keu_bendahara_pengeluaran"] },
       { href: "/dashboard/termin", label: "Penagihan", icon: ClipboardCheck, roles: billing },
       { href: "/dashboard/invoice", label: "Invoice", icon: FileText, roles: [...billing, "keu_bendahara", "keu_bendahara_pendapatan", "pimpinan", "spi"] },
       { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"] },
@@ -146,14 +147,19 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
   const currentUser = useCurrentUser();
   const isGeneralCoordinator = role === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM";
   const canViewRetail = currentUser.data?.canViewRetail === true;
-  const canSeeOperationalFunds = isGeneralCoordinator || ["superadmin", "keuangan", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas"].includes(role);
+  const canSeeOperationalFunds = isGeneralCoordinator || ["superadmin", "keuangan", "keu_bendahara", "keu_bendahara_pendapatan", "keu_karwas"].includes(role);
   const [switching, setSwitching] = useState(false);
   const [accessPanelOpen, setAccessPanelOpen] = useState(false);
+  const [storedAccesses, setStoredAccesses] = useState<RoleAccess[]>(accesses);
   const [accessPanelPosition, setAccessPanelPosition] = useState({ left: 12, mobile: false });
   const accessPanelRef = useRef<HTMLDivElement>(null);
   const accessCardRef = useRef<HTMLElement>(null);
   const accessButtonRef = useRef<HTMLButtonElement>(null);
-  const roleOptions = accesses.filter((access, index, list) => list.findIndex((item) => item.token === access.token) === index);
+  useEffect(() => {
+    const stored = readStoredAccesses();
+    if (stored.length) setStoredAccesses(stored);
+  }, []);
+  const roleOptions = (storedAccesses.length ? storedAccesses : accesses).filter((access, index, list) => list.findIndex((item) => item.token === access.token) === index);
   const currentAccess = roleOptions.find((access) => access.token === activeToken) ?? roleOptions.find((access) => access.role === role);
   useEffect(() => {
     if (!accessPanelOpen) return;
