@@ -405,11 +405,7 @@ export default function PengajuanBelanjaPageClient() {
     tag: "keuanganPengajuanBelanjaReviewContext",
     method: "pengajuanBelanjaReviewContextControllerReviewContext",
     params: { id: String(reviewing?.id ?? "") },
-    enabled: Boolean(
-      reviewing &&
-      canReview &&
-      ["DIAJUKAN", "DISETUJUI_KARWAS", "DISETUJUI_KEUANGAN"].includes(String(reviewing.status)),
-    ),
+    enabled: Boolean(reviewing && canReview && ["DIAJUKAN", "DISETUJUI_KARWAS", "DISETUJUI_KEUANGAN"].includes(String(reviewing.status))),
     queryFn: async ({ id }) => {
       setBrowserToken();
       return apiData(browserApi.keuanganPengajuanBelanja.pengajuanBelanjaReviewContextControllerReviewContext(id, { format: "json" }));
