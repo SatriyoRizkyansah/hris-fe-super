@@ -216,19 +216,31 @@ export default function PengajuanBelanjaPageClient() {
           setError(apiErrorMessage(cause, "Daftar kamar dana belum dapat dimuat."));
         }
       })
-      .finally(() => { if (active) setPaymentWalletsLoading(false); });
-    return () => { active = false; };
+      .finally(() => {
+        if (active) setPaymentWalletsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [paying?.id]);
 
-  const panjarMode = panjarAction?.panjar?.status === "DIAJUKAN_PERTANGGUNGJAWABAN" ? "review"
-    : panjarAction?.panjar?.status === "MENUNGGU_PENGEMBALIAN" ? "refund" : "accountability";
+  const panjarMode = panjarAction?.panjar?.status === "DIAJUKAN_PERTANGGUNGJAWABAN" ? "review" : panjarAction?.panjar?.status === "MENUNGGU_PENGEMBALIAN" ? "refund" : "accountability";
   useEffect(() => {
-    if (panjarMode !== "refund" || !panjarAction?.id) { setRefundWallets([]); return; }
+    if (panjarMode !== "refund" || !panjarAction?.id) {
+      setRefundWallets([]);
+      return;
+    }
     let active = true;
     requestHrisApi(`/api/pengajuan-belanja/${encodeURIComponent(String(panjarAction.id))}/sumber-dana`)
-      .then((response) => { if (active) setRefundWallets(listRows(response)); })
-      .catch((cause) => { if (active) setPanjarError(apiErrorMessage(cause, "Daftar kamar tujuan belum dapat dimuat.")); });
-    return () => { active = false; };
+      .then((response) => {
+        if (active) setRefundWallets(listRows(response));
+      })
+      .catch((cause) => {
+        if (active) setPanjarError(apiErrorMessage(cause, "Daftar kamar tujuan belum dapat dimuat."));
+      });
+    return () => {
+      active = false;
+    };
   }, [panjarMode, panjarAction?.id]);
   const detailStatus = String(detailRequest?.status ?? "");
   const detailRejected = detailStatus.startsWith("DITOLAK_");
@@ -389,7 +401,8 @@ export default function PengajuanBelanjaPageClient() {
       return requestHrisApi(`/api/pengajuan-belanja?${searchParams.toString()}`);
     },
   });
-  const rows = useMemo(() => listRows(listQuery.data), [listQuery.data]);
+  // Panjar perjalanan punya menu tersendiri (/dashboard/panjar) agar daftarnya tidak tercampur.
+  const rows = useMemo(() => listRows(listQuery.data).filter((row) => row.jenis !== "PANJAR_PERJALANAN"), [listQuery.data]);
   const filterOptionsQuery = use_query({
     tag: "keuanganPengajuanBelanja",
     method: "pengajuanBelanjaFilterOptionsControllerFilterOptions",
@@ -558,18 +571,29 @@ export default function PengajuanBelanjaPageClient() {
     tag: "keuanganPengajuanBelanja",
     method: "submitTravelAdvanceAccountability",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: ({ id, file, jumlah_realisasi, jumlah_pengembalian, catatan }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/pertanggungjawaban`, file, { jumlah_realisasi: String(jumlah_realisasi), jumlah_pengembalian: String(jumlah_pengembalian), catatan }),
+    mutationFn: ({ id, file, jumlah_realisasi, jumlah_pengembalian, catatan }) =>
+      uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/pertanggungjawaban`, file, { jumlah_realisasi: String(jumlah_realisasi), jumlah_pengembalian: String(jumlah_pengembalian), catatan }),
     successMessage: "Pertanggungjawaban panjar berhasil diajukan ke KARWAS.",
-    onSuccess: async () => { await refreshPanjarDetail(); setPanjarAction(null); setPanjarFile(null); },
+    onSuccess: async () => {
+      await refreshPanjarDetail();
+      setPanjarAction(null);
+      setPanjarFile(null);
+    },
     onError: (cause) => setPanjarError(apiErrorMessage(cause, "Pertanggungjawaban panjar gagal diajukan.")),
   });
   const panjarReviewMutation = use_mutation<unknown, Error, { id: string; disetujui: boolean; catatan: string }>({
     tag: "keuanganPengajuanBelanja",
     method: "reviewTravelAdvanceAccountability",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: ({ id, ...data }) => { setBrowserToken(); return requestHrisApi(`/api/pengajuan-belanja/${id}/panjar/review`, { method: "POST", body: JSON.stringify(data) }); },
+    mutationFn: ({ id, ...data }) => {
+      setBrowserToken();
+      return requestHrisApi(`/api/pengajuan-belanja/${id}/panjar/review`, { method: "POST", body: JSON.stringify(data) });
+    },
     successMessage: "Keputusan KARWAS atas panjar berhasil disimpan.",
-    onSuccess: async () => { await refreshPanjarDetail(); setPanjarAction(null); },
+    onSuccess: async () => {
+      await refreshPanjarDetail();
+      setPanjarAction(null);
+    },
     onError: (cause) => setPanjarError(apiErrorMessage(cause, "Review pertanggungjawaban gagal disimpan.")),
   });
   const panjarRefundMutation = use_mutation<unknown, Error, { id: string; file: File; nomor_penerimaan: string; tanggal_diterima: string; dana_tujuan_id: string; catatan: string }>({
@@ -578,7 +602,11 @@ export default function PengajuanBelanjaPageClient() {
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
     mutationFn: ({ id, file, ...data }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/pengembalian`, file, data),
     successMessage: "Penerimaan pengembalian panjar berhasil dicatat.",
-    onSuccess: async () => { await refreshPanjarDetail(); setPanjarAction(null); setPanjarFile(null); },
+    onSuccess: async () => {
+      await refreshPanjarDetail();
+      setPanjarAction(null);
+      setPanjarFile(null);
+    },
     onError: (cause) => setPanjarError(apiErrorMessage(cause, "Penerimaan pengembalian panjar gagal dicatat.")),
   });
   const retailReviewMutation = use_mutation<unknown, Error, { id: string; disetujui: boolean; stage: "karwas" | "keuangan" | "kabag" }>({
@@ -669,15 +697,28 @@ export default function PengajuanBelanjaPageClient() {
         }
         await panjarSubmitMutation.mutateAsync({ id: String(panjarAction.id), jumlah_realisasi: actual, jumlah_pengembalian: refund, catatan: panjarForm.catatan.trim(), file: panjarFile });
       } else if (panjarMode === "review") {
-        if (approved === false && !panjarForm.catatan.trim()) { setPanjarError("Alasan penolakan wajib diisi."); return; }
+        if (approved === false && !panjarForm.catatan.trim()) {
+          setPanjarError("Alasan penolakan wajib diisi.");
+          return;
+        }
         await panjarReviewMutation.mutateAsync({ id: String(panjarAction.id), disetujui: approved === true, catatan: panjarForm.catatan.trim() });
       } else {
         if (!panjarForm.nomor_penerimaan.trim() || !panjarForm.tanggal_diterima || !panjarForm.dana_tujuan_id || !panjarFile) {
           setPanjarError("Nomor, tanggal, kamar tujuan, dan bukti penerimaan wajib diisi.");
           return;
         }
-        if (!panjarFile.name.toLowerCase().endsWith(".pdf") || panjarFile.size > 10 * 1024 * 1024) { setPanjarError("Bukti penerimaan wajib berupa PDF maksimal 10 MB."); return; }
-        await panjarRefundMutation.mutateAsync({ id: String(panjarAction.id), nomor_penerimaan: panjarForm.nomor_penerimaan.trim(), tanggal_diterima: panjarForm.tanggal_diterima, dana_tujuan_id: panjarForm.dana_tujuan_id, catatan: panjarForm.catatan.trim(), file: panjarFile });
+        if (!panjarFile.name.toLowerCase().endsWith(".pdf") || panjarFile.size > 10 * 1024 * 1024) {
+          setPanjarError("Bukti penerimaan wajib berupa PDF maksimal 10 MB.");
+          return;
+        }
+        await panjarRefundMutation.mutateAsync({
+          id: String(panjarAction.id),
+          nomor_penerimaan: panjarForm.nomor_penerimaan.trim(),
+          tanggal_diterima: panjarForm.tanggal_diterima,
+          dana_tujuan_id: panjarForm.dana_tujuan_id,
+          catatan: panjarForm.catatan.trim(),
+          file: panjarFile,
+        });
       }
     } catch (cause) {
       setPanjarError(apiErrorMessage(cause, "Proses panjar gagal disimpan."));
@@ -1373,18 +1414,35 @@ export default function PengajuanBelanjaPageClient() {
       </Modal>
       <Modal
         open={Boolean(panjarAction)}
-        onClose={() => { setPanjarAction(null); setPanjarFile(null); setPanjarError(""); }}
+        onClose={() => {
+          setPanjarAction(null);
+          setPanjarFile(null);
+          setPanjarError("");
+        }}
         title={panjarMode === "review" ? "Tinjau Pertanggungjawaban Panjar" : panjarMode === "refund" ? "Catat Pengembalian Panjar" : "Ajukan Pertanggungjawaban Panjar"}
         description={panjarAction ? `${String(panjarAction.nomor_pengajuan)} · ${String(panjarAction.nama_kegiatan)} · Panjar ${formatRupiah(panjarAction.panjar?.nominal)}` : undefined}
         size="lg"
         bodyClassName="space-y-4"
         footer={
           <>
-            <Button variant="outline" onClick={() => { setPanjarAction(null); setPanjarFile(null); setPanjarError(""); }}>Batal</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPanjarAction(null);
+                setPanjarFile(null);
+                setPanjarError("");
+              }}
+            >
+              Batal
+            </Button>
             {panjarMode === "review" ? (
               <>
-                <Button variant="destructive" disabled={panjarReviewMutation.isPending} onClick={() => void submitPanjarAction(false)}>{panjarReviewMutation.isPending && <LoaderCircle className="animate-spin" size={15} />} Tolak</Button>
-                <Button disabled={panjarReviewMutation.isPending} onClick={() => void submitPanjarAction(true)}>{panjarReviewMutation.isPending && <LoaderCircle className="animate-spin" size={15} />} Setujui</Button>
+                <Button variant="destructive" disabled={panjarReviewMutation.isPending} onClick={() => void submitPanjarAction(false)}>
+                  {panjarReviewMutation.isPending && <LoaderCircle className="animate-spin" size={15} />} Tolak
+                </Button>
+                <Button disabled={panjarReviewMutation.isPending} onClick={() => void submitPanjarAction(true)}>
+                  {panjarReviewMutation.isPending && <LoaderCircle className="animate-spin" size={15} />} Setujui
+                </Button>
               </>
             ) : (
               <Button disabled={panjarSubmitMutation.isPending || panjarReviewMutation.isPending || panjarRefundMutation.isPending} onClick={() => void submitPanjarAction()}>
@@ -1401,36 +1459,93 @@ export default function PengajuanBelanjaPageClient() {
               Jumlah panjar <strong className="tabular-nums">{formatRupiah(panjarAction.panjar?.nominal)}</strong>. Isi realisasi biaya dan sisa yang dikembalikan; totalnya harus sama dengan panjar.
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">Realisasi biaya *<MoneyInput value={panjarForm.jumlah_realisasi} onValueChange={(value) => setPanjarForm((form) => ({ ...form, jumlah_realisasi: value }))} /></label>
-              <label className="grid gap-1 text-sm">Pengembalian *<MoneyInput value={panjarForm.jumlah_pengembalian} onValueChange={(value) => setPanjarForm((form) => ({ ...form, jumlah_pengembalian: value }))} /></label>
+              <label className="grid gap-1 text-sm">
+                Realisasi biaya *<MoneyInput value={panjarForm.jumlah_realisasi} onValueChange={(value) => setPanjarForm((form) => ({ ...form, jumlah_realisasi: value }))} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                Pengembalian *<MoneyInput value={panjarForm.jumlah_pengembalian} onValueChange={(value) => setPanjarForm((form) => ({ ...form, jumlah_pengembalian: value }))} />
+              </label>
             </div>
             <DocumentUploadField label="Bukti pertanggungjawaban (PDF) *" accept=".pdf" value={panjarFile} onChange={setPanjarFile} disabled={panjarSubmitMutation.isPending} className="p-3 sm:p-3" />
-            <label className="grid gap-1 text-sm">Catatan untuk KARWAS<textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={panjarForm.catatan} onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))} /></label>
+            <label className="grid gap-1 text-sm">
+              Catatan untuk KARWAS
+              <textarea
+                className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                maxLength={500}
+                value={panjarForm.catatan}
+                onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))}
+              />
+            </label>
           </>
         )}
         {panjarAction && panjarMode === "review" && (
           <>
             <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2 text-sm">
-              <p>Realisasi dilaporkan <strong>{formatRupiah(panjarAction.panjar?.jumlah_realisasi)}</strong></p>
-              <p>Sisa untuk dikembalikan <strong>{formatRupiah(panjarAction.panjar?.jumlah_pengembalian)}</strong></p>
-              <p className="sm:col-span-2">Bukti: {panjarAction.panjar?.file_pertanggungjawaban ? <a className="text-primary underline" href={String(panjarAction.panjar.file_pertanggungjawaban)} target="_blank" rel="noreferrer">Buka dokumen</a> : "—"}</p>
+              <p>
+                Realisasi dilaporkan <strong>{formatRupiah(panjarAction.panjar?.jumlah_realisasi)}</strong>
+              </p>
+              <p>
+                Sisa untuk dikembalikan <strong>{formatRupiah(panjarAction.panjar?.jumlah_pengembalian)}</strong>
+              </p>
+              <p className="sm:col-span-2">
+                Bukti:{" "}
+                {panjarAction.panjar?.file_pertanggungjawaban ? (
+                  <a className="text-primary underline" href={String(panjarAction.panjar.file_pertanggungjawaban)} target="_blank" rel="noreferrer">
+                    Buka dokumen
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </p>
             </div>
-            <label className="grid gap-1 text-sm">Catatan pemeriksa<textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={panjarForm.catatan} onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))} placeholder="Wajib jika menolak" /></label>
+            <label className="grid gap-1 text-sm">
+              Catatan pemeriksa
+              <textarea
+                className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                maxLength={500}
+                value={panjarForm.catatan}
+                onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))}
+                placeholder="Wajib jika menolak"
+              />
+            </label>
           </>
         )}
         {panjarAction && panjarMode === "refund" && (
           <>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-950">KARWAS menyetujui pengembalian sebesar <strong>{formatRupiah(panjarAction.panjar?.jumlah_pengembalian)}</strong>. Pilih kamar tujuan sesuai bukti penerimaan aktual.</div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">Nomor penerimaan *<Input maxLength={100} value={panjarForm.nomor_penerimaan} onChange={(event) => setPanjarForm((form) => ({ ...form, nomor_penerimaan: event.target.value }))} /></label>
-              <label className="grid gap-1 text-sm">Tanggal diterima *<Input type="date" value={panjarForm.tanggal_diterima} onChange={(event) => setPanjarForm((form) => ({ ...form, tanggal_diterima: event.target.value }))} /></label>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-950">
+              KARWAS menyetujui pengembalian sebesar <strong>{formatRupiah(panjarAction.panjar?.jumlah_pengembalian)}</strong>. Pilih kamar tujuan sesuai bukti penerimaan aktual.
             </div>
-            <FilterCombobox label="Kamar tujuan penerimaan" value={panjarForm.dana_tujuan_id} onValueChange={(value) => setPanjarForm((form) => ({ ...form, dana_tujuan_id: value }))} options={refundWallets.map((wallet) => ({ value: String(wallet.id), label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} · ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")}`}))} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                Nomor penerimaan *<Input maxLength={100} value={panjarForm.nomor_penerimaan} onChange={(event) => setPanjarForm((form) => ({ ...form, nomor_penerimaan: event.target.value }))} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                Tanggal diterima *<Input type="date" value={panjarForm.tanggal_diterima} onChange={(event) => setPanjarForm((form) => ({ ...form, tanggal_diterima: event.target.value }))} />
+              </label>
+            </div>
+            <FilterCombobox
+              label="Kamar tujuan penerimaan"
+              value={panjarForm.dana_tujuan_id}
+              onValueChange={(value) => setPanjarForm((form) => ({ ...form, dana_tujuan_id: value }))}
+              options={refundWallets.map((wallet) => ({ value: String(wallet.id), label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} · ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")}` }))}
+            />
             <DocumentUploadField label="Bukti penerimaan pengembalian (PDF) *" accept=".pdf" value={panjarFile} onChange={setPanjarFile} disabled={panjarRefundMutation.isPending} className="p-3 sm:p-3" />
-            <label className="grid gap-1 text-sm">Catatan<textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={panjarForm.catatan} onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))} /></label>
+            <label className="grid gap-1 text-sm">
+              Catatan
+              <textarea
+                className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                maxLength={500}
+                value={panjarForm.catatan}
+                onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))}
+              />
+            </label>
           </>
         )}
-        {panjarError && <Alert variant="destructive"><AlertDescription>{panjarError}</AlertDescription></Alert>}
+        {panjarError && (
+          <Alert variant="destructive">
+            <AlertDescription>{panjarError}</AlertDescription>
+          </Alert>
+        )}
       </Modal>
     </section>
   );

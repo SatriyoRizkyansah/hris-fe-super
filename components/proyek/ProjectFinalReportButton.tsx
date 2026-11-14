@@ -6,12 +6,11 @@ import { Button } from "@/components/ui/Button";
 import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { apiErrorMessage, envelopeData, envelopeRows, unwrapEnvelope } from "@/lib/hris/api";
-import { buildProjectReportHtml } from "@/lib/hris/project-report";
-import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
+import { buildProjectReportHtml, type ProjectReportSource } from "@/lib/hris/project-report";
 
 type Row = Record<string, unknown>;
 
-export function ProjectFinalReportButton({ project, compact = false }: { project: ProyekItemDto; compact?: boolean }) {
+export function ProjectFinalReportButton({ project, compact = false }: { project: ProjectReportSource; compact?: boolean }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,9 +33,7 @@ export function ProjectFinalReportButton({ project, compact = false }: { project
       const ros = Array.isArray(firstRosEnvelope.data) ? [...firstRosEnvelope.data] : [];
       const totalPages = Math.max(1, Number(firstRosEnvelope.pagination?.total_pages) || 1);
       if (totalPages > 1) {
-        const remainingPages = await Promise.all(Array.from({ length: totalPages - 1 }, (_, index) =>
-          browserApi.masterRo.roGetDataControllerGetData({ id_proyek: project.id, limit: 100, page: index + 2 }),
-        ));
+        const remainingPages = await Promise.all(Array.from({ length: totalPages - 1 }, (_, index) => browserApi.masterRo.roGetDataControllerGetData({ id_proyek: project.id, limit: 100, page: index + 2 })));
         remainingPages.forEach((response) => ros.push(...envelopeRows<Row>(response)));
       }
       if (ros.some((ro) => ro.can_access_detail === false)) {
@@ -58,12 +55,16 @@ export function ProjectFinalReportButton({ project, compact = false }: { project
         logoUrl: `${window.location.origin}/images/lemigas.webp`,
         generatedAt,
       });
-      reportWindow.addEventListener("load", () => {
-        window.setTimeout(() => {
-          reportWindow.focus();
-          reportWindow.print();
-        }, 250);
-      }, { once: true });
+      reportWindow.addEventListener(
+        "load",
+        () => {
+          window.setTimeout(() => {
+            reportWindow.focus();
+            reportWindow.print();
+          }, 250);
+        },
+        { once: true },
+      );
       reportWindow.document.open();
       reportWindow.document.write(html);
       reportWindow.document.close();
@@ -80,9 +81,18 @@ export function ProjectFinalReportButton({ project, compact = false }: { project
       <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => void openReport()} title="Buka laporan akhir proyek dan simpan sebagai PDF">
         {pending ? <LoaderCircle size={15} className="animate-spin" /> : <FileText size={15} />}
         {!compact && (pending ? "Menyiapkan..." : "Laporan Akhir")}
-        {compact && <><span>PDF</span><span className="sr-only"> Laporan Akhir proyek</span></>}
+        {compact && (
+          <>
+            <span>PDF</span>
+            <span className="sr-only"> Laporan Akhir proyek</span>
+          </>
+        )}
       </Button>
-      {error && <span role="alert" className="max-w-48 text-right text-[11px] leading-tight text-destructive">{error}</span>}
+      {error && (
+        <span role="alert" className="max-w-48 text-right text-[11px] leading-tight text-destructive">
+          {error}
+        </span>
+      )}
     </span>
   );
 }

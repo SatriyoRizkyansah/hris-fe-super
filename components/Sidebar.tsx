@@ -24,6 +24,7 @@ import {
   UserCog,
   ClipboardCheck,
   FileClock,
+  HandCoins,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/legacy-button";
@@ -68,12 +69,14 @@ const sections = [
       { href: "/dashboard/karwas/perpanjangan-proyek", label: "Perpanjangan SK Proyek", icon: FileClock, roles: ["superadmin", "keu_karwas"] },
       { href: "/dashboard/ro", label: "RO", icon: ClipboardCheck, roles: ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"] },
       { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_karwas", "pimpinan", "spi"] },
+      { href: "/dashboard/panjar", label: "Panjar Perjalanan", icon: HandCoins, roles: ["superadmin", "koordinator", "subkoor", "keu_karwas", "keu_bendahara_pengeluaran", "pimpinan", "spi"] },
     ],
   },
   {
     title: "Keuangan",
     items: [
       { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["keu_bendahara_pengeluaran"] },
+      { href: "/dashboard/panjar", label: "Panjar Perjalanan", icon: HandCoins, roles: ["keu_bendahara_pengeluaran"] },
       { href: "/dashboard/termin", label: "Penagihan", icon: ClipboardCheck, roles: billing },
       { href: "/dashboard/invoice", label: "Invoice", icon: FileText, roles: [...billing, "keu_bendahara", "keu_bendahara_pendapatan", "pimpinan", "spi"] },
       { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"] },
@@ -109,6 +112,7 @@ const allowedPath: Record<string, string[]> = {
   "/dashboard/invoice": ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pendapatan", "pimpinan", "spi"],
   "/dashboard/retail": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_karwas"],
   "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_karwas", "pimpinan", "spi"],
+  "/dashboard/panjar": ["superadmin", "koordinator", "subkoor", "keu_karwas", "keu_bendahara_pengeluaran", "pimpinan", "spi"],
   "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"],
   "/dashboard/karwas": ["superadmin", "keu_karwas"],
   "/dashboard/karwas/perpanjangan-proyek": ["superadmin", "keu_karwas"],
@@ -136,10 +140,10 @@ const homeForRole = (value: string) =>
             : value === "keu_bendahara_pendapatan"
               ? "/dashboard/invoice"
               : value === "keu_bendahara"
-            ? "/dashboard/pengajuan-belanja"
-            : ["subkoor", "spi", "karyawan"].includes(value)
-              ? "/dashboard/profil"
-              : "/dashboard";
+                ? "/dashboard/pengajuan-belanja"
+                : ["subkoor", "spi", "karyawan"].includes(value)
+                  ? "/dashboard/profil"
+                  : "/dashboard";
 
 export default function Sidebar({ collapsed, open, onToggle, role = "", accesses = [], activeToken = "" }: Props) {
   const pathname = usePathname() ?? "";

@@ -25,7 +25,7 @@ export type ProjectExtensionRow = {
   diperiksa_oleh?: { nama?: string } | null;
   catatan_pemeriksa?: string | null;
 };
-export type ProjectDetail = ProyekItemDto & {
+export type ProjectDetail = Omit<ProyekItemDto, "job_list" | "ro_list" | "riwayat_revisi"> & {
   file_bast?: string | null;
   selesai_oleh_id?: string | null;
   selesai_pada?: string | null;
@@ -71,4 +71,3 @@ export type ProjectDetail = ProyekItemDto & {
   termin_list?: Array<{ id: string; nomor_termin: number; persentase: number; nilai_termin: number; has_invoice?: boolean }>;
   unit_terlibat?: Array<{ id: string; peran?: string; nama_unit?: string }>;
 };
-

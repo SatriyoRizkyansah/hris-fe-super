@@ -8,6 +8,7 @@ const roleAccess: Record<string, string[]> = {
   "/dashboard/termin": ["superadmin", "keuangan", "keu_billing"],
   "/dashboard/invoice": ["superadmin", "keuangan", "keu_billing", "keu_bendahara", "pimpinan", "spi"],
   "/dashboard/pengajuan-belanja": ["superadmin", "koordinator", "subkoor", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_karwas", "pimpinan", "spi"],
+  "/dashboard/panjar": ["superadmin", "koordinator", "subkoor", "keu_karwas", "keu_bendahara_pengeluaran", "pimpinan", "spi"],
   "/dashboard/ro": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_karwas"],
   "/dashboard/karwas": ["superadmin", "keu_karwas"],
   "/dashboard/dana-operasional": ["superadmin", "koordinator", "keuangan", "keu_bendahara", "keu_karwas"],
@@ -32,9 +33,9 @@ const roleHome = (role: string) =>
           ? "/dashboard/pengajuan-belanja"
           : role === "keu_bendahara_pengeluaran"
             ? "/dashboard/pengajuan-belanja"
-          : ["subkoor", "spi", "karyawan"].includes(role)
-            ? "/dashboard/profil"
-            : "/dashboard";
+            : ["subkoor", "spi", "karyawan"].includes(role)
+              ? "/dashboard/profil"
+              : "/dashboard";
 
 function readIdentity(cookie?: string): { role?: string } | null {
   if (!cookie) return null;

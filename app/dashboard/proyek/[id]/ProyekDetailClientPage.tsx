@@ -524,7 +524,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     const lead = participants.find((unit) => unit.peran === "PENGUSUL")?.id ?? identity.unitKerjaId;
     setRevisionLeadUnitId(lead);
     setRevisionCollaboratorIds(participants.filter((unit) => unit.peran !== "PENGUSUL").map((unit) => unit.id));
-    const existingJobs = (project.job_list ?? []).map((job) => ({ ...job, ro_list: [...job.ro_list] }));
+    const existingJobs = (project.job_list ?? []).map((job) => ({ ...job, ro_list: [...(job.ro_list ?? [])] }));
     const assignedRoIds = new Set(existingJobs.flatMap((job) => job.ro_list.map((ro) => ro.id)));
     for (const ro of project.ro_list ?? []) {
       if (assignedRoIds.has(ro.id)) continue;

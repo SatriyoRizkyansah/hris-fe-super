@@ -1,7 +1,27 @@
-import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
-
 type ReportRow = Record<string, unknown>;
 type ItemDetail = { quantity?: string; unit?: string; unitPrice?: number; note: string };
+
+/**
+ * Bentuk minimal data proyek yang dibutuhkan laporan. Semua nilai dibaca secara longgar
+ * oleh helper (`valueText`, `amount`), sehingga baik `ProyekItemDto` (halaman daftar) maupun
+ * `ProjectDetail` (halaman detail) dapat dipakai tanpa konflik tipe generasi API.
+ */
+export type ProjectReportSource = {
+  id: string;
+  nama_proyek?: unknown;
+  nama_client?: unknown;
+  kode_proyek?: unknown;
+  no_kontrak?: unknown;
+  tahun_fiscal?: unknown;
+  nilai_kontrak?: unknown;
+  total_direct_cost?: unknown;
+  total_margin?: unknown;
+  mulai_kontrak?: unknown;
+  berakhir_kontrak?: unknown;
+  file_rab?: unknown;
+  pj_1?: unknown;
+  unit_terlibat?: Array<{ nama_unit?: unknown }> | null;
+};
 
 function row(value: unknown): ReportRow {
   return value && typeof value === "object" ? (value as ReportRow) : {};
@@ -59,13 +79,7 @@ function amountCell(value: unknown): string {
   return `<td class="number">${escapeHtml(money(value))}</td>`;
 }
 
-export function buildProjectReportHtml(input: {
-  project: ProyekItemDto;
-  ros: ReportRow[];
-  roDetails: ReportRow[];
-  logoUrl: string;
-  generatedAt: Date;
-}): string {
+export function buildProjectReportHtml(input: { project: ProjectReportSource; ros: ReportRow[]; roDetails: ReportRow[]; logoUrl: string; generatedAt: Date }): string {
   const { project, ros, roDetails, logoUrl, generatedAt } = input;
   const reports = ros.map((ro, index) => {
     const detail = roDetails[index] ?? {};
@@ -101,33 +115,44 @@ export function buildProjectReportHtml(input: {
   const evaluatorTitle = coordinatorNames.length ? `Koordinator ${coordinatorNames.join(" · ")}` : "Koordinator";
   const periodStart = project.mulai_kontrak ?? ros.map((ro) => ro.mulai_kontrak).find(Boolean);
   const periodEnd = project.berakhir_kontrak ?? ros.map((ro) => ro.berakhir_kontrak).find(Boolean);
-  const fileName = valueText(project.file_rab || ros.find((ro) => ro.file_rab)?.file_rab, "Rekap aplikasi").split(/[\\/]/).pop() || "Rekap aplikasi";
+  const fileName =
+    valueText(project.file_rab || ros.find((ro) => ro.file_rab)?.file_rab, "Rekap aplikasi")
+      .split(/[\\/]/)
+      .pop() || "Rekap aplikasi";
 
-  const summaryRows = [...byMak.values()].map((group, index) => `<tr>
+  const summaryRows = [...byMak.values()]
+    .map(
+      (group, index) => `<tr>
     <td class="center">${index + 1}</td>
     <td>${escapeHtml(group.code ? `${group.code} · ${group.name}` : group.name)}</td>
     <td>${group.descriptions.map(escapeHtml).join("<br>")}</td>
     ${amountCell(group.budget)}
-  </tr>`).join("");
+  </tr>`,
+    )
+    .join("");
 
-  const allocationRows = reports.map(({ ro, budget }, index) => {
-    const percentage = directCost > 0 ? (budget / directCost) * 100 : 0;
-    const collaboration = Array.isArray(ro.unit_kolaborasi) ? unique(ro.unit_kolaborasi).join(", ") : "";
-    const job = valueText(ro.nomor_job, "");
-    const splitParts = job ? (jobCounts.get(job) ?? 0) : 0;
-    const splitLabel = splitParts > 1 ? " / RO split " + splitParts : "";
-    const allocation = valueText(ro.nama_unit_koordinator, "Unit belum tersedia") + " / " + valueText(ro.nama_ro) + (collaboration ? " / Kolaborasi: " + collaboration : "") + splitLabel;
-    return `<tr><td class="center">${index + 1}</td><td>${escapeHtml(allocation)}</td><td class="number">${percentage.toFixed(2)}</td><td>%</td>${amountCell(budget)}</tr>`;
-  }).join("");
+  const allocationRows = reports
+    .map(({ ro, budget }, index) => {
+      const percentage = directCost > 0 ? (budget / directCost) * 100 : 0;
+      const collaboration = Array.isArray(ro.unit_kolaborasi) ? unique(ro.unit_kolaborasi).join(", ") : "";
+      const job = valueText(ro.nomor_job, "");
+      const splitParts = job ? (jobCounts.get(job) ?? 0) : 0;
+      const splitLabel = splitParts > 1 ? " / RO split " + splitParts : "";
+      const allocation = valueText(ro.nama_unit_koordinator, "Unit belum tersedia") + " / " + valueText(ro.nama_ro) + (collaboration ? " / Kolaborasi: " + collaboration : "") + splitLabel;
+      return `<tr><td class="center">${index + 1}</td><td>${escapeHtml(allocation)}</td><td class="number">${percentage.toFixed(2)}</td><td>%</td>${amountCell(budget)}</tr>`;
+    })
+    .join("");
 
   const operationalRows = [...byMak.values()].map((group, index) => `<tr><td class="center">${index + 1}</td><td>${escapeHtml(group.code)} · ${escapeHtml(group.name)}</td>${amountCell(group.budget)}</tr>`).join("");
 
-  const detailSections = reports.map(({ ro, expenses }, roIndex) => {
-    const rows = expenses.map((transaction, index) => {
-      const detail = itemDetail(transaction.keterangan);
-      const total = amount(transaction.kredit);
-      const unitPrice = detail.unitPrice ?? (detail.quantity ? total / Number(detail.quantity.replace(",", ".")) : undefined);
-      return `<tr>
+  const detailSections = reports
+    .map(({ ro, expenses }, roIndex) => {
+      const rows = expenses
+        .map((transaction, index) => {
+          const detail = itemDetail(transaction.keterangan);
+          const total = amount(transaction.kredit);
+          const unitPrice = detail.unitPrice ?? (detail.quantity ? total / Number(detail.quantity.replace(",", ".")) : undefined);
+          return `<tr>
         <td class="center">${index + 1}</td>
         <td>${escapeHtml(valueText(transaction.nama_kegiatan))}${transaction.no_kuitansi ? `<span class="sub">Kuitansi ${escapeHtml(transaction.no_kuitansi)}</span>` : ""}</td>
         <td>${escapeHtml(detail.note)}</td>
@@ -136,16 +161,18 @@ export function buildProjectReportHtml(input: {
         <td class="number">${unitPrice === undefined ? "" : escapeHtml(money(unitPrice))}</td>
         ${amountCell(total)}
       </tr>`;
-    }).join("");
-    const expenseTotal = expenses.reduce((sum, transaction) => sum + amount(transaction.kredit), 0);
-    return `<section class="mak-section">
+        })
+        .join("");
+      const expenseTotal = expenses.reduce((sum, transaction) => sum + amount(transaction.kredit), 0);
+      return `<section class="mak-section">
       <div class="group-title"><strong>${escapeHtml(valueText(ro.kode_mak))} · ${escapeHtml(valueText(ro.nama_mak))}</strong><span>${escapeHtml(valueText(ro.nama_unit_koordinator, "Unit belum tersedia"))} · ${escapeHtml(valueText(ro.nama_ro))}</span></div>
       <table class="items"><thead><tr><th class="center">No.</th><th>Uraian</th><th>Rincian / keterangan</th><th class="number">Jumlah</th><th>Satuan</th><th class="number">Unit Biaya [Rp]</th><th class="number">Total [Rp]</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7" class="empty">Belum ada rincian transaksi.</td></tr>`}</tbody>
         <tfoot><tr><th colspan="6">Total ${escapeHtml(valueText(ro.nama_mak))}</th>${amountCell(expenseTotal || reports[roIndex].budget)}</tr></tfoot>
       </table>
     </section>`;
-  }).join("");
+    })
+    .join("");
 
   return `<!doctype html>
 <html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(project.nama_proyek)} - Rencana Operasional</title>
