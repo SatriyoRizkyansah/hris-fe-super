@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, ClipboardList, Eye, LoaderCircle, Plus, ShieldCheck, WalletCards } from "lucide-react";
@@ -26,13 +26,13 @@ import { formatRupiah } from "@/lib/hris/format";
 import type { CreatePengajuanBelanjaDto } from "@/lib/api/generated/api-generated";
 
 type Row = Record<string, any>;
-type Form = { ro_id: string; nama_kegiatan: string; no_kuitansi: string; tanggal: string; jumlah: string; keterangan: string };
+type Form = { ro_id: string; nama_kegiatan: string; no_kuitansi: string; tanggal: string; jumlah: string; keterangan: string; jenis: "BELANJA_LANGSUNG" | "PANJAR_PERJALANAN" };
 type ProjectRow = { id: string; kode_proyek?: string; nama_proyek?: string; tahun_fiscal?: number };
-type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string };
+type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string; dana_sumber_id?: string };
 type ReviewPengajuanBelanjaDto = { disetujui: boolean; catatan?: string };
-type BayarPengajuanBelanjaDto = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string };
+type BayarPengajuanBelanjaDto = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string; dana_sumber_id: string };
 const today = () => new Date().toISOString().slice(0, 10);
-const blankForm = (): Form => ({ ro_id: "", nama_kegiatan: "", no_kuitansi: "", tanggal: today(), jumlah: "", keterangan: "" });
+const blankForm = (): Form => ({ ro_id: "", nama_kegiatan: "", no_kuitansi: "", tanggal: today(), jumlah: "", keterangan: "", jenis: "BELANJA_LANGSUNG" });
 const blankPayment = (): PaymentForm => ({ nomor_pembayaran: "", tanggal_bayar: today(), catatan: "" });
 function listRows(value: unknown): Row[] {
   let current: any = value;
@@ -141,6 +141,13 @@ export default function PengajuanBelanjaPageClient() {
   const [form, setForm] = useState<Form>(blankForm);
   const [payment, setPayment] = useState<PaymentForm>(blankPayment);
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
+  const [paymentWallets, setPaymentWallets] = useState<Row[]>([]);
+  const [paymentWalletsLoading, setPaymentWalletsLoading] = useState(false);
+  const [panjarAction, setPanjarAction] = useState<Row | null>(null);
+  const [panjarFile, setPanjarFile] = useState<File | null>(null);
+  const [panjarForm, setPanjarForm] = useState({ jumlah_realisasi: "", jumlah_pengembalian: "", nomor_penerimaan: "", tanggal_diterima: today(), dana_tujuan_id: "", catatan: "" });
+  const [refundWallets, setRefundWallets] = useState<Row[]>([]);
+  const [panjarError, setPanjarError] = useState("");
   const [note, setNote] = useState("");
   const [retailReviewNote, setRetailReviewNote] = useState("");
   const [retailReviewError, setRetailReviewError] = useState("");
@@ -190,6 +197,39 @@ export default function PengajuanBelanjaPageClient() {
   const canReviewKabag = isSuperadmin || ((role === "koordinator" || role === "subkoor") && !!kabagUnit && unitCode === kabagUnit);
   const canReview = canReviewKarwas || canReviewKeuangan || canReviewKabag;
   const canPay = isSuperadmin || role === "keu_bendahara_pengeluaran";
+  const payingPanjar = paying?.jenis === "PANJAR_PERJALANAN";
+
+  useEffect(() => {
+    if (!paying?.id) {
+      setPaymentWallets([]);
+      return;
+    }
+    let active = true;
+    setPaymentWalletsLoading(true);
+    requestHrisApi(`/api/pengajuan-belanja/${encodeURIComponent(String(paying.id))}/sumber-dana`)
+      .then((response) => {
+        if (active) setPaymentWallets(listRows(response));
+      })
+      .catch((cause) => {
+        if (active) {
+          setPaymentWallets([]);
+          setError(apiErrorMessage(cause, "Daftar kamar dana belum dapat dimuat."));
+        }
+      })
+      .finally(() => { if (active) setPaymentWalletsLoading(false); });
+    return () => { active = false; };
+  }, [paying?.id]);
+
+  const panjarMode = panjarAction?.panjar?.status === "DIAJUKAN_PERTANGGUNGJAWABAN" ? "review"
+    : panjarAction?.panjar?.status === "MENUNGGU_PENGEMBALIAN" ? "refund" : "accountability";
+  useEffect(() => {
+    if (panjarMode !== "refund" || !panjarAction?.id) { setRefundWallets([]); return; }
+    let active = true;
+    requestHrisApi(`/api/pengajuan-belanja/${encodeURIComponent(String(panjarAction.id))}/sumber-dana`)
+      .then((response) => { if (active) setRefundWallets(listRows(response)); })
+      .catch((cause) => { if (active) setPanjarError(apiErrorMessage(cause, "Daftar kamar tujuan belum dapat dimuat.")); });
+    return () => { active = false; };
+  }, [panjarMode, panjarAction?.id]);
   const detailStatus = String(detailRequest?.status ?? "");
   const detailRejected = detailStatus.startsWith("DITOLAK_");
   const detailCanceled = detailStatus === "DIBATALKAN";
@@ -230,14 +270,14 @@ export default function PengajuanBelanjaPageClient() {
                     ? "active"
                     : "waiting",
           description: detailRequest.validator_keuangan?.nama
-            ? `Diproses oleh ${detailRequest.validator_keuangan.nama} Â· ${formatDateTime(detailRequest.divalidasi_keuangan_pada)}${detailRequest.catatan_keuangan ? ` Â· ${detailRequest.catatan_keuangan}` : ""}`
+            ? `Diproses oleh ${detailRequest.validator_keuangan.nama} · ${formatDateTime(detailRequest.divalidasi_keuangan_pada)}${detailRequest.catatan_keuangan ? ` · ${detailRequest.catatan_keuangan}` : ""}`
             : "Menunggu validasi Keuangan.",
         },
         {
           title: "Persetujuan Kabag",
           state: detailStatus === "DITOLAK_KABAG" ? "rejected" : ["DISETUJUI_KABAG", "DIBAYAR"].includes(detailStatus) ? "done" : detailRejected || detailCanceled ? "skipped" : detailStatus === "DISETUJUI_KEUANGAN" ? "active" : "waiting",
           description: detailRequest.validator_kabag?.nama
-            ? `Diproses oleh ${detailRequest.validator_kabag.nama} Â· ${formatDateTime(detailRequest.divalidasi_kabag_pada)}${detailRequest.catatan_kabag ? ` Â· ${detailRequest.catatan_kabag}` : ""}`
+            ? `Diproses oleh ${detailRequest.validator_kabag.nama} · ${formatDateTime(detailRequest.divalidasi_kabag_pada)}${detailRequest.catatan_kabag ? ` · ${detailRequest.catatan_kabag}` : ""}`
             : "Menunggu persetujuan Kabag.",
         },
         {
@@ -291,7 +331,7 @@ export default function PengajuanBelanjaPageClient() {
                     ? "active"
                     : "waiting",
           description: retailDetailRequest.validator_keuangan?.nama
-            ? `Diproses oleh ${retailDetailRequest.validator_keuangan.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_keuangan_pada)}${retailDetailRequest.catatan_keuangan ? ` Â· ${retailDetailRequest.catatan_keuangan}` : ""}`
+            ? `Diproses oleh ${retailDetailRequest.validator_keuangan.nama} · ${formatDateTime(retailDetailRequest.divalidasi_keuangan_pada)}${retailDetailRequest.catatan_keuangan ? ` · ${retailDetailRequest.catatan_keuangan}` : ""}`
             : "Menunggu validasi Keuangan.",
         },
         {
@@ -307,7 +347,7 @@ export default function PengajuanBelanjaPageClient() {
                     ? "active"
                     : "waiting",
           description: retailDetailRequest.validator_kabag?.nama
-            ? `Diproses oleh ${retailDetailRequest.validator_kabag.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_kabag_pada)}${retailDetailRequest.catatan_kabag ? ` Â· ${retailDetailRequest.catatan_kabag}` : ""}`
+            ? `Diproses oleh ${retailDetailRequest.validator_kabag.nama} · ${formatDateTime(retailDetailRequest.divalidasi_kabag_pada)}${retailDetailRequest.catatan_kabag ? ` · ${retailDetailRequest.catatan_kabag}` : ""}`
             : "Menunggu persetujuan Kabag.",
         },
         {
@@ -464,7 +504,7 @@ export default function PengajuanBelanjaPageClient() {
       ]
     : [];
   const hasRetailDetailDocuments = retailDetailDocuments.some((document) => typeof document.path === "string" && document.path.length > 0);
-  const createMutation = use_mutation<unknown, Error, CreatePengajuanBelanjaDto>({
+  const createMutation = use_mutation<unknown, Error, CreatePengajuanBelanjaDto & { jenis?: string }>({
     tag: "keuanganPengajuanBelanja",
     method: "pengajuanBelanjaCreateControllerCreate",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja")],
@@ -503,6 +543,7 @@ export default function PengajuanBelanjaPageClient() {
       uploadHrisFile(`/api/pengajuan-belanja/${id}/bayar`, file, {
         nomor_pembayaran: data.nomor_pembayaran,
         tanggal_bayar: data.tanggal_bayar,
+        ...(data.dana_sumber_id ? { dana_sumber_id: data.dana_sumber_id } : {}),
         ...(data.catatan ? { catatan: data.catatan } : {}),
       }),
     successMessage: "Pembayaran berhasil dicatat.",
@@ -512,6 +553,33 @@ export default function PengajuanBelanjaPageClient() {
       setPaymentFile(null);
       setError("");
     },
+  });
+  const panjarSubmitMutation = use_mutation<unknown, Error, { id: string; jumlah_realisasi: number; jumlah_pengembalian: number; catatan: string; file: File }>({
+    tag: "keuanganPengajuanBelanja",
+    method: "submitTravelAdvanceAccountability",
+    invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
+    mutationFn: ({ id, file, jumlah_realisasi, jumlah_pengembalian, catatan }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/pertanggungjawaban`, file, { jumlah_realisasi: String(jumlah_realisasi), jumlah_pengembalian: String(jumlah_pengembalian), catatan }),
+    successMessage: "Pertanggungjawaban panjar berhasil diajukan ke KARWAS.",
+    onSuccess: async () => { await refreshPanjarDetail(); setPanjarAction(null); setPanjarFile(null); },
+    onError: (cause) => setPanjarError(apiErrorMessage(cause, "Pertanggungjawaban panjar gagal diajukan.")),
+  });
+  const panjarReviewMutation = use_mutation<unknown, Error, { id: string; disetujui: boolean; catatan: string }>({
+    tag: "keuanganPengajuanBelanja",
+    method: "reviewTravelAdvanceAccountability",
+    invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
+    mutationFn: ({ id, ...data }) => { setBrowserToken(); return requestHrisApi(`/api/pengajuan-belanja/${id}/panjar/review`, { method: "POST", body: JSON.stringify(data) }); },
+    successMessage: "Keputusan KARWAS atas panjar berhasil disimpan.",
+    onSuccess: async () => { await refreshPanjarDetail(); setPanjarAction(null); },
+    onError: (cause) => setPanjarError(apiErrorMessage(cause, "Review pertanggungjawaban gagal disimpan.")),
+  });
+  const panjarRefundMutation = use_mutation<unknown, Error, { id: string; file: File; nomor_penerimaan: string; tanggal_diterima: string; dana_tujuan_id: string; catatan: string }>({
+    tag: "keuanganPengajuanBelanja",
+    method: "receiveTravelAdvanceRefund",
+    invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
+    mutationFn: ({ id, file, ...data }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/pengembalian`, file, data),
+    successMessage: "Penerimaan pengembalian panjar berhasil dicatat.",
+    onSuccess: async () => { await refreshPanjarDetail(); setPanjarAction(null); setPanjarFile(null); },
+    onError: (cause) => setPanjarError(apiErrorMessage(cause, "Penerimaan pengembalian panjar gagal dicatat.")),
   });
   const retailReviewMutation = use_mutation<unknown, Error, { id: string; disetujui: boolean; stage: "karwas" | "keuangan" | "kabag" }>({
     tag: "keuanganPengajuanBelanja",
@@ -564,7 +632,57 @@ export default function PengajuanBelanjaPageClient() {
     onError: (cause) => setRetailPaymentError(apiErrorMessage(cause, "Pembayaran pengajuan retail gagal dicatat.")),
   });
   const field = (key: keyof Form, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const paymentAmount = Number(paying?.jumlah ?? 0);
+  async function refreshPanjarDetail() {
+    if (!panjarAction?.id) return;
+    const response = await requestHrisApi(`/api/pengajuan-belanja/${encodeURIComponent(String(panjarAction.id))}`);
+    const updated = objectData(response);
+    if (updated.id) setDetailRequest(updated);
+  }
+  function startPanjarAction(request: Row) {
+    setDetailRequest(null);
+    setPanjarAction(request);
+    setPanjarFile(null);
+    setPanjarError("");
+    setPanjarForm({
+      jumlah_realisasi: String(request.panjar?.jumlah_realisasi ?? ""),
+      jumlah_pengembalian: String(request.panjar?.jumlah_pengembalian ?? ""),
+      nomor_penerimaan: "",
+      tanggal_diterima: today(),
+      dana_tujuan_id: "",
+      catatan: "",
+    });
+  }
+  async function submitPanjarAction(approved?: boolean) {
+    if (!panjarAction) return;
+    setPanjarError("");
+    try {
+      if (panjarMode === "accountability") {
+        if (!panjarFile || panjarFile.size > 10 * 1024 * 1024 || !panjarFile.name.toLowerCase().endsWith(".pdf")) {
+          setPanjarError("Dokumen pertanggungjawaban wajib berupa PDF maksimal 10 MB.");
+          return;
+        }
+        const actual = Number(panjarForm.jumlah_realisasi);
+        const refund = Number(panjarForm.jumlah_pengembalian);
+        if (actual < 0 || refund < 0 || actual + refund !== Number(panjarAction.panjar?.nominal)) {
+          setPanjarError("Realisasi dan pengembalian harus sama dengan total panjar yang diterima.");
+          return;
+        }
+        await panjarSubmitMutation.mutateAsync({ id: String(panjarAction.id), jumlah_realisasi: actual, jumlah_pengembalian: refund, catatan: panjarForm.catatan.trim(), file: panjarFile });
+      } else if (panjarMode === "review") {
+        if (approved === false && !panjarForm.catatan.trim()) { setPanjarError("Alasan penolakan wajib diisi."); return; }
+        await panjarReviewMutation.mutateAsync({ id: String(panjarAction.id), disetujui: approved === true, catatan: panjarForm.catatan.trim() });
+      } else {
+        if (!panjarForm.nomor_penerimaan.trim() || !panjarForm.tanggal_diterima || !panjarForm.dana_tujuan_id || !panjarFile) {
+          setPanjarError("Nomor, tanggal, kamar tujuan, dan bukti penerimaan wajib diisi.");
+          return;
+        }
+        if (!panjarFile.name.toLowerCase().endsWith(".pdf") || panjarFile.size > 10 * 1024 * 1024) { setPanjarError("Bukti penerimaan wajib berupa PDF maksimal 10 MB."); return; }
+        await panjarRefundMutation.mutateAsync({ id: String(panjarAction.id), nomor_penerimaan: panjarForm.nomor_penerimaan.trim(), tanggal_diterima: panjarForm.tanggal_diterima, dana_tujuan_id: panjarForm.dana_tujuan_id, catatan: panjarForm.catatan.trim(), file: panjarFile });
+      }
+    } catch (cause) {
+      setPanjarError(apiErrorMessage(cause, "Proses panjar gagal disimpan."));
+    }
+  }
   async function submit() {
     if (!form.ro_id || !form.nama_kegiatan.trim() || !form.tanggal || Number(form.jumlah) <= 0) {
       setError("RO, nama kegiatan, tanggal, dan jumlah lebih dari nol wajib diisi.");
@@ -578,6 +696,7 @@ export default function PengajuanBelanjaPageClient() {
         no_kuitansi: form.no_kuitansi.trim() || undefined,
         tanggal: form.tanggal,
         jumlah: Number(form.jumlah),
+        jenis: form.jenis,
         keterangan: form.keterangan.trim() || undefined,
       });
     } catch (cause) {
@@ -604,6 +723,10 @@ export default function PengajuanBelanjaPageClient() {
       setError("Bukti pembayaran harus berupa PDF maksimal 10 MB.");
       return;
     }
+    if (!payment.dana_sumber_id) {
+      setError("Pilih kamar sumber dana yang digunakan untuk pembayaran.");
+      return;
+    }
     try {
       setError("");
       await payMutation.mutateAsync({
@@ -611,6 +734,7 @@ export default function PengajuanBelanjaPageClient() {
         data: {
           nomor_pembayaran: payment.nomor_pembayaran.trim(),
           tanggal_bayar: payment.tanggal_bayar,
+          dana_sumber_id: payment.dana_sumber_id!,
           catatan: payment.catatan?.trim() || undefined,
         },
         file: paymentFile,
@@ -949,6 +1073,8 @@ export default function PengajuanBelanjaPageClient() {
         canReviewKeuangan={canReviewKeuangan}
         canReviewKabag={canReviewKabag}
         canPay={canPay}
+        canSubmitPanjar={canCreate}
+        onStartPanjar={startPanjarAction}
         retailReviewPending={retailReviewMutation.isPending}
         reviewRetail={reviewRetail}
         retailReviewNote={retailReviewNote}
@@ -1040,6 +1166,21 @@ export default function PengajuanBelanjaPageClient() {
         }
       >
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium">Jenis pengajuan</label>
+            <FilterCombobox
+              label="Jenis pengajuan"
+              value={form.jenis}
+              onValueChange={(value) => field("jenis", value as Form["jenis"])}
+              options={[
+                { value: "BELANJA_LANGSUNG", label: "Belanja langsung" },
+                { value: "PANJAR_PERJALANAN", label: "Panjar perjalanan" },
+              ]}
+            />
+            {form.jenis === "PANJAR_PERJALANAN" && (
+              <p className="mt-1 text-xs text-muted-foreground">Bendahara memilih kamar sumber saat mencairkan. Setelah perjalanan, pemohon melaporkan realisasi dan KARWAS memeriksa sebelum pengembalian diterima Bendahara.</p>
+            )}
+          </div>
           <div className="space-y-3 sm:col-span-2">
             <Card className="border-primary/20 bg-primary/[0.02]">
               <CardContent className="space-y-3 p-4">
@@ -1179,7 +1320,7 @@ export default function PengajuanBelanjaPageClient() {
             >
               Batal
             </Button>
-            <Button disabled={payMutation.isPending || !paymentFile} onClick={pay}>
+            <Button disabled={payMutation.isPending || !paymentFile || paymentWalletsLoading || !payment.dana_sumber_id} onClick={pay}>
               {payMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <CircleDollarSign size={16} />} Simpan Pembayaran
             </Button>
           </>
@@ -1195,21 +1336,26 @@ export default function PengajuanBelanjaPageClient() {
             <Input type="date" value={payment.tanggal_bayar} onChange={(event) => setPayment((current) => ({ ...current, tanggal_bayar: event.target.value }))} />
           </label>
         </div>
-        <section className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-              <WalletCards size={19} />
-            </span>
-            <div>
-              <h3 className="font-semibold text-emerald-950">Sumber dana otomatis: OPS_KANTOR</h3>
-              <p className="mt-1 text-sm leading-relaxed text-emerald-800">
-                Sistem mengambil seluruh pembayaran dari dompet OPS_KANTOR sebesar <strong>{formatRupiah(paymentAmount)}</strong> dan mencatatnya sebagai talangan proyek.
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-emerald-700">
-                Saat pembayaran invoice proyek diterima, sistem memulihkan talangan ke OPS_KANTOR terlebih dahulu. Margin tersisa kemudian dibagi otomatis ke lima kamar sesuai pengaturan persentase.
-              </p>
-            </div>
+        <section className={`space-y-3 rounded-lg border p-4 ${payingPanjar ? "border-sky-200 bg-sky-50/60" : "border-emerald-200 bg-emerald-50/60"}`}>
+          <div>
+            <h3 className={`font-semibold ${payingPanjar ? "text-sky-950" : "text-emerald-950"}`}>Pilih kamar sumber dana</h3>
+            <p className={`mt-1 text-sm ${payingPanjar ? "text-sky-800" : "text-emerald-800"}`}>
+              {payingPanjar
+                ? "Pilih kamar yang benar-benar digunakan untuk membayar panjar. Pengembalian sisa panjar dicatat ke kamar tujuan yang dipilih Bendahara."
+                : "Pilih kamar yang benar-benar digunakan untuk membayar pengajuan ini. Jika tercatat sebagai talangan proyek, penerimaan invoice akan memulihkan dana ke kamar sumber yang sama."}
+            </p>
           </div>
+          <FilterCombobox
+            label="Kamar sumber dana"
+            value={payment.dana_sumber_id ?? ""}
+            onValueChange={(value) => setPayment((current) => ({ ...current, dana_sumber_id: value }))}
+            options={paymentWallets.map((wallet) => ({
+              value: String(wallet.id),
+              label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} · ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")} · tersedia ${formatRupiah(wallet.saldo_tersedia)}`,
+            }))}
+          />
+          {paymentWalletsLoading && <p className="text-xs text-muted-foreground">Memuat kamar dana…</p>}
+          {!paymentWalletsLoading && paymentWallets.length === 0 && <p className="text-xs text-amber-800">Belum ada kamar dana untuk tahun fiskal proyek ini.</p>}
         </section>
         <div>
           <DocumentUploadField label="Bukti pembayaran (PDF) *" accept=".pdf" value={paymentFile} onChange={setPaymentFile} disabled={payMutation.isPending} className="p-3 sm:p-3" />
@@ -1224,6 +1370,67 @@ export default function PengajuanBelanjaPageClient() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+      </Modal>
+      <Modal
+        open={Boolean(panjarAction)}
+        onClose={() => { setPanjarAction(null); setPanjarFile(null); setPanjarError(""); }}
+        title={panjarMode === "review" ? "Tinjau Pertanggungjawaban Panjar" : panjarMode === "refund" ? "Catat Pengembalian Panjar" : "Ajukan Pertanggungjawaban Panjar"}
+        description={panjarAction ? `${String(panjarAction.nomor_pengajuan)} · ${String(panjarAction.nama_kegiatan)} · Panjar ${formatRupiah(panjarAction.panjar?.nominal)}` : undefined}
+        size="lg"
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setPanjarAction(null); setPanjarFile(null); setPanjarError(""); }}>Batal</Button>
+            {panjarMode === "review" ? (
+              <>
+                <Button variant="destructive" disabled={panjarReviewMutation.isPending} onClick={() => void submitPanjarAction(false)}>{panjarReviewMutation.isPending && <LoaderCircle className="animate-spin" size={15} />} Tolak</Button>
+                <Button disabled={panjarReviewMutation.isPending} onClick={() => void submitPanjarAction(true)}>{panjarReviewMutation.isPending && <LoaderCircle className="animate-spin" size={15} />} Setujui</Button>
+              </>
+            ) : (
+              <Button disabled={panjarSubmitMutation.isPending || panjarReviewMutation.isPending || panjarRefundMutation.isPending} onClick={() => void submitPanjarAction()}>
+                {(panjarSubmitMutation.isPending || panjarRefundMutation.isPending) && <LoaderCircle className="animate-spin" size={15} />}
+                {panjarMode === "refund" ? "Simpan Penerimaan" : "Kirim ke KARWAS"}
+              </Button>
+            )}
+          </>
+        }
+      >
+        {panjarAction && panjarMode === "accountability" && (
+          <>
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              Jumlah panjar <strong className="tabular-nums">{formatRupiah(panjarAction.panjar?.nominal)}</strong>. Isi realisasi biaya dan sisa yang dikembalikan; totalnya harus sama dengan panjar.
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">Realisasi biaya *<MoneyInput value={panjarForm.jumlah_realisasi} onValueChange={(value) => setPanjarForm((form) => ({ ...form, jumlah_realisasi: value }))} /></label>
+              <label className="grid gap-1 text-sm">Pengembalian *<MoneyInput value={panjarForm.jumlah_pengembalian} onValueChange={(value) => setPanjarForm((form) => ({ ...form, jumlah_pengembalian: value }))} /></label>
+            </div>
+            <DocumentUploadField label="Bukti pertanggungjawaban (PDF) *" accept=".pdf" value={panjarFile} onChange={setPanjarFile} disabled={panjarSubmitMutation.isPending} className="p-3 sm:p-3" />
+            <label className="grid gap-1 text-sm">Catatan untuk KARWAS<textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={panjarForm.catatan} onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))} /></label>
+          </>
+        )}
+        {panjarAction && panjarMode === "review" && (
+          <>
+            <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2 text-sm">
+              <p>Realisasi dilaporkan <strong>{formatRupiah(panjarAction.panjar?.jumlah_realisasi)}</strong></p>
+              <p>Sisa untuk dikembalikan <strong>{formatRupiah(panjarAction.panjar?.jumlah_pengembalian)}</strong></p>
+              <p className="sm:col-span-2">Bukti: {panjarAction.panjar?.file_pertanggungjawaban ? <a className="text-primary underline" href={String(panjarAction.panjar.file_pertanggungjawaban)} target="_blank" rel="noreferrer">Buka dokumen</a> : "—"}</p>
+            </div>
+            <label className="grid gap-1 text-sm">Catatan pemeriksa<textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={panjarForm.catatan} onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))} placeholder="Wajib jika menolak" /></label>
+          </>
+        )}
+        {panjarAction && panjarMode === "refund" && (
+          <>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-950">KARWAS menyetujui pengembalian sebesar <strong>{formatRupiah(panjarAction.panjar?.jumlah_pengembalian)}</strong>. Pilih kamar tujuan sesuai bukti penerimaan aktual.</div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">Nomor penerimaan *<Input maxLength={100} value={panjarForm.nomor_penerimaan} onChange={(event) => setPanjarForm((form) => ({ ...form, nomor_penerimaan: event.target.value }))} /></label>
+              <label className="grid gap-1 text-sm">Tanggal diterima *<Input type="date" value={panjarForm.tanggal_diterima} onChange={(event) => setPanjarForm((form) => ({ ...form, tanggal_diterima: event.target.value }))} /></label>
+            </div>
+            <FilterCombobox label="Kamar tujuan penerimaan" value={panjarForm.dana_tujuan_id} onValueChange={(value) => setPanjarForm((form) => ({ ...form, dana_tujuan_id: value }))} options={refundWallets.map((wallet) => ({ value: String(wallet.id), label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} · ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")}`}))} />
+            <DocumentUploadField label="Bukti penerimaan pengembalian (PDF) *" accept=".pdf" value={panjarFile} onChange={setPanjarFile} disabled={panjarRefundMutation.isPending} className="p-3 sm:p-3" />
+            <label className="grid gap-1 text-sm">Catatan<textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={panjarForm.catatan} onChange={(event) => setPanjarForm((form) => ({ ...form, catatan: event.target.value }))} /></label>
+          </>
+        )}
+        {panjarError && <Alert variant="destructive"><AlertDescription>{panjarError}</AlertDescription></Alert>}
       </Modal>
     </section>
   );

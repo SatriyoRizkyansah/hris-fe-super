@@ -18,6 +18,7 @@ export type TransactionForm = {
 };
 
 export type SpendRequestForm = {
+  jenis: "BELANJA_LANGSUNG" | "PANJAR_PERJALANAN";
   nama_kegiatan: string;
   no_kuitansi: string;
   tanggal: string;

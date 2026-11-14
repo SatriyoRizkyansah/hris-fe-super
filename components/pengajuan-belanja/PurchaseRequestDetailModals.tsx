@@ -33,6 +33,8 @@ type Props = {
   canReviewKeuangan: boolean;
   canReviewKabag: boolean;
   canPay: boolean;
+  canSubmitPanjar: boolean;
+  onStartPanjar: (request: Row) => void;
   retailReviewPending: boolean;
   reviewRetail: (approved: boolean) => void;
   retailReviewNote: string;
@@ -49,7 +51,7 @@ export function PurchaseRequestDetailModals(props: Props) {
     detailRequest, setDetailRequest, detailStatus, detailSteps, retailDetailRequest,
     setRetailDetailRequest, retailDetailStatus, retailDetailRejected, retailDetailCanceled,
     retailDetailPaid, retailDetailApproved, retailDetailSteps, retailDetailJob,
-    retailDetailDocuments, hasRetailDetailDocuments, canReview, canReviewKarwas, canReviewKeuangan, canReviewKabag, canPay,
+    retailDetailDocuments, hasRetailDetailDocuments, canReview, canReviewKarwas, canReviewKeuangan, canReviewKabag, canPay, canSubmitPanjar, onStartPanjar,
     retailReviewPending, reviewRetail, retailReviewNote, setRetailReviewNote,
     retailReviewError, onStartRetailPayment, formatDateTime, statusLabels, statusTone,
   } = props;
@@ -78,6 +80,7 @@ export function PurchaseRequestDetailModals(props: Props) {
               <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">
                 {[
                   ["Pemohon", detailRequest.pembuat?.nama ?? "—"],
+                  ["Jenis pengajuan", detailRequest.jenis === "PANJAR_PERJALANAN" ? "Panjar perjalanan" : "Belanja langsung"],
                   ["Tanggal pengajuan", formatDateTime(detailRequest.diajukan_pada ?? detailRequest.created_at)],
                   ["Nama kegiatan", detailRequest.nama_kegiatan ?? "—"],
                   ["Nominal", formatRupiah(detailRequest.jumlah)],
@@ -177,6 +180,23 @@ export function PurchaseRequestDetailModals(props: Props) {
                   </div>
                 )}
                 {detailRequest.pembayaran.catatan && <p className="mt-3 text-xs text-muted-foreground">Catatan Bendahara: {String(detailRequest.pembayaran.catatan)}</p>}
+              </ModalSection>
+            )}
+            {detailRequest.panjar && (
+              <ModalSection title="Panjar perjalanan" description="KARWAS memeriksa pertanggungjawaban. Bendahara mencatat pengembalian ke kamar dana tujuan.">
+                <ModalDetailGrid>
+                  <ModalDetailItem label="Status" value={String(detailRequest.panjar.status ?? "—").replaceAll("_", " ")} />
+                  <ModalDetailItem label="Kamar sumber" value={`${String(detailRequest.panjar.dana_sumber?.kategori_kamar ?? "—").replaceAll("_", " ")} · TA ${detailRequest.panjar.dana_sumber?.tahun_fiscal ?? "—"}`} />
+                  <ModalDetailItem label="Panjar dibayarkan" value={formatRupiah(detailRequest.panjar.nominal)} />
+                  <ModalDetailItem label="Realisasi dilaporkan" value={formatRupiah(detailRequest.panjar.jumlah_realisasi)} />
+                  <ModalDetailItem label="Pengembalian disetujui" value={formatRupiah(detailRequest.panjar.jumlah_pengembalian)} />
+                  {detailRequest.panjar.pengembalian && <ModalDetailItem label="Kamar penerimaan" value={String(detailRequest.panjar.pengembalian.dana_tujuan?.kategori_kamar ?? "—").replaceAll("_", " ")} />}
+                </ModalDetailGrid>
+                {detailRequest.panjar.file_pertanggungjawaban && <div className="mt-3"><DocumentLinks documents={[{ label: "Bukti pertanggungjawaban", path: detailRequest.panjar.file_pertanggungjawaban }, ...(detailRequest.panjar.pengembalian?.file_bukti ? [{ label: "Bukti penerimaan pengembalian", path: detailRequest.panjar.pengembalian.file_bukti }] : [])]} /></div>}
+                {detailRequest.panjar.catatan_karwas && <p className="mt-2 text-xs text-muted-foreground">Catatan KARWAS: {String(detailRequest.panjar.catatan_karwas)}</p>}
+                {canSubmitPanjar && ["DIBAYARKAN", "DITOLAK_KARWAS"].includes(String(detailRequest.panjar.status)) && <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>{detailRequest.panjar.status === "DITOLAK_KARWAS" ? "Perbaiki pertanggungjawaban" : "Ajukan pertanggungjawaban"}</Button>}
+                {canReviewKarwas && detailRequest.panjar.status === "DIAJUKAN_PERTANGGUNGJAWABAN" && <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>Tinjau pertanggungjawaban</Button>}
+                {canPay && detailRequest.panjar.status === "MENUNGGU_PENGEMBALIAN" && <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>Catat penerimaan pengembalian</Button>}
               </ModalSection>
             )}
           </>

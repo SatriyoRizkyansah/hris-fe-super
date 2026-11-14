@@ -241,6 +241,21 @@ export function RoDetailModals(props: Props) {
             </div>
           </section>
           <label className="grid gap-1 text-sm sm:col-span-2">
+            Jenis pengajuan *
+            <FilterCombobox
+              label="Jenis pengajuan"
+              value={spendRequest.jenis}
+              onValueChange={(value) => setSpendRequest((current) => ({ ...current, jenis: value as SpendRequestForm["jenis"] }))}
+              options={[
+                { value: "BELANJA_LANGSUNG", label: "Belanja langsung" },
+                { value: "PANJAR_PERJALANAN", label: "Panjar perjalanan" },
+              ]}
+            />
+            {spendRequest.jenis === "PANJAR_PERJALANAN" && (
+              <span className="text-xs text-muted-foreground">Pilih panjar untuk biaya perjalanan yang akan dipertanggungjawabkan setelah kegiatan. Pemohon melaporkan realisasi dan sisa pengembalian setelah dana dibayarkan.</span>
+            )}
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
             Nama kegiatan *
             <Input maxLength={200} value={spendRequest.nama_kegiatan} onChange={(event) => setSpendRequest((current) => ({ ...current, nama_kegiatan: event.target.value }))} />
           </label>

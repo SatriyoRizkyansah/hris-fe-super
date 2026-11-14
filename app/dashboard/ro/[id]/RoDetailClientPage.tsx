@@ -25,7 +25,7 @@ import type { CreatePengajuanBelanjaDto, RoItemDto, UpdateRoDto } from "@/lib/ap
 import type { AnyRow, EditForm, SpendRequestForm, TransactionDirection, TransactionForm } from "@/components/ro/ro-detail.types";
 const emptyEdit = (): EditForm => ({ total_plafon: "", no_kontrak: "", unit_kolaborasi_ids: [], pj: "", status_ro: "AKTIF" });
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
-const emptySpendRequest = (): SpendRequestForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), jumlah: "", keterangan: "" });
+const emptySpendRequest = (): SpendRequestForm => ({ jenis: "BELANJA_LANGSUNG", nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), jumlah: "", keterangan: "" });
 function missing(row: RoItemDto) {
   return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", row.id_proyek && !row.nomor_job && "Nomor Job", row.id_proyek && !row.mulai_kontrak && "Mulai kontrak proyek", row.id_proyek && !row.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean);
 }
@@ -152,7 +152,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       await refresh();
     },
   });
-  const createSpendRequest = use_mutation<unknown, Error, CreatePengajuanBelanjaDto>({
+  const createSpendRequest = use_mutation<unknown, Error, CreatePengajuanBelanjaDto & { jenis: SpendRequestForm["jenis"] }>({
     tag: "keuanganPengajuanBelanja",
     method: "pengajuanBelanjaCreateControllerCreate",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja")],
@@ -271,6 +271,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       setSpendRequestError("");
       await createSpendRequest.mutateAsync({
         ro_id: ro.id,
+        jenis: spendRequest.jenis,
         nama_kegiatan: spendRequest.nama_kegiatan.trim(),
         no_kuitansi: spendRequest.no_kuitansi.trim() || undefined,
         tanggal: spendRequest.tanggal,
