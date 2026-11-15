@@ -48,6 +48,8 @@ type BukuKasRow = {
   buku: JenisBuku[];
   buku_label: string;
   sumber: string;
+  jenis_transaksi?: string | null;
+  jenis_transaksi_label?: string | null;
   pajak_ppn?: number | null;
   pajak_pph_21?: number | null;
   pajak_pph_22?: number | null;
@@ -372,6 +374,11 @@ export default function BukuKasPageClient() {
         </div>
       ),
     },
+    {
+      key: "jenis_transaksi",
+      header: "Jenis Transaksi",
+      render: (row) => row.jenis_transaksi_label || <span className="text-xs text-muted-foreground">—</span>,
+    },
     { key: "debit", header: "Debet", className: "text-right", render: (row) => (num(row.debit) ? formatRupiah(row.debit) : "—") },
     { key: "kredit", header: "Kredit", className: "text-right", render: (row) => (num(row.kredit) ? formatRupiah(row.kredit) : "—") },
     { key: "saldo", header: "Saldo", className: "text-right font-semibold", render: (row) => formatRupiah(row.saldo) },
@@ -380,7 +387,7 @@ export default function BukuKasPageClient() {
 
   if (buku === "PAJAK") {
     kolom.splice(
-      6,
+      7,
       0,
       { key: "pajak_ppn", header: "PPN", className: "text-right", render: (row) => (num(row.pajak_ppn) ? formatRupiah(row.pajak_ppn) : "—") },
       { key: "pajak_pph_21", header: "PPh 21", className: "text-right", render: (row) => (num(row.pajak_pph_21) ? formatRupiah(row.pajak_pph_21) : "—") },
