@@ -1182,10 +1182,17 @@ export interface CreatePengajuanBelanjaDto {
   tanggal: string;
   /** @example 1500000 */
   jumlah: number;
+  /** @default "BELANJA_LANGSUNG" */
+  jenis?: "BELANJA_LANGSUNG" | "PANJAR_PERJALANAN";
   keterangan?: string;
 }
 
 export interface ReviewPengajuanBelanjaDto {
+  disetujui: boolean;
+  catatan?: string;
+}
+
+export interface ReviewPanjarDto {
   disetujui: boolean;
   catatan?: string;
 }
@@ -1289,6 +1296,94 @@ export interface CreateRetailExpenseDto {
 export interface ReviewRetailExpenseDto {
   disetujui: boolean;
   catatan?: string;
+}
+
+export interface CreateBukuKasDto {
+  /** @example "2025-02-01" */
+  tanggal: string;
+  /** @example "P 2025000368" */
+  no_slip?: string;
+  /** @example "PT Contoh Jaya" */
+  penerima?: string;
+  /** @example "Pembayaran tagihan listrik gedung" */
+  uraian: string;
+  /** @example "Bulan Februari 2025" */
+  keterangan?: string;
+  /**
+   * Penerimaan (kas masuk)
+   * @example 0
+   */
+  debit?: number;
+  /**
+   * Pengeluaran (kas keluar)
+   * @example 1500000
+   */
+  kredit?: number;
+  /**
+   * Satu transaksi boleh tampil di beberapa buku
+   * @example ["KAS_UMUM","BANK"]
+   */
+  buku: ("KAS_UMUM" | "BANK" | "PANJAR" | "PAJAK")[];
+  /**
+   * Pungutan PPN (buku pajak)
+   * @example 150000
+   */
+  pajak_ppn?: number;
+  /** @example 0 */
+  pajak_pph_21?: number;
+  /** @example 0 */
+  pajak_pph_22?: number;
+  /** @example 0 */
+  pajak_pph_23?: number;
+  /** @example 0 */
+  pajak_pph_4?: number;
+  /** Kaitkan ke transaksi dana operasional */
+  dana_transaksi_id?: string;
+  /** Kaitkan ke transaksi RO */
+  ro_transaksi_id?: string;
+  /** @example "/uploads/dokumen/bukti.pdf" */
+  dokumen_file?: string;
+}
+
+export interface UpdateBukuKasDto {
+  /** @example "2025-02-01" */
+  tanggal?: string;
+  no_slip?: string;
+  penerima?: string;
+  uraian?: string;
+  keterangan?: string;
+  debit?: number;
+  kredit?: number;
+  buku?: ("KAS_UMUM" | "BANK" | "PANJAR" | "PAJAK")[];
+  pajak_ppn?: number;
+  pajak_pph_21?: number;
+  pajak_pph_22?: number;
+  pajak_pph_23?: number;
+  pajak_pph_4?: number;
+  dokumen_file?: string;
+}
+
+export interface SaldoAwalItemDto {
+  /** @example "KAS_UMUM" */
+  buku: "KAS_UMUM" | "BANK" | "PANJAR" | "PAJAK";
+  /** @example 1918348208 */
+  nominal: number;
+}
+
+export interface SetSaldoAwalBukuKasDto {
+  /** @example 2025 */
+  tahun_fiscal: number;
+  items: SaldoAwalItemDto[];
+}
+
+export interface TarikBukuKasDto {
+  /** @example 2025 */
+  tahun_fiscal: number;
+  /**
+   * Kosong berarti seluruh tahun
+   * @example 2
+   */
+  bulan?: number;
 }
 
 export type QueryParamsType = Record<string | number, any>;
@@ -4293,7 +4388,7 @@ export class Api<
      *
      * @tags Keuangan - Pengajuan Belanja
      * @name PengajuanBelanjaReviewContextControllerReviewContext
-     * @summary Konteks finansial untuk review KARWAS (Superadmin, Keuangan - KARWAS, Keuangan (Legacy), Koordinator)
+     * @summary Konteks finansial untuk review KARWAS (Superadmin, Keuangan - KARWAS, Keuangan (Legacy), Koordinator, Subkoordinator)
      * @request GET:/api/pengajuan-belanja/{id}/review-context
      * @secure
      */
@@ -4391,7 +4486,7 @@ export class Api<
      *
      * @tags Keuangan - Pengajuan Belanja
      * @name PengajuanBelanjaValidasiKeuanganControllerValidate
-     * @summary Validasi pengajuan oleh Keuangan (Superadmin, Keuangan (Legacy), Koordinator)
+     * @summary Validasi pengajuan oleh Subkoordinator unit Keuangan (Superadmin, Subkoordinator)
      * @request POST:/api/pengajuan-belanja/{id}/validasi-keuangan
      * @secure
      */
@@ -4429,6 +4524,156 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Pengajuan Belanja
+     * @name PanjarDompetControllerList
+     * @summary Daftar kamar sumber pembayaran (Superadmin, Bendahara Pengeluaran)
+     * @request GET:/api/pengajuan-belanja/{id}/sumber-dana
+     * @secure
+     */
+    panjarDompetControllerList: (id: string, params: RequestParams = {}) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/sumber-dana`,
+        method: "GET",
+        secure: true,
+        ...params,
+      }),
+  };
+  keuanganPanjarPerjalanan = {
+    /**
+     * No description
+     *
+     * @tags Keuangan - Panjar Perjalanan
+     * @name PanjarPertanggungjawabanControllerSubmit
+     * @summary Ajukan pertanggungjawaban panjar (Superadmin, Koordinator, Subkoordinator)
+     * @request POST:/api/pengajuan-belanja/{id}/panjar/pertanggungjawaban
+     * @secure
+     */
+    panjarPertanggungjawabanControllerSubmit: (
+      id: string,
+      data: {
+        /** @min 0 */
+        jumlah_realisasi: number;
+        /** @min 0 */
+        jumlah_pengembalian: number;
+        /** @maxLength 500 */
+        catatan?: string;
+        /**
+         * Dokumen pertanggungjawaban panjar PDF, maksimal 10 MB
+         * @format binary
+         */
+        file: File;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/panjar/pertanggungjawaban`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.FormData,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Panjar Perjalanan
+     * @name PanjarReviewControllerReview
+     * @summary Validasi pertanggungjawaban panjar oleh KARWAS (Superadmin, Keuangan - KARWAS)
+     * @request POST:/api/pengajuan-belanja/{id}/panjar/review
+     * @secure
+     */
+    panjarReviewControllerReview: (
+      id: string,
+      data: ReviewPanjarDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/panjar/review`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Panjar Perjalanan
+     * @name PanjarPengembalianControllerReceive
+     * @summary Catat penerimaan pengembalian panjar (Superadmin, Bendahara Pengeluaran)
+     * @request POST:/api/pengajuan-belanja/{id}/panjar/pengembalian
+     * @secure
+     */
+    panjarPengembalianControllerReceive: (
+      id: string,
+      data: {
+        /** @maxLength 100 */
+        nomor_penerimaan: string;
+        /** @format date */
+        tanggal_diterima: string;
+        /** @format uuid */
+        dana_tujuan_id: string;
+        /** @maxLength 500 */
+        catatan?: string;
+        /**
+         * Bukti penerimaan pengembalian PDF, maksimal 10 MB
+         * @format binary
+         */
+        file: File;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/panjar/pengembalian`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.FormData,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Panjar Perjalanan
+     * @name PanjarDanaTambahanControllerBayar
+     * @summary Cairkan dana tambahan panjar (Superadmin, Bendahara Pengeluaran)
+     * @request POST:/api/pengajuan-belanja/{id}/panjar/dana-tambahan
+     * @secure
+     */
+    panjarDanaTambahanControllerBayar: (
+      id: string,
+      data: {
+        /** @maxLength 100 */
+        nomor_pembayaran: string;
+        /** @format date */
+        tanggal_bayar: string;
+        /** @format uuid */
+        dana_sumber_id: string;
+        /** @maxLength 500 */
+        catatan?: string;
+        /**
+         * Bukti pembayaran dana tambahan PDF, maksimal 10 MB
+         * @format binary
+         */
+        file: File;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pengajuan-belanja/${id}/panjar/dana-tambahan`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.FormData,
         ...params,
       }),
   };
@@ -4887,7 +5132,7 @@ export class Api<
      *
      * @tags Layanan Retail Non-RO
      * @name RetailValidasiKeuanganControllerValidate
-     * @summary Validasi pengajuan retail oleh Keuangan (Superadmin, Keuangan (Legacy), Koordinator)
+     * @summary Validasi pengajuan retail oleh Subkoordinator unit Keuangan (Superadmin, Subkoordinator)
      * @request POST:/api/retail/pengajuan-belanja/{id}/validasi-keuangan
      * @secure
      */
@@ -4921,6 +5166,197 @@ export class Api<
     ) =>
       this.request<void, any>({
         path: `/api/retail/pengajuan-belanja/${id}/validasi-kabag`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+  };
+  pembukuanBukuKas = {
+    /**
+     * No description
+     *
+     * @tags Pembukuan - Buku Kas
+     * @name BukuKasListControllerList
+     * @summary Daftar baris buku kas Bendahara Pengeluaran (Superadmin, Bendahara Pengeluaran)
+     * @request GET:/api/pembukuan
+     * @secure
+     */
+    bukuKasListControllerList: (
+      query?: {
+        /** @example "KAS_UMUM" */
+        buku?: "KAS_UMUM" | "BANK" | "PANJAR" | "PAJAK";
+        /** @example 2025 */
+        tahun_fiscal?: number;
+        /**
+         * 1-12, kosong berarti satu tahun
+         * @example 2
+         */
+        bulan?: number;
+        /** @example "bayar listrik" */
+        cari?: string;
+        /**
+         * @default 1
+         * @example 1
+         */
+        page?: number;
+        /**
+         * @default 50
+         * @example 50
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pembukuan`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Pembukuan - Buku Kas
+     * @name BukuKasCreateControllerCreate
+     * @summary Tambah baris buku kas (Superadmin, Bendahara Pengeluaran)
+     * @request POST:/api/pembukuan
+     * @secure
+     */
+    bukuKasCreateControllerCreate: (
+      data: CreateBukuKasDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pembukuan`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Pembukuan - Buku Kas
+     * @name BukuKasListControllerDetail
+     * @summary Detail baris buku kas (Superadmin, Bendahara Pengeluaran)
+     * @request GET:/api/pembukuan/detail/{id}
+     * @secure
+     */
+    bukuKasListControllerDetail: (id: string, params: RequestParams = {}) =>
+      this.request<void, any>({
+        path: `/api/pembukuan/detail/${id}`,
+        method: "GET",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Pembukuan - Buku Kas
+     * @name BukuKasRekapControllerRekap
+     * @summary Rekap bulanan buku kas (Superadmin, Bendahara Pengeluaran)
+     * @request GET:/api/pembukuan/rekap
+     * @secure
+     */
+    bukuKasRekapControllerRekap: (
+      query?: {
+        /** @example 2025 */
+        tahun_fiscal?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pembukuan/rekap`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Pembukuan - Buku Kas
+     * @name BukuKasUpdateControllerUpdate
+     * @summary Ubah baris buku kas (Superadmin, Bendahara Pengeluaran)
+     * @request PATCH:/api/pembukuan/{id}
+     * @secure
+     */
+    bukuKasUpdateControllerUpdate: (
+      id: string,
+      data: UpdateBukuKasDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pembukuan/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Pembukuan - Buku Kas
+     * @name BukuKasRemoveControllerRemove
+     * @summary Hapus baris buku kas (Superadmin, Bendahara Pengeluaran)
+     * @request DELETE:/api/pembukuan/{id}
+     * @secure
+     */
+    bukuKasRemoveControllerRemove: (id: string, params: RequestParams = {}) =>
+      this.request<void, any>({
+        path: `/api/pembukuan/${id}`,
+        method: "DELETE",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Pembukuan - Buku Kas
+     * @name BukuKasSaldoTarikControllerSetSaldoAwal
+     * @summary Simpan saldo awal buku kas (Superadmin, Bendahara Pengeluaran)
+     * @request POST:/api/pembukuan/saldo-awal
+     * @secure
+     */
+    bukuKasSaldoTarikControllerSetSaldoAwal: (
+      data: SetSaldoAwalBukuKasDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pembukuan/saldo-awal`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Pembukuan - Buku Kas
+     * @name BukuKasSaldoTarikControllerTarik
+     * @summary Tarik transaksi arus kas keuangan ke buku kas (Superadmin, Bendahara Pengeluaran)
+     * @request POST:/api/pembukuan/tarik-arus-kas
+     * @secure
+     */
+    bukuKasSaldoTarikControllerTarik: (
+      data: TarikBukuKasDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/pembukuan/tarik-arus-kas`,
         method: "POST",
         body: data,
         secure: true,

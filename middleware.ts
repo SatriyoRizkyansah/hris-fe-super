@@ -17,6 +17,7 @@ const roleAccess: Record<string, string[]> = {
   "/dashboard/sk": ["superadmin", "koordinator"],
   "/dashboard/alokasi-gaji": ["superadmin", "koordinator", "keuangan"],
   "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan", "keu_bendahara"],
+  "/dashboard/buku-kas": ["superadmin", "keu_bendahara_pengeluaran"],
   "/dashboard/pengguna": ["superadmin"],
   "/dashboard/pengaturan-margin": ["superadmin"],
   "/dashboard/profil": ["superadmin", "koordinator", "subkoor", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas", "pimpinan", "spi", "karyawan"],
@@ -32,7 +33,7 @@ const roleHome = (role: string) =>
         : role === "keu_bendahara"
           ? "/dashboard/pengajuan-belanja"
           : role === "keu_bendahara_pengeluaran"
-            ? "/dashboard/pengajuan-belanja"
+            ? "/dashboard/buku-kas"
             : ["subkoor", "spi", "karyawan"].includes(role)
               ? "/dashboard/profil"
               : "/dashboard";

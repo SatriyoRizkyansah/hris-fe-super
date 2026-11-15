@@ -8,12 +8,26 @@ export function normalizeRole(value: string): HrisRole | null {
     .trim()
     .toLocaleLowerCase("id-ID")
     .replace(/[\s_-]+/g, "");
-  const aliases: Record<string, HrisRole> = { superadmin: "superadmin", koordinator: "koordinator", subkoor: "subkoor", subkoordinator: "subkoor", keuangan: "keuangan", keubilling: "keu_billing", keubendahara: "keu_bendahara", keubendaharapengeluaran: "keu_bendahara_pengeluaran", keubendaharapendapatan: "keu_bendahara_pendapatan", keukarwas: "keu_karwas", pimpinan: "pimpinan", spi: "spi", karyawan: "karyawan" };
+  const aliases: Record<string, HrisRole> = {
+    superadmin: "superadmin",
+    koordinator: "koordinator",
+    subkoor: "subkoor",
+    subkoordinator: "subkoor",
+    keuangan: "keuangan",
+    keubilling: "keu_billing",
+    keubendahara: "keu_bendahara",
+    keubendaharapengeluaran: "keu_bendahara_pengeluaran",
+    keubendaharapendapatan: "keu_bendahara_pendapatan",
+    keukarwas: "keu_karwas",
+    pimpinan: "pimpinan",
+    spi: "spi",
+    karyawan: "karyawan",
+  };
   return aliases[role] ?? null;
 }
 export function roleHome(role: string): string {
   if (role === "pimpinan" || role === "keu_billing" || role === "keu_karwas") return "/dashboard/proyek";
-  if (role === "keu_bendahara_pengeluaran") return "/dashboard/pengajuan-belanja";
+  if (role === "keu_bendahara_pengeluaran") return "/dashboard/buku-kas";
   if (role === "keu_bendahara_pendapatan") return "/dashboard/invoice";
   if (role === "keuangan" || role === "keu_bendahara") return "/dashboard/termin";
   if (["subkoor", "spi", "karyawan"].includes(role)) return "/dashboard/profil";
@@ -46,9 +60,7 @@ export function readStoredAccesses(): RoleAccess[] {
   if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(window.localStorage.getItem(ACCESS_STORAGE_KEY) ?? "[]");
-    return Array.isArray(parsed)
-      ? parsed.filter((access): access is RoleAccess => Boolean(access && typeof access.token === "string" && typeof access.akses === "string" && typeof access.role === "string"))
-      : [];
+    return Array.isArray(parsed) ? parsed.filter((access): access is RoleAccess => Boolean(access && typeof access.token === "string" && typeof access.akses === "string" && typeof access.role === "string")) : [];
   } catch {
     return [];
   }

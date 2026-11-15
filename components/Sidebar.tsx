@@ -19,6 +19,7 @@ import {
   Landmark,
   FileText,
   Banknote,
+  BookOpen,
   ChartNoAxesCombined,
   Settings,
   UserCog,
@@ -77,6 +78,7 @@ const sections = [
     items: [
       { href: "/dashboard/pengajuan-belanja", label: "Pengajuan Belanja", icon: Wallet, roles: ["keu_bendahara_pengeluaran"] },
       { href: "/dashboard/panjar", label: "Panjar Perjalanan", icon: HandCoins, roles: ["keu_bendahara_pengeluaran"] },
+      { href: "/dashboard/buku-kas", label: "Pembukuan (Buku Kas)", icon: BookOpen, roles: ["superadmin", "keu_bendahara_pengeluaran"] },
       { href: "/dashboard/termin", label: "Penagihan", icon: ClipboardCheck, roles: billing },
       { href: "/dashboard/invoice", label: "Invoice", icon: FileText, roles: [...billing, "keu_bendahara", "keu_bendahara_pendapatan", "pimpinan", "spi"] },
       { href: "/dashboard/dana-operasional", label: "Dana Operasional", icon: Wallet, roles: ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"] },
@@ -122,6 +124,7 @@ const allowedPath: Record<string, string[]> = {
   "/dashboard/sk": ["superadmin", "koordinator", "keuangan"],
   "/dashboard/alokasi-gaji": ["superadmin", "koordinator", "keuangan"],
   "/dashboard/rekonsiliasi-bank": ["superadmin", "keuangan", "keu_bendahara", "keu_bendahara_pendapatan"],
+  "/dashboard/buku-kas": ["superadmin", "keu_bendahara_pengeluaran"],
   "/dashboard/pengguna": ["superadmin"],
   "/dashboard/pengaturan-margin": ["superadmin"],
   "/dashboard/profil": all,
@@ -136,7 +139,7 @@ const homeForRole = (value: string) =>
         : value === "keuangan"
           ? "/dashboard/invoice"
           : value === "keu_bendahara_pengeluaran"
-            ? "/dashboard/pengajuan-belanja"
+            ? "/dashboard/buku-kas"
             : value === "keu_bendahara_pendapatan"
               ? "/dashboard/invoice"
               : value === "keu_bendahara"
