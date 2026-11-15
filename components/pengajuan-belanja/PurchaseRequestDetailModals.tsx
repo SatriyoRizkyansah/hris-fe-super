@@ -33,7 +33,8 @@ type Props = {
   canReviewKeuangan: boolean;
   canReviewKabag: boolean;
   canPay: boolean;
-  canSubmitPanjar: boolean;
+  canSubmitPanjar: (request: Row | null) => boolean;
+  canOwnPanjarRole: boolean;
   onStartPanjar: (request: Row) => void;
   retailReviewPending: boolean;
   reviewRetail: (approved: boolean) => void;
@@ -48,12 +49,38 @@ type Props = {
 
 export function PurchaseRequestDetailModals(props: Props) {
   const {
-    detailRequest, setDetailRequest, detailStatus, detailSteps, retailDetailRequest,
-    setRetailDetailRequest, retailDetailStatus, retailDetailRejected, retailDetailCanceled,
-    retailDetailPaid, retailDetailApproved, retailDetailSteps, retailDetailJob,
-    retailDetailDocuments, hasRetailDetailDocuments, canReview, canReviewKarwas, canReviewKeuangan, canReviewKabag, canPay, canSubmitPanjar, onStartPanjar,
-    retailReviewPending, reviewRetail, retailReviewNote, setRetailReviewNote,
-    retailReviewError, onStartRetailPayment, formatDateTime, statusLabels, statusTone,
+    detailRequest,
+    setDetailRequest,
+    detailStatus,
+    detailSteps,
+    retailDetailRequest,
+    setRetailDetailRequest,
+    retailDetailStatus,
+    retailDetailRejected,
+    retailDetailCanceled,
+    retailDetailPaid,
+    retailDetailApproved,
+    retailDetailSteps,
+    retailDetailJob,
+    retailDetailDocuments,
+    hasRetailDetailDocuments,
+    canReview,
+    canReviewKarwas,
+    canReviewKeuangan,
+    canReviewKabag,
+    canPay,
+    canSubmitPanjar,
+    canOwnPanjarRole,
+    onStartPanjar,
+    retailReviewPending,
+    reviewRetail,
+    retailReviewNote,
+    setRetailReviewNote,
+    retailReviewError,
+    onStartRetailPayment,
+    formatDateTime,
+    statusLabels,
+    statusTone,
   } = props;
   return (
     <>
@@ -96,10 +123,7 @@ export function PurchaseRequestDetailModals(props: Props) {
                     <dd className={`mt-1 break-words text-sm ${label === "Nominal" ? "font-semibold tabular-nums text-foreground" : "text-foreground"}`}>
                       {value}
                       {label === "RO" && detailRequest.ro?.id && (
-                        <Link
-                          href={`/dashboard/ro/${encodeURIComponent(String(detailRequest.ro.id))}`}
-                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                        >
+                        <Link href={`/dashboard/ro/${encodeURIComponent(String(detailRequest.ro.id))}`} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
                           Lihat detail RO <ArrowUpRight size={13} />
                         </Link>
                       )}
@@ -183,20 +207,56 @@ export function PurchaseRequestDetailModals(props: Props) {
               </ModalSection>
             )}
             {detailRequest.panjar && (
-              <ModalSection title="Panjar perjalanan" description="KARWAS memeriksa pertanggungjawaban. Bendahara mencatat pengembalian ke kamar dana tujuan.">
+              <ModalSection title="Panjar perjalanan" description="KARWAS memeriksa pertanggungjawaban. Bendahara mencairkan dana tambahan atau mencatat pengembalian sisa ke kamar dana tujuan.">
                 <ModalDetailGrid>
                   <ModalDetailItem label="Status" value={String(detailRequest.panjar.status ?? "—").replaceAll("_", " ")} />
                   <ModalDetailItem label="Kamar sumber" value={`${String(detailRequest.panjar.dana_sumber?.kategori_kamar ?? "—").replaceAll("_", " ")} · TA ${detailRequest.panjar.dana_sumber?.tahun_fiscal ?? "—"}`} />
                   <ModalDetailItem label="Panjar dibayarkan" value={formatRupiah(detailRequest.panjar.nominal)} />
                   <ModalDetailItem label="Realisasi dilaporkan" value={formatRupiah(detailRequest.panjar.jumlah_realisasi)} />
-                  <ModalDetailItem label="Pengembalian disetujui" value={formatRupiah(detailRequest.panjar.jumlah_pengembalian)} />
+                  {Number(detailRequest.panjar.jumlah_kekurangan ?? 0) > 0 ? (
+                    <ModalDetailItem label="Kekurangan (dana tambahan)" value={formatRupiah(detailRequest.panjar.jumlah_kekurangan)} />
+                  ) : (
+                    <ModalDetailItem label="Pengembalian disetujui" value={formatRupiah(detailRequest.panjar.jumlah_pengembalian)} />
+                  )}
                   {detailRequest.panjar.pengembalian && <ModalDetailItem label="Kamar penerimaan" value={String(detailRequest.panjar.pengembalian.dana_tujuan?.kategori_kamar ?? "—").replaceAll("_", " ")} />}
+                  {detailRequest.panjar.dana_tambahan_nomor && <ModalDetailItem label="Dana tambahan dicairkan" value={`${formatRupiah(detailRequest.panjar.dana_tambahan_nominal)} · ${String(detailRequest.panjar.dana_tambahan_nomor)}`} />}
                 </ModalDetailGrid>
-                {detailRequest.panjar.file_pertanggungjawaban && <div className="mt-3"><DocumentLinks documents={[{ label: "Bukti pertanggungjawaban", path: detailRequest.panjar.file_pertanggungjawaban }, ...(detailRequest.panjar.pengembalian?.file_bukti ? [{ label: "Bukti penerimaan pengembalian", path: detailRequest.panjar.pengembalian.file_bukti }] : [])]} /></div>}
+                {detailRequest.panjar.file_pertanggungjawaban && (
+                  <div className="mt-3">
+                    <DocumentLinks
+                      documents={[
+                        { label: "Bukti pertanggungjawaban", path: detailRequest.panjar.file_pertanggungjawaban },
+                        ...(detailRequest.panjar.pengembalian?.file_bukti ? [{ label: "Bukti penerimaan pengembalian", path: detailRequest.panjar.pengembalian.file_bukti }] : []),
+                      ]}
+                    />
+                  </div>
+                )}
                 {detailRequest.panjar.catatan_karwas && <p className="mt-2 text-xs text-muted-foreground">Catatan KARWAS: {String(detailRequest.panjar.catatan_karwas)}</p>}
-                {canSubmitPanjar && ["DIBAYARKAN", "DITOLAK_KARWAS"].includes(String(detailRequest.panjar.status)) && <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>{detailRequest.panjar.status === "DITOLAK_KARWAS" ? "Perbaiki pertanggungjawaban" : "Ajukan pertanggungjawaban"}</Button>}
-                {canReviewKarwas && detailRequest.panjar.status === "DIAJUKAN_PERTANGGUNGJAWABAN" && <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>Tinjau pertanggungjawaban</Button>}
-                {canPay && detailRequest.panjar.status === "MENUNGGU_PENGEMBALIAN" && <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>Catat penerimaan pengembalian</Button>}
+                {canSubmitPanjar(detailRequest) && ["DIBAYARKAN", "DITOLAK_KARWAS", "DITOLAK_KEUANGAN"].includes(String(detailRequest.panjar.status)) && (
+                  <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>
+                    {detailRequest.panjar.status === "DIBAYARKAN" ? "Ajukan pertanggungjawaban" : "Perbaiki pertanggungjawaban"}
+                  </Button>
+                )}
+                {!canSubmitPanjar(detailRequest) && canOwnPanjarRole && ["DIBAYARKAN", "DITOLAK_KARWAS", "DITOLAK_KEUANGAN"].includes(String(detailRequest.panjar.status)) && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Hanya pemohon <strong>{String(detailRequest.pembuat?.nama ?? "pengajuan ini")}</strong> yang dapat melaporkan pertanggungjawaban panjar ini.
+                  </p>
+                )}
+                {canReviewKarwas && detailRequest.panjar.status === "DIAJUKAN_PERTANGGUNGJAWABAN" && (
+                  <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>
+                    Tinjau pertanggungjawaban
+                  </Button>
+                )}
+                {canPay && detailRequest.panjar.status === "MENUNGGU_DANA_TAMBAHAN" && (
+                  <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>
+                    Cairkan dana tambahan
+                  </Button>
+                )}
+                {canPay && detailRequest.panjar.status === "MENUNGGU_PENGEMBALIAN" && (
+                  <Button className="mt-3" onClick={() => onStartPanjar(detailRequest)}>
+                    Catat penerimaan pengembalian
+                  </Button>
+                )}
               </ModalSection>
             )}
           </>
@@ -217,14 +277,13 @@ export function PurchaseRequestDetailModals(props: Props) {
                   {retailReviewPending && <LoaderCircle className="animate-spin" size={15} />} Tolak
                 </Button>
                 <Button disabled={retailReviewPending} onClick={() => reviewRetail(true)}>
-                  {retailReviewPending && <LoaderCircle className="animate-spin" size={15} />} {retailDetailStatus === "DIAJUKAN" ? "Setujui & Reservasi OPS_KANTOR" : retailDetailStatus === "DISETUJUI_KARWAS" ? "Setujui Validasi Keuangan" : "Setujui sebagai Kabag"}
+                  {retailReviewPending && <LoaderCircle className="animate-spin" size={15} />}{" "}
+                  {retailDetailStatus === "DIAJUKAN" ? "Setujui & Reservasi OPS_KANTOR" : retailDetailStatus === "DISETUJUI_KARWAS" ? "Setujui Validasi Keuangan" : "Setujui sebagai Kabag"}
                 </Button>
               </>
             )}
             {canPay && retailDetailStatus === "DISETUJUI_KABAG" && retailDetailRequest && (
-              <Button
-                onClick={() => onStartRetailPayment(retailDetailRequest)}
-              >
+              <Button onClick={() => onStartRetailPayment(retailDetailRequest)}>
                 <CircleDollarSign size={15} /> Catat Pembayaran
               </Button>
             )}
@@ -271,7 +330,10 @@ export function PurchaseRequestDetailModals(props: Props) {
               )}
             </ModalSection>
 
-            <ModalSection title={retailDetailStatus === "DIAJUKAN" ? "Validasi KARWAS" : retailDetailStatus === "DISETUJUI_KARWAS" ? "Validasi Keuangan" : retailDetailStatus === "DISETUJUI_KEUANGAN" ? "Persetujuan Kabag" : "Riwayat persetujuan"} description="Informasi dan catatan setiap tahap ditampilkan dengan format yang sama agar alur keputusan mudah ditinjau.">
+            <ModalSection
+              title={retailDetailStatus === "DIAJUKAN" ? "Validasi KARWAS" : retailDetailStatus === "DISETUJUI_KARWAS" ? "Validasi Keuangan" : retailDetailStatus === "DISETUJUI_KEUANGAN" ? "Persetujuan Kabag" : "Riwayat persetujuan"}
+              description="Informasi dan catatan setiap tahap ditampilkan dengan format yang sama agar alur keputusan mudah ditinjau."
+            >
               <div
                 className={`rounded-lg border px-3.5 py-3 text-sm ${retailDetailRejected ? "border-red-200 bg-red-50 text-red-900" : retailDetailStatus === "DIAJUKAN" ? "border-amber-200 bg-amber-50 text-amber-950" : retailDetailCanceled ? "border-slate-200 bg-slate-50 text-slate-700" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}
               >
@@ -284,7 +346,13 @@ export function PurchaseRequestDetailModals(props: Props) {
                         ? "Pengajuan dibatalkan"
                         : retailDetailPaid
                           ? "Validasi selesai · pembayaran tercatat"
-                          : retailDetailStatus === "DISETUJUI_KARWAS" ? "Disetujui KARWAS · menunggu validasi Keuangan" : retailDetailStatus === "DISETUJUI_KEUANGAN" ? "Disetujui Keuangan · menunggu persetujuan Kabag" : retailDetailStatus === "DISETUJUI_KABAG" ? "Disetujui Kabag · menunggu pembayaran Bendahara Pengeluaran" : "Proses pengajuan belanja"}
+                          : retailDetailStatus === "DISETUJUI_KARWAS"
+                            ? "Disetujui KARWAS · menunggu validasi Keuangan"
+                            : retailDetailStatus === "DISETUJUI_KEUANGAN"
+                              ? "Disetujui Keuangan · menunggu persetujuan Kabag"
+                              : retailDetailStatus === "DISETUJUI_KABAG"
+                                ? "Disetujui Kabag · menunggu pembayaran Bendahara Pengeluaran"
+                                : "Proses pengajuan belanja"}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed">
                   {retailDetailStatus === "DIAJUKAN"
@@ -321,11 +389,18 @@ export function PurchaseRequestDetailModals(props: Props) {
             </ModalSection>
 
             <ModalSection title="Posisi dana OPS_KANTOR" description="Perkiraan saldo setelah pengajuan ini disetujui. Persetujuan KARWAS akan mereservasi nominal pengajuan.">
-              <MoneyFlow items={[
-                { label: "Saldo tersedia", amount: retailDetailRequest.saldo_ops_tersedia },
-                { label: "Pengajuan ini", amount: retailDetailRequest.jumlah, operator: "−", tone: "text-amber-700" },
-                { label: "Sisa setelah pengajuan", amount: Math.max(0, Number(retailDetailRequest.saldo_ops_tersedia ?? 0) - Number(retailDetailRequest.jumlah ?? 0)), operator: "=", tone: Number(retailDetailRequest.saldo_ops_tersedia ?? 0) < Number(retailDetailRequest.jumlah ?? 0) ? "text-rose-700" : "text-emerald-700" },
-              ]} />
+              <MoneyFlow
+                items={[
+                  { label: "Saldo tersedia", amount: retailDetailRequest.saldo_ops_tersedia },
+                  { label: "Pengajuan ini", amount: retailDetailRequest.jumlah, operator: "−", tone: "text-amber-700" },
+                  {
+                    label: "Sisa setelah pengajuan",
+                    amount: Math.max(0, Number(retailDetailRequest.saldo_ops_tersedia ?? 0) - Number(retailDetailRequest.jumlah ?? 0)),
+                    operator: "=",
+                    tone: Number(retailDetailRequest.saldo_ops_tersedia ?? 0) < Number(retailDetailRequest.jumlah ?? 0) ? "text-rose-700" : "text-emerald-700",
+                  },
+                ]}
+              />
             </ModalSection>
 
             <ModalSection title="Progress pengajuan" description="Tahapan pemeriksaan dan pembayaran pengajuan belanja retail.">

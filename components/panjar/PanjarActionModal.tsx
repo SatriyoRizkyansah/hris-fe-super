@@ -28,11 +28,13 @@ function listRows(value: unknown): Row[] {
   return [];
 }
 
-export type PanjarMode = "accountability" | "review" | "refund";
+export type PanjarMode = "accountability" | "review" | "topup" | "refund";
 
 export function panjarModeOf(request: Row | null): PanjarMode {
-  if (request?.panjar?.status === "DIAJUKAN_PERTANGGUNGJAWABAN") return "review";
-  if (request?.panjar?.status === "MENUNGGU_PENGEMBALIAN") return "refund";
+  const status = String(request?.panjar?.status ?? "");
+  if (status === "DIAJUKAN_PERTANGGUNGJAWABAN") return "review";
+  if (status === "MENUNGGU_DANA_TAMBAHAN") return "topup";
+  if (status === "MENUNGGU_PENGEMBALIAN") return "refund";
   return "accountability";
 }
 
@@ -41,6 +43,9 @@ export const PANJAR_STATUS_LABELS: Record<string, string> = {
   DIAJUKAN_PERTANGGUNGJAWAN: "Menunggu tinjauan KARWAS",
   DIAJUKAN_PERTANGGUNGJAWABAN: "Menunggu tinjauan KARWAS",
   DITOLAK_KARWAS: "Ditolak KARWAS",
+  MENUNGGU_VALIDASI_KEUANGAN: "Menunggu validasi Keuangan",
+  DITOLAK_KEUANGAN: "Ditolak Keuangan",
+  MENUNGGU_DANA_TAMBAHAN: "Menunggu dana tambahan",
   MENUNGGU_PENGEMBALIAN: "Menunggu pengembalian",
   SELESAI: "Selesai",
 };
@@ -51,15 +56,20 @@ type Props = {
   onCompleted?: () => void | Promise<void>;
 };
 
-/** Modal for the three panjar steps: pemohon accountability, KARWAS review, Bendahara refund. */
+/** Modal for every panjar step: pemohon accountability, KARWAS review, Bendahara disbursement dana tambahan/refund. */
 export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [form, setForm] = useState({ jumlah_realisasi: "", jumlah_pengembalian: "", nomor_penerimaan: "", tanggal_diterima: today(), dana_tujuan_id: "", catatan: "" });
+  const [funding, setFunding] = useState({ nomor_pembayaran: "", tanggal_bayar: today(), dana_sumber_id: "", catatan: "" });
   const [wallets, setWallets] = useState<Row[]>([]);
   const [error, setError] = useState("");
   const mode = panjarModeOf(request);
   const panjarNominal = Number(request?.panjar?.nominal ?? 0);
-  const autoRefund = Math.max(0, panjarNominal - Number(form.jumlah_realisasi || 0));
+  const actualInput = Number(form.jumlah_realisasi || 0);
+  const autoRefund = Math.max(0, panjarNominal - actualInput);
+  const autoShortfall = Math.max(0, actualInput - panjarNominal);
+  const panjarShortfall = Number(request?.panjar?.jumlah_kekurangan ?? 0);
+  const needsWallet = mode === "refund" || mode === "topup";
 
   useEffect(() => {
     if (!request) return;
@@ -73,10 +83,11 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
       dana_tujuan_id: "",
       catatan: "",
     });
+    setFunding({ nomor_pembayaran: "", tanggal_bayar: today(), dana_sumber_id: "", catatan: "" });
   }, [request]);
 
   useEffect(() => {
-    if (mode !== "refund" || !request?.id) {
+    if (!needsWallet || !request?.id) {
       setWallets([]);
       return;
     }
@@ -86,19 +97,18 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
         if (active) setWallets(listRows(response));
       })
       .catch((cause) => {
-        if (active) setError(apiErrorMessage(cause, "Daftar kamar tujuan belum dapat dimuat."));
+        if (active) setError(apiErrorMessage(cause, "Daftar kamar dana belum dapat dimuat."));
       });
     return () => {
       active = false;
     };
-  }, [mode, request?.id]);
+  }, [needsWallet, request?.id]);
 
-  const submitMutation = use_mutation<unknown, Error, { id: string; jumlah_realisasi: number; jumlah_pengembalian: number; catatan: string; file: File }>({
+  const submitMutation = use_mutation<unknown, Error, { id: string; jumlah_realisasi: number; catatan: string; file: File }>({
     tag: "keuanganPengajuanBelanja",
     method: "submitTravelAdvanceAccountability",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: ({ id, file: uploadFile, jumlah_realisasi, jumlah_pengembalian, catatan }) =>
-      uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/pertanggungjawaban`, uploadFile, { jumlah_realisasi: String(jumlah_realisasi), jumlah_pengembalian: String(jumlah_pengembalian), catatan }),
+    mutationFn: ({ id, file: uploadFile, jumlah_realisasi, catatan }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/pertanggungjawaban`, uploadFile, { jumlah_realisasi: String(jumlah_realisasi), catatan }),
     successMessage: "Pertanggungjawaban panjar berhasil diajukan ke KARWAS.",
     onSuccess: async () => {
       await onCompleted?.();
@@ -123,6 +133,19 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
     onError: (cause) => setError(apiErrorMessage(cause, "Review pertanggungjawaban gagal disimpan.")),
   });
 
+  const topupMutation = use_mutation<unknown, Error, { id: string; file: File; nomor_pembayaran: string; tanggal_bayar: string; dana_sumber_id: string; catatan: string }>({
+    tag: "keuanganPengajuanBelanja",
+    method: "payTravelAdvanceShortfall",
+    invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
+    mutationFn: ({ id, file: uploadFile, ...data }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/dana-tambahan`, uploadFile, data),
+    successMessage: "Pencairan dana tambahan panjar berhasil dicatat.",
+    onSuccess: async () => {
+      await onCompleted?.();
+      onClose();
+    },
+    onError: (cause) => setError(apiErrorMessage(cause, "Pencairan dana tambahan gagal dicatat.")),
+  });
+
   const refundMutation = use_mutation<unknown, Error, { id: string; file: File; nomor_penerimaan: string; tanggal_diterima: string; dana_tujuan_id: string; catatan: string }>({
     tag: "keuanganPengajuanBelanja",
     method: "receiveTravelAdvanceRefund",
@@ -136,52 +159,71 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
     onError: (cause) => setError(apiErrorMessage(cause, "Penerimaan pengembalian panjar gagal dicatat.")),
   });
 
-  const pending = submitMutation.isPending || reviewMutation.isPending || refundMutation.isPending;
+  const pending = submitMutation.isPending || reviewMutation.isPending || topupMutation.isPending || refundMutation.isPending;
+
+  function assertPdf(label: string): File | null {
+    if (!file || file.size > 10 * 1024 * 1024 || !file.name.toLowerCase().endsWith(".pdf")) {
+      setError(`${label} wajib berupa PDF maksimal 10 MB.`);
+      return null;
+    }
+    return file;
+  }
 
   async function submit(approved?: boolean) {
     if (!request) return;
     setError("");
     try {
       if (mode === "accountability") {
-        if (!file || file.size > 10 * 1024 * 1024 || !file.name.toLowerCase().endsWith(".pdf")) {
-          setError("Dokumen pertanggungjawaban wajib berupa PDF maksimal 10 MB.");
-          return;
-        }
-        const nominal = Number(request.panjar?.nominal ?? 0);
+        const proof = assertPdf("Dokumen pertanggungjawaban");
+        if (!proof) return;
         const actual = Number(form.jumlah_realisasi);
-        if (!form.jumlah_realisasi.trim() || actual < 0 || actual > nominal) {
-          setError("Realisasi biaya wajib diisi dan tidak boleh melebihi jumlah panjar yang diterima.");
+        if (!form.jumlah_realisasi.trim() || actual < 0) {
+          setError("Realisasi biaya wajib diisi dan tidak boleh negatif.");
           return;
         }
-        const refund = Math.max(0, nominal - actual);
-        await submitMutation.mutateAsync({ id: String(request.id), jumlah_realisasi: actual, jumlah_pengembalian: refund, catatan: form.catatan.trim(), file });
+        await submitMutation.mutateAsync({ id: String(request.id), jumlah_realisasi: actual, catatan: form.catatan.trim(), file: proof });
       } else if (mode === "review") {
         if (approved === false && !form.catatan.trim()) {
           setError("Alasan penolakan wajib diisi.");
           return;
         }
         await reviewMutation.mutateAsync({ id: String(request.id), disetujui: approved === true, catatan: form.catatan.trim() });
+      } else if (mode === "topup") {
+        if (!funding.nomor_pembayaran.trim() || !funding.tanggal_bayar || !funding.dana_sumber_id) {
+          setError("Nomor, tanggal, dan kamar sumber dana wajib diisi.");
+          return;
+        }
+        const proof = assertPdf("Bukti pembayaran dana tambahan");
+        if (!proof) return;
+        await topupMutation.mutateAsync({
+          id: String(request.id),
+          nomor_pembayaran: funding.nomor_pembayaran.trim(),
+          tanggal_bayar: funding.tanggal_bayar,
+          dana_sumber_id: funding.dana_sumber_id,
+          catatan: funding.catatan.trim(),
+          file: proof,
+        });
       } else {
-        if (!form.nomor_penerimaan.trim() || !form.tanggal_diterima || !form.dana_tujuan_id || !file) {
-          setError("Nomor, tanggal, kamar tujuan, dan bukti penerimaan wajib diisi.");
+        if (!form.nomor_penerimaan.trim() || !form.tanggal_diterima || !form.dana_tujuan_id) {
+          setError("Nomor, tanggal, dan kamar tujuan wajib diisi.");
           return;
         }
-        if (!file.name.toLowerCase().endsWith(".pdf") || file.size > 10 * 1024 * 1024) {
-          setError("Bukti penerimaan wajib berupa PDF maksimal 10 MB.");
-          return;
-        }
-        await refundMutation.mutateAsync({ id: String(request.id), nomor_penerimaan: form.nomor_penerimaan.trim(), tanggal_diterima: form.tanggal_diterima, dana_tujuan_id: form.dana_tujuan_id, catatan: form.catatan.trim(), file });
+        const proof = assertPdf("Bukti penerimaan pengembalian");
+        if (!proof) return;
+        await refundMutation.mutateAsync({ id: String(request.id), nomor_penerimaan: form.nomor_penerimaan.trim(), tanggal_diterima: form.tanggal_diterima, dana_tujuan_id: form.dana_tujuan_id, catatan: form.catatan.trim(), file: proof });
       }
     } catch (cause) {
       setError(apiErrorMessage(cause, "Proses panjar gagal disimpan."));
     }
   }
 
+  const title = mode === "review" ? "Tinjau Pertanggungjawaban Panjar" : mode === "topup" ? "Cairkan Dana Tambahan Panjar" : mode === "refund" ? "Catat Pengembalian Panjar" : "Ajukan Pertanggungjawaban Panjar";
+
   return (
     <Modal
       open={Boolean(request)}
       onClose={onClose}
-      title={mode === "review" ? "Tinjau Pertanggungjawaban Panjar" : mode === "refund" ? "Catat Pengembalian Panjar" : "Ajukan Pertanggungjawaban Panjar"}
+      title={title}
       description={request ? `${String(request.nomor_pengajuan)} · ${String(request.nama_kegiatan)} · Panjar ${formatRupiah(request.panjar?.nominal)}` : undefined}
       size="lg"
       bodyClassName="space-y-4"
@@ -201,8 +243,8 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
             </>
           ) : (
             <Button disabled={pending} onClick={() => void submit()}>
-              {(submitMutation.isPending || refundMutation.isPending) && <LoaderCircle className="animate-spin" size={15} />}
-              {mode === "refund" ? "Simpan Penerimaan" : "Kirim ke KARWAS"}
+              {(submitMutation.isPending || topupMutation.isPending || refundMutation.isPending) && <LoaderCircle className="animate-spin" size={15} />}
+              {mode === "refund" ? "Simpan Penerimaan" : mode === "topup" ? "Catat Pencairan" : "Kirim ke KARWAS"}
             </Button>
           )}
         </>
@@ -211,18 +253,30 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
       {request && mode === "accountability" && (
         <>
           <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-            Jumlah panjar <strong className="tabular-nums">{formatRupiah(request.panjar?.nominal)}</strong>. Isi realisasi biaya; sisa yang dikembalikan dihitung otomatis.
+            Jumlah panjar yang sudah diterima <strong className="tabular-nums">{formatRupiah(panjarNominal)}</strong>. Isi total realisasi biaya perjalanan; sisa atau kekurangan dihitung otomatis.
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-1 text-sm">
-              Realisasi biaya *
+              Realisasi biaya perjalanan *
               <MoneyInput value={form.jumlah_realisasi} onValueChange={(value) => setForm((current) => ({ ...current, jumlah_realisasi: value }))} disabled={pending} />
             </label>
-            <label className="grid gap-1 text-sm">
-              Pengembalian (otomatis)
-              <span className="flex h-9 min-w-0 items-center rounded-md border border-input bg-muted px-3 text-sm tabular-nums text-muted-foreground">{formatRupiah(autoRefund)}</span>
-            </label>
+            {autoShortfall > 0 ? (
+              <label className="grid gap-1 text-sm">
+                Kekurangan biaya (otomatis)
+                <span className="flex h-9 min-w-0 items-center rounded-md border border-amber-200 bg-amber-50 px-3 text-sm font-medium tabular-nums text-amber-800">{formatRupiah(autoShortfall)}</span>
+              </label>
+            ) : (
+              <label className="grid gap-1 text-sm">
+                Pengembalian (otomatis)
+                <span className="flex h-9 min-w-0 items-center rounded-md border border-input bg-muted px-3 text-sm tabular-nums text-muted-foreground">{formatRupiah(autoRefund)}</span>
+              </label>
+            )}
           </div>
+          {autoShortfall > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs leading-relaxed text-amber-900">
+              Realisasi melebihi panjar. Setelah KARWAS menyetujui, kekurangan ini langsung dicairkan Bendahara Pengeluaran sebagai <strong>dana tambahan (reimburse)</strong>.
+            </div>
+          )}
           <DocumentUploadField label="Bukti pertanggungjawaban (PDF) *" accept=".pdf" value={file} onChange={setFile} disabled={pending} className="p-3 sm:p-3" />
           <label className="grid gap-1 text-sm">
             Catatan untuk KARWAS
@@ -237,7 +291,7 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
               Realisasi dilaporkan <strong>{formatRupiah(request.panjar?.jumlah_realisasi)}</strong>
             </p>
             <p>
-              Sisa untuk dikembalikan <strong>{formatRupiah(request.panjar?.jumlah_pengembalian)}</strong>
+              {panjarShortfall > 0 ? "Kekurangan biaya" : "Sisa untuk dikembalikan"} <strong>{formatRupiah(panjarShortfall > 0 ? panjarShortfall : request.panjar?.jumlah_pengembalian)}</strong>
             </p>
             <p className="sm:col-span-2">
               Bukti:{" "}
@@ -249,6 +303,7 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
                 "—"
               )}
             </p>
+            {panjarShortfall > 0 && <p className="text-xs text-amber-800 sm:col-span-2">Realisasi melebihi panjar. Setujui untuk melanjutkan ke pencairan dana tambahan oleh Bendahara Pengeluaran.</p>}
           </div>
           <label className="grid gap-1 text-sm">
             Catatan pemeriksa
@@ -258,6 +313,43 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
               value={form.catatan}
               onChange={(event) => setForm((current) => ({ ...current, catatan: event.target.value }))}
               placeholder="Wajib jika menolak"
+            />
+          </label>
+        </>
+      )}
+      {request && mode === "topup" && (
+        <>
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm text-amber-950">
+            KARWAS menyetujui realisasi <strong>{formatRupiah(request.panjar?.jumlah_realisasi)}</strong>. Kekurangan biaya yang perlu dicairkan sebesar <strong>{formatRupiah(panjarShortfall)}</strong>. Catat pencairannya melalui kamar dana
+            yang dipilih.
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-sm">
+              Nomor pembayaran *
+              <Input maxLength={100} value={funding.nomor_pembayaran} onChange={(event) => setFunding((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Tanggal bayar *
+              <Input type="date" value={funding.tanggal_bayar} onChange={(event) => setFunding((current) => ({ ...current, tanggal_bayar: event.target.value }))} />
+            </label>
+          </div>
+          <FilterCombobox
+            label="Kamar sumber dana"
+            value={funding.dana_sumber_id}
+            onValueChange={(value) => setFunding((current) => ({ ...current, dana_sumber_id: value }))}
+            options={wallets.map((wallet) => ({
+              value: String(wallet.id),
+              label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} · ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")} · tersedia ${formatRupiah(wallet.saldo_tersedia)}`,
+            }))}
+          />
+          <DocumentUploadField label="Bukti pembayaran dana tambahan (PDF) *" accept=".pdf" value={file} onChange={setFile} disabled={pending} className="p-3 sm:p-3" />
+          <label className="grid gap-1 text-sm">
+            Catatan
+            <textarea
+              className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              maxLength={500}
+              value={funding.catatan}
+              onChange={(event) => setFunding((current) => ({ ...current, catatan: event.target.value }))}
             />
           </label>
         </>
