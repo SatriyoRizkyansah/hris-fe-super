@@ -173,6 +173,8 @@ export interface UpdatePegawaiDto {
 export interface UnitKerjaItemDto {
   id: string;
   kode_unit: string;
+  /** Kode DPM BLU */
+  kode_dpm?: object | null;
   nama_unit: string;
   tipe_unit: string;
   parent_unit_id?: object | null;
@@ -191,6 +193,8 @@ export interface UnitKerjaItemDto {
 export interface UnitKerjaTreeNodeDto {
   id: string;
   kode_unit: string;
+  /** Kode DPM BLU */
+  kode_dpm?: object | null;
   nama_unit: string;
   tipe_unit: string;
   kepala_unit_nama?: object | null;

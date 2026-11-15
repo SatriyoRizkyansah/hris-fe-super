@@ -111,11 +111,19 @@ export default function UnitKerjaPage() {
           {list.isLoading ? (
             <p role="status">Memuat unit kerja…</p>
           ) : list.isError ? (
-            <EmptyData label="Data unit kerja belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void list.refetch()}>Coba lagi</Button>} />
+            <EmptyData
+              label="Data unit kerja belum dapat dimuat."
+              action={
+                <Button type="button" variant="outline" size="sm" onClick={() => void list.refetch()}>
+                  Coba lagi
+                </Button>
+              }
+            />
           ) : (
             <DataTable
               columns={[
                 { key: "kode_unit", header: "Kode", render: (row: any) => row.kode_unit },
+                { key: "kode_dpm", header: "Kode DPM", render: (row: any) => row.kode_dpm || "—" },
                 {
                   key: "nama_unit",
                   header: "Nama Unit",
