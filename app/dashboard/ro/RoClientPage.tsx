@@ -65,7 +65,7 @@ export default function RoClientPage() {
   const rows = envelopeRows<RoListItem>(list.data);
   const pagination = unwrapEnvelope<RoListItem[]>(list.data).pagination;
   const projectRows = envelopeRows<ProyekItemDto>(projects.data);
-  const projectOptions = projectRows.map((item) => ({ value: item.id, label: `${item.kode_proyek} — ${item.nama_proyek}` }));
+  const projectOptions = projectRows.map((item) => ({ value: item.id, label: `${item.no_kontrak} — ${item.nama_proyek}` }));
   const unitOptions = envelopeRows<Record<string, unknown>>(units.data).map((item) => ({ value: String(item.id), label: `${String(item.kode_unit ?? "")} — ${String(item.nama_unit ?? "")}` }));
   const projectGroups = useMemo(() => {
     const groups = new Map<string, RoListItem[]>();
@@ -218,7 +218,7 @@ export default function RoClientPage() {
                         <div>
                           <h2 className="font-semibold">{projectName}</h2>
                           <p className="text-xs text-muted-foreground">
-                            {projectInfo ? `${projectInfo.kode_proyek} · TA ${projectInfo.tahun_fiscal}` : "Rencana Operasi"} · {groupRows.length} RO
+                            {projectInfo ? `${projectInfo.no_kontrak} · TA ${projectInfo.tahun_fiscal}` : "Rencana Operasi"} · {groupRows.length} RO
                           </p>
                         </div>
                       </header>

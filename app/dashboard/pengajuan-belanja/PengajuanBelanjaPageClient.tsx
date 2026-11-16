@@ -1,4 +1,4 @@
-ï»¿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, ClipboardList, Eye, LoaderCircle, Plus, ShieldCheck, WalletCards } from "lucide-react";
@@ -27,7 +27,7 @@ import type { CreatePengajuanBelanjaDto } from "@/lib/api/generated/api-generate
 
 type Row = Record<string, any>;
 type Form = { ro_id: string; nama_kegiatan: string; no_kuitansi: string; tanggal: string; jumlah: string; keterangan: string; jenis: "BELANJA_LANGSUNG" | "PANJAR_PERJALANAN" };
-type ProjectRow = { id: string; kode_proyek?: string; nama_proyek?: string; tahun_fiscal?: number };
+type ProjectRow = { id: string; no_kontrak?: string; nama_proyek?: string; tahun_fiscal?: number };
 type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string; dana_sumber_id?: string };
 type ReviewPengajuanBelanjaDto = { disetujui: boolean; catatan?: string };
 type BayarPengajuanBelanjaDto = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string; dana_sumber_id: string };
@@ -58,9 +58,9 @@ function roAccountingReference(ro: Row) {
   return ro.kode_mak ? `MAK ${String(ro.kode_mak)}` : ro.nomor_job ? `Job ${String(ro.nomor_job)}` : null;
 }
 function formatDateTime(value: unknown) {
-  if (!value) return "â€”";
+  if (!value) return "—";
   const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "â€”";
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 const statusLabels: Record<string, string> = {
@@ -260,15 +260,15 @@ export default function PengajuanBelanjaPageClient() {
         {
           title: "Pengajuan dikirim",
           state: detailSubmitted ? "done" : "waiting",
-          description: detailSubmitted ? `${detailRequest.pembuat?.nama ?? "Pemohon"} Â· ${formatDateTime(detailRequest.diajukan_pada ?? detailRequest.created_at)}` : "Pengajuan belum dikirim.",
+          description: detailSubmitted ? `${detailRequest.pembuat?.nama ?? "Pemohon"} · ${formatDateTime(detailRequest.diajukan_pada ?? detailRequest.created_at)}` : "Pengajuan belum dikirim.",
         },
         {
           title: "Pemeriksaan KARWAS",
           state: detailRejected ? "rejected" : detailReviewed ? "done" : detailCanceled ? "skipped" : detailSubmitted ? "active" : "waiting",
           description: detailRejected
-            ? `Ditolak ${detailRequest.pemeriksa?.nama ? `oleh ${detailRequest.pemeriksa.nama} ` : ""}Â· ${formatDateTime(detailRequest.diperiksa_pada)}${detailRequest.catatan_pemeriksa ? ` Â· ${detailRequest.catatan_pemeriksa}` : ""}`
+            ? `Ditolak ${detailRequest.pemeriksa?.nama ? `oleh ${detailRequest.pemeriksa.nama} ` : ""}· ${formatDateTime(detailRequest.diperiksa_pada)}${detailRequest.catatan_pemeriksa ? ` · ${detailRequest.catatan_pemeriksa}` : ""}`
             : detailReviewed
-              ? `Disetujui ${detailRequest.pemeriksa?.nama ? `oleh ${detailRequest.pemeriksa.nama} ` : ""}Â· reservasi pagu ${formatRupiah(detailRequest.reservasi?.nominal ?? detailRequest.jumlah)} Â· ${formatDateTime(detailRequest.diperiksa_pada)}`
+              ? `Disetujui ${detailRequest.pemeriksa?.nama ? `oleh ${detailRequest.pemeriksa.nama} ` : ""}· reservasi pagu ${formatRupiah(detailRequest.reservasi?.nominal ?? detailRequest.jumlah)} · ${formatDateTime(detailRequest.diperiksa_pada)}`
               : detailCanceled
                 ? "Proses dihentikan karena pengajuan dibatalkan."
                 : detailSubmitted
@@ -288,21 +288,21 @@ export default function PengajuanBelanjaPageClient() {
                     ? "active"
                     : "waiting",
           description: detailRequest.validator_keuangan?.nama
-            ? `Diproses oleh ${detailRequest.validator_keuangan.nama} Â· ${formatDateTime(detailRequest.divalidasi_keuangan_pada)}${detailRequest.catatan_keuangan ? ` Â· ${detailRequest.catatan_keuangan}` : ""}`
+            ? `Diproses oleh ${detailRequest.validator_keuangan.nama} · ${formatDateTime(detailRequest.divalidasi_keuangan_pada)}${detailRequest.catatan_keuangan ? ` · ${detailRequest.catatan_keuangan}` : ""}`
             : "Menunggu validasi Keuangan.",
         },
         {
           title: "Persetujuan Kabag",
           state: detailStatus === "DITOLAK_KABAG" ? "rejected" : ["DISETUJUI_KABAG", "DIBAYAR"].includes(detailStatus) ? "done" : detailRejected || detailCanceled ? "skipped" : detailStatus === "DISETUJUI_KEUANGAN" ? "active" : "waiting",
           description: detailRequest.validator_kabag?.nama
-            ? `Diproses oleh ${detailRequest.validator_kabag.nama} Â· ${formatDateTime(detailRequest.divalidasi_kabag_pada)}${detailRequest.catatan_kabag ? ` Â· ${detailRequest.catatan_kabag}` : ""}`
+            ? `Diproses oleh ${detailRequest.validator_kabag.nama} · ${formatDateTime(detailRequest.divalidasi_kabag_pada)}${detailRequest.catatan_kabag ? ` · ${detailRequest.catatan_kabag}` : ""}`
             : "Menunggu persetujuan Kabag.",
         },
         {
           title: "Pembayaran Bendahara Pengeluaran",
           state: detailPaid ? "done" : detailRejected || detailCanceled ? "skipped" : detailStatus === "DISETUJUI_KABAG" ? "active" : "waiting",
           description: detailPaid
-            ? `${detailRequest.pembayaran?.nomor_pembayaran ?? "Pembayaran tercatat"} Â· ${formatRupiah(detailRequest.pembayaran?.nominal ?? detailRequest.jumlah)} Â· ${formatDateTime(detailRequest.pembayaran?.tanggal_bayar)}${detailRequest.pembayaran?.pembayar?.nama ? ` Â· ${detailRequest.pembayaran.pembayar.nama}` : ""}`
+            ? `${detailRequest.pembayaran?.nomor_pembayaran ?? "Pembayaran tercatat"} · ${formatRupiah(detailRequest.pembayaran?.nominal ?? detailRequest.jumlah)} · ${formatDateTime(detailRequest.pembayaran?.tanggal_bayar)}${detailRequest.pembayaran?.pembayar?.nama ? ` · ${detailRequest.pembayaran.pembayar.nama}` : ""}`
             : detailRejected
               ? "Tidak dilanjutkan karena pengajuan ditolak."
               : detailCanceled
@@ -323,15 +323,15 @@ export default function PengajuanBelanjaPageClient() {
         {
           title: "Pengajuan dikirim",
           state: retailDetailStatus ? "done" : "waiting",
-          description: retailDetailStatus ? `${retailDetailRequest.pembuat?.nama ?? "Pemohon"} Â· ${formatDateTime(retailDetailRequest.diajukan_pada ?? retailDetailRequest.created_at)}` : "Pengajuan belum dikirim.",
+          description: retailDetailStatus ? `${retailDetailRequest.pembuat?.nama ?? "Pemohon"} · ${formatDateTime(retailDetailRequest.diajukan_pada ?? retailDetailRequest.created_at)}` : "Pengajuan belum dikirim.",
         },
         {
           title: "Pemeriksaan KARWAS",
           state: retailDetailRejected ? "rejected" : retailDetailApproved ? "done" : retailDetailCanceled ? "skipped" : "active",
           description: retailDetailRejected
-            ? `Ditolak${retailDetailRequest.pemeriksa?.nama ? ` oleh ${retailDetailRequest.pemeriksa.nama}` : ""} Â· ${formatDateTime(retailDetailRequest.diperiksa_pada)}`
+            ? `Ditolak${retailDetailRequest.pemeriksa?.nama ? ` oleh ${retailDetailRequest.pemeriksa.nama}` : ""} · ${formatDateTime(retailDetailRequest.diperiksa_pada)}`
             : retailDetailApproved
-              ? `Disetujui${retailDetailRequest.pemeriksa?.nama ? ` oleh ${retailDetailRequest.pemeriksa.nama}` : ""} Â· ${formatDateTime(retailDetailRequest.diperiksa_pada)}`
+              ? `Disetujui${retailDetailRequest.pemeriksa?.nama ? ` oleh ${retailDetailRequest.pemeriksa.nama}` : ""} · ${formatDateTime(retailDetailRequest.diperiksa_pada)}`
               : retailDetailCanceled
                 ? "Tidak dilanjutkan karena pengajuan dibatalkan."
                 : "Menunggu pemeriksaan KARWAS dan reservasi saldo OPS_KANTOR.",
@@ -349,7 +349,7 @@ export default function PengajuanBelanjaPageClient() {
                     ? "active"
                     : "waiting",
           description: retailDetailRequest.validator_keuangan?.nama
-            ? `Diproses oleh ${retailDetailRequest.validator_keuangan.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_keuangan_pada)}${retailDetailRequest.catatan_keuangan ? ` Â· ${retailDetailRequest.catatan_keuangan}` : ""}`
+            ? `Diproses oleh ${retailDetailRequest.validator_keuangan.nama} · ${formatDateTime(retailDetailRequest.divalidasi_keuangan_pada)}${retailDetailRequest.catatan_keuangan ? ` · ${retailDetailRequest.catatan_keuangan}` : ""}`
             : "Menunggu validasi Keuangan.",
         },
         {
@@ -365,14 +365,14 @@ export default function PengajuanBelanjaPageClient() {
                     ? "active"
                     : "waiting",
           description: retailDetailRequest.validator_kabag?.nama
-            ? `Diproses oleh ${retailDetailRequest.validator_kabag.nama} Â· ${formatDateTime(retailDetailRequest.divalidasi_kabag_pada)}${retailDetailRequest.catatan_kabag ? ` Â· ${retailDetailRequest.catatan_kabag}` : ""}`
+            ? `Diproses oleh ${retailDetailRequest.validator_kabag.nama} · ${formatDateTime(retailDetailRequest.divalidasi_kabag_pada)}${retailDetailRequest.catatan_kabag ? ` · ${retailDetailRequest.catatan_kabag}` : ""}`
             : "Menunggu persetujuan Kabag.",
         },
         {
           title: "Pembayaran Bendahara Pengeluaran",
           state: retailDetailPaid ? "done" : retailDetailRejected || retailDetailCanceled ? "skipped" : retailDetailStatus === "DISETUJUI_KABAG" ? "active" : "waiting",
           description: retailDetailPaid
-            ? `${retailDetailRequest.nomor_pembayaran ?? "Pembayaran tercatat"} Â· ${formatRupiah(retailDetailRequest.jumlah)} Â· ${formatDateTime(retailDetailRequest.tanggal_bayar)}${retailDetailRequest.pembayar?.nama ? ` Â· ${retailDetailRequest.pembayar.nama}` : ""}`
+            ? `${retailDetailRequest.nomor_pembayaran ?? "Pembayaran tercatat"} · ${formatRupiah(retailDetailRequest.jumlah)} · ${formatDateTime(retailDetailRequest.tanggal_bayar)}${retailDetailRequest.pembayar?.nama ? ` · ${retailDetailRequest.pembayar.nama}` : ""}`
             : retailDetailRejected
               ? "Tidak dilanjutkan karena pengajuan ditolak."
               : retailDetailCanceled
@@ -423,8 +423,8 @@ export default function PengajuanBelanjaPageClient() {
   const filterUnits = Array.isArray(filterOptionData.unit_koordinator_list) ? (filterOptionData.unit_koordinator_list as Row[]) : [];
   const filterProjects = Array.isArray(filterOptionData.proyek_list) ? (filterOptionData.proyek_list as Row[]) : [];
   const filterRetailUnits = Array.isArray(filterOptionData.unit_pelaksana_list) ? (filterOptionData.unit_pelaksana_list as Row[]) : [];
-  const coordinatorOptions = useMemo(() => filterUnits.map((unit) => ({ value: String(unit.id), label: `${String(unit.kode_unit ?? "")} Â· ${String(unit.nama_unit ?? "Koordinator")}` })), [filterUnits]);
-  const retailUnitOptions = useMemo(() => filterRetailUnits.map((unit) => ({ value: String(unit.id), label: `${String(unit.kode_unit ?? "")} Â· ${String(unit.nama_unit ?? "Unit pelaksana")}` })), [filterRetailUnits]);
+  const coordinatorOptions = useMemo(() => filterUnits.map((unit) => ({ value: String(unit.id), label: `${String(unit.kode_unit ?? "")} · ${String(unit.nama_unit ?? "Koordinator")}` })), [filterUnits]);
+  const retailUnitOptions = useMemo(() => filterRetailUnits.map((unit) => ({ value: String(unit.id), label: `${String(unit.kode_unit ?? "")} · ${String(unit.nama_unit ?? "Unit pelaksana")}` })), [filterRetailUnits]);
   const filterProjectOptions = useMemo(() => {
     const coordinatorsByProject = new Map<string, Set<string>>();
     for (const ro of filterRos) {
@@ -432,14 +432,14 @@ export default function PengajuanBelanjaPageClient() {
       const unitName = ro.unit_koordinator?.nama_unit ? String(ro.unit_koordinator.nama_unit) : "";
       if (!projectId || !unitName) continue;
       const coordinators = coordinatorsByProject.get(projectId) ?? new Set<string>();
-      coordinators.add(`Koor Â· ${unitName}`);
+      coordinators.add(`Koor · ${unitName}`);
       coordinatorsByProject.set(projectId, coordinators);
     }
     return filterProjects.map((project) => {
       const badges = [...(coordinatorsByProject.get(String(project.id)) ?? [])];
       return {
         value: String(project.id),
-        label: `${String(project.kode_proyek ?? "")} Â· ${String(project.nama_proyek ?? "Proyek")}`,
+        label: `${String(project.no_kontrak ?? "")} · ${String(project.nama_proyek ?? "Proyek")}`,
         badges: badges.length ? badges : ["Belum ada RO"],
       };
     });
@@ -453,7 +453,7 @@ export default function PengajuanBelanjaPageClient() {
             (coordinatorFilter === "__all" || String(ro.unit_koordinator?.id) === coordinatorFilter) &&
             (fiscalYearFilter === "__all" || String(ro.tahun_fiscal) === fiscalYearFilter),
         )
-        .map((ro) => ({ value: String(ro.id), label: `${String(ro.kode_ro ?? "")} Â· ${String(ro.nama_ro ?? "RO")}` })),
+        .map((ro) => ({ value: String(ro.id), label: `${String(ro.kode_ro ?? "")} · ${String(ro.nama_ro ?? "RO")}` })),
     [filterRos, projectFilter, coordinatorFilter, fiscalYearFilter],
   );
   const fiscalYearOptions = useMemo(() => {
@@ -504,10 +504,10 @@ export default function PengajuanBelanjaPageClient() {
     },
   });
   const ros = listRows(rosQuery.data);
-  const projectOptions = projects.map((project) => ({ value: String(project.id), label: `${project.kode_proyek ?? ""} Â· ${project.nama_proyek ?? "Proyek"} Â· TA ${project.tahun_fiscal ?? "â€”"}` }));
+  const projectOptions = projects.map((project) => ({ value: String(project.id), label: `${project.no_kontrak ?? ""} · ${project.nama_proyek ?? "Proyek"} · TA ${project.tahun_fiscal ?? "—"}` }));
   const roOptions = ros.map((ro) => ({
     value: String(ro.id),
-    label: [roDisplayName(ro), roAccountingReference(ro), `sisa ${formatRupiah(ro.sisa_saldo ?? ro.total_plafon)}`].filter(Boolean).join(" Â· "),
+    label: [roDisplayName(ro), roAccountingReference(ro), `sisa ${formatRupiah(ro.sisa_saldo ?? ro.total_plafon)}`].filter(Boolean).join(" · "),
   }));
   const selectedProject = projects.find((project) => String(project.id) === selectedProjectId);
   const selectedRo = ros.find((ro) => String(ro.id) === form.ro_id);
@@ -920,7 +920,7 @@ export default function PengajuanBelanjaPageClient() {
         <CardContent className="pt-4">
           {listQuery.isLoading && (
             <p role="status" className="py-8 text-center text-sm text-muted-foreground">
-              Memuat pengajuan belanjaâ€¦
+              Memuat pengajuan belanja…
             </p>
           )}
           {listQuery.isError && (
@@ -951,7 +951,7 @@ export default function PengajuanBelanjaPageClient() {
                 rowKey={(row, index) => `${String(row.jenis_sumber ?? "PROYEK")}:${String(row.id ?? index)}`}
                 remoteSearch
                 searchValue={search}
-                searchPlaceholder="Cari kegiatan / kuitansiâ€¦"
+                searchPlaceholder="Cari kegiatan / kuitansi…"
                 onSearchChange={setSearch}
                 filters={[
                   {
@@ -998,7 +998,7 @@ export default function PengajuanBelanjaPageClient() {
                     className: "min-w-[11rem]",
                     render: (row) => (
                       <div>
-                        <p className="font-medium">{row.nomor_pengajuan ?? "â€”"}</p>
+                        <p className="font-medium">{row.nomor_pengajuan ?? "—"}</p>
                         <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.jenis_sumber === "LAYANAN_RETAIL" ? "bg-violet-50 text-violet-700" : "bg-sky-50 text-sky-700"}`}>
                           {row.jenis_sumber === "LAYANAN_RETAIL" ? "Proyek Retail" : "Proyek"}
                         </span>
@@ -1011,7 +1011,7 @@ export default function PengajuanBelanjaPageClient() {
                     className: "min-w-[13rem]",
                     render: (row) => (
                       <div>
-                        <p className="font-medium">{row.nama_kegiatan ?? "â€”"}</p>
+                        <p className="font-medium">{row.nama_kegiatan ?? "—"}</p>
                         {row.keterangan && <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground">{row.keterangan}</p>}
                       </div>
                     ),
@@ -1024,23 +1024,23 @@ export default function PengajuanBelanjaPageClient() {
                       row.jenis_sumber === "LAYANAN_RETAIL" ? (
                         <div>
                           <span className="font-medium">
-                            {row.retail_job?.nomor_job ?? "Order Retail"} Â· {row.retail_job?.nama_pelanggan ?? "Klien belum tercatat"}
+                            {row.retail_job?.nomor_job ?? "Order Retail"} · {row.retail_job?.nama_pelanggan ?? "Klien belum tercatat"}
                           </span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {row.retail_job?.unit_pelaksana?.nama_unit ?? "Unit belum tercatat"} Â· {row.retail_job?.nomor_lhu ? `LHU ${row.retail_job.nomor_lhu}` : "LHU belum dicatat"}
+                            {row.retail_job?.unit_pelaksana?.nama_unit ?? "Unit belum tercatat"} · {row.retail_job?.nomor_lhu ? `LHU ${row.retail_job.nomor_lhu}` : "LHU belum dicatat"}
                           </span>
                         </div>
                       ) : row.ro ? (
                         <div>
                           <span>
-                            {row.ro.proyek?.kode_proyek ?? ""} Â· {row.ro.proyek?.nama_proyek ?? "Proyek"}
+                            {row.ro.proyek?.no_kontrak ?? ""} · {row.ro.proyek?.nama_proyek ?? "Proyek"}
                           </span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {row.ro.kode_ro} Â· {row.ro.nama_ro} Â· {row.ro.unit_koordinator?.nama_unit ?? "â€”"}
+                            {row.ro.kode_ro} · {row.ro.nama_ro} · {row.ro.unit_koordinator?.nama_unit ?? "—"}
                           </span>
                         </div>
                       ) : (
-                        "â€”"
+                        "—"
                       ),
                   },
                   {
@@ -1051,21 +1051,21 @@ export default function PengajuanBelanjaPageClient() {
                       row.jenis_sumber === "LAYANAN_RETAIL" ? (
                         <div>
                           <p className="font-medium">{row.dana?.kategori_kamar ?? "OPS_KANTOR"}</p>
-                          <p className="text-xs text-muted-foreground">TA {row.dana?.tahun_fiscal ?? row.retail_job?.tahun_fiscal ?? "â€”"}</p>
+                          <p className="text-xs text-muted-foreground">TA {row.dana?.tahun_fiscal ?? row.retail_job?.tahun_fiscal ?? "—"}</p>
                         </div>
                       ) : (
                         <div>
                           <p className="font-medium">Kamar RO</p>
                           <p className="text-xs text-muted-foreground">
                             {row.ro?.mak?.kode_mak ?? "MAK belum terhubung"}
-                            {row.pembayaran?.talangan ? " Â· talangan OPS_KANTOR" : ""}
+                            {row.pembayaran?.talangan ? " · talangan OPS_KANTOR" : ""}
                           </p>
                         </div>
                       ),
                   },
-                  { key: "tanggal", header: "Tanggal", render: (row) => (row.tanggal ? new Date(row.tanggal).toLocaleDateString("id-ID") : "â€”") },
+                  { key: "tanggal", header: "Tanggal", render: (row) => (row.tanggal ? new Date(row.tanggal).toLocaleDateString("id-ID") : "—") },
                   { key: "jumlah", header: "Jumlah", render: (row) => formatRupiah(row.jumlah) },
-                  { key: "status", header: "Status", render: (row) => <StatusBadge status={statusTone(row.status)}>{statusLabels[row.status] ?? row.status ?? "â€”"}</StatusBadge> },
+                  { key: "status", header: "Status", render: (row) => <StatusBadge status={statusTone(row.status)}>{statusLabels[row.status] ?? row.status ?? "—"}</StatusBadge> },
                   ...(canCreate || canReview || canPay
                     ? [
                         {
@@ -1170,7 +1170,7 @@ export default function PengajuanBelanjaPageClient() {
           setRetailPaymentError("");
         }}
         title="Catat Pembayaran Belanja Retail"
-        description={retailPaying ? `${String(retailPaying.nomor_pengajuan ?? "")} Â· ${String(retailPaying.nama_kegiatan ?? "")} Â· ${formatRupiah(retailPaying.jumlah)}` : undefined}
+        description={retailPaying ? `${String(retailPaying.nomor_pengajuan ?? "")} · ${String(retailPaying.nama_kegiatan ?? "")} · ${formatRupiah(retailPaying.jumlah)}` : undefined}
         size="md"
         bodyClassName="space-y-4"
         footer={
@@ -1188,7 +1188,7 @@ export default function PengajuanBelanjaPageClient() {
           <>
             <div className="rounded-lg border bg-muted/30 p-3 text-sm">
               <p className="font-medium">
-                {String(retailPaying.retail_job?.nomor_job ?? "Order retail")} Â· {String(retailPaying.retail_job?.nama_pelanggan ?? "Klien")}
+                {String(retailPaying.retail_job?.nomor_job ?? "Order retail")} · {String(retailPaying.retail_job?.nama_pelanggan ?? "Klien")}
               </p>
               <p className="mt-1 text-muted-foreground">Pembayaran dicatat sebagai pengeluaran OPS_KANTOR.</p>
               <p className="mt-2 font-semibold tabular-nums">Nominal {formatRupiah(retailPaying.jumlah)}</p>
@@ -1280,11 +1280,11 @@ export default function PengajuanBelanjaPageClient() {
                     <p className="text-xs font-medium text-muted-foreground">Proyek terpilih</p>
                     <p className="mt-0.5 font-semibold">{selectedProject.nama_proyek}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {selectedProject.kode_proyek} Â· Tahun fiskal {selectedProject.tahun_fiscal ?? "â€”"}
+                      {selectedProject.no_kontrak} · Tahun fiskal {selectedProject.tahun_fiscal ?? "—"}
                     </p>
                   </div>
                 )}
-                {projectsQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar proyekâ€¦</p>}
+                {projectsQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar proyek…</p>}
                 {projectsQuery.isError && (
                   <EmptyData
                     className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden"
@@ -1312,10 +1312,10 @@ export default function PengajuanBelanjaPageClient() {
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
                       <p className="text-xs font-medium text-emerald-800">RO terpilih</p>
                       <p className="mt-0.5 font-semibold text-emerald-950">{String(selectedRo.nama_ro ?? "RO")}</p>
-                      <p className="mt-0.5 text-xs text-emerald-800">{[roAccountingReference(selectedRo), `Sisa saldo ${formatRupiah(selectedRo.sisa_saldo ?? selectedRo.total_plafon)}`].filter(Boolean).join(" Â· ")}</p>
+                      <p className="mt-0.5 text-xs text-emerald-800">{[roAccountingReference(selectedRo), `Sisa saldo ${formatRupiah(selectedRo.sisa_saldo ?? selectedRo.total_plafon)}`].filter(Boolean).join(" · ")}</p>
                     </div>
                   )}
-                  {rosQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar ROâ€¦</p>}
+                  {rosQuery.isLoading && <p className="text-xs text-muted-foreground">Memuat daftar RO…</p>}
                   {rosQuery.isError && (
                     <EmptyData
                       className="min-h-0 border-0 p-3 [&_.empty-pyramid]:hidden"
@@ -1383,7 +1383,7 @@ export default function PengajuanBelanjaPageClient() {
           setError("");
         }}
         title="Bayar Pengajuan"
-        description={paying ? `${String(paying.nama_kegiatan)} Â· ${formatRupiah(paying.jumlah)}` : "Pembayaran pengajuan belanja."}
+        description={paying ? `${String(paying.nama_kegiatan)} · ${formatRupiah(paying.jumlah)}` : "Pembayaran pengajuan belanja."}
         size="lg"
         bodyClassName="space-y-4"
         footer={
@@ -1429,10 +1429,10 @@ export default function PengajuanBelanjaPageClient() {
             onValueChange={(value) => setPayment((current) => ({ ...current, dana_sumber_id: value }))}
             options={paymentWallets.map((wallet) => ({
               value: String(wallet.id),
-              label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} Â· ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")} Â· tersedia ${formatRupiah(wallet.saldo_tersedia)}`,
+              label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} · ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")} · tersedia ${formatRupiah(wallet.saldo_tersedia)}`,
             }))}
           />
-          {paymentWalletsLoading && <p className="text-xs text-muted-foreground">Memuat kamar danaâ€¦</p>}
+          {paymentWalletsLoading && <p className="text-xs text-muted-foreground">Memuat kamar dana…</p>}
           {!paymentWalletsLoading && paymentWallets.length === 0 && <p className="text-xs text-amber-800">Belum ada kamar dana untuk tahun fiskal proyek ini.</p>}
         </section>
         <div>
@@ -1457,7 +1457,7 @@ export default function PengajuanBelanjaPageClient() {
           setPanjarError("");
         }}
         title={panjarMode === "review" ? "Tinjau Pertanggungjawaban Panjar" : panjarMode === "topup" ? "Cairkan Dana Tambahan Panjar" : panjarMode === "refund" ? "Catat Pengembalian Panjar" : "Ajukan Pertanggungjawaban Panjar"}
-        description={panjarAction ? `${String(panjarAction.nomor_pengajuan)} Â· ${String(panjarAction.nama_kegiatan)} Â· Panjar ${formatRupiah(panjarAction.panjar?.nominal)}` : undefined}
+        description={panjarAction ? `${String(panjarAction.nomor_pengajuan)} · ${String(panjarAction.nama_kegiatan)} · Panjar ${formatRupiah(panjarAction.panjar?.nominal)}` : undefined}
         size="lg"
         bodyClassName="space-y-4"
         footer={
@@ -1544,7 +1544,7 @@ export default function PengajuanBelanjaPageClient() {
                     Buka dokumen
                   </a>
                 ) : (
-                  "â€”"
+                  "—"
                 )}
               </p>
             </div>
@@ -1580,7 +1580,7 @@ export default function PengajuanBelanjaPageClient() {
               onValueChange={(value) => setPanjarFunding((form) => ({ ...form, dana_sumber_id: value }))}
               options={refundWallets.map((wallet) => ({
                 value: String(wallet.id),
-                label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} Â· ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")} Â· tersedia ${formatRupiah(wallet.saldo_tersedia)}`,
+                label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} · ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")} · tersedia ${formatRupiah(wallet.saldo_tersedia)}`,
               }))}
             />
             <DocumentUploadField label="Bukti pembayaran dana tambahan (PDF) *" accept=".pdf" value={panjarFile} onChange={setPanjarFile} disabled={panjarTopupMutation.isPending} className="p-3 sm:p-3" />
@@ -1612,7 +1612,7 @@ export default function PengajuanBelanjaPageClient() {
               label="Kamar tujuan penerimaan"
               value={panjarForm.dana_tujuan_id}
               onValueChange={(value) => setPanjarForm((form) => ({ ...form, dana_tujuan_id: value }))}
-              options={refundWallets.map((wallet) => ({ value: String(wallet.id), label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} Â· ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")}` }))}
+              options={refundWallets.map((wallet) => ({ value: String(wallet.id), label: `${String(wallet.kategori_kamar ?? "Kamar").replaceAll("_", " ")} · ${String(wallet.unit_koordinator?.nama_unit ?? "Unit")}` }))}
             />
             <DocumentUploadField label="Bukti penerimaan pengembalian (PDF) *" accept=".pdf" value={panjarFile} onChange={setPanjarFile} disabled={panjarRefundMutation.isPending} className="p-3 sm:p-3" />
             <label className="grid gap-1 text-sm">

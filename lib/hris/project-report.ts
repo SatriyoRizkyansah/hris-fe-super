@@ -10,7 +10,7 @@ export type ProjectReportSource = {
   id: string;
   nama_proyek?: unknown;
   nama_client?: unknown;
-  kode_proyek?: unknown;
+  no_kontrak?: unknown;
   no_kontrak?: unknown;
   tahun_fiscal?: unknown;
   nilai_kontrak?: unknown;
@@ -106,7 +106,7 @@ export function buildProjectReportHtml(input: { project: ProjectReportSource; ro
   const margin = amount(project.total_margin);
   const profitPercent = contract > 0 ? (margin / contract) * 100 : 0;
   const generatedDate = date(generatedAt);
-  const contractNumber = valueText(project.no_kontrak, unique(ros.map((ro) => ro.no_kontrak)).join(" · ") || valueText(project.kode_proyek));
+  const contractNumber = valueText(project.no_kontrak, unique(ros.map((ro) => ro.no_kontrak)).join(" · ") || valueText(project.no_kontrak));
   const jobs = unique(ros.map((ro) => ro.nomor_job));
   const jobCounts = new Map<string, number>();
   for (const job of jobs) jobCounts.set(job, ros.filter((ro) => valueText(ro.nomor_job, "") === job).length);

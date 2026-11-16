@@ -168,7 +168,7 @@ export function PurchaseRequestReviewModal({
 
           {reviewProject.id && (
             <ModalSection
-              title={`Gambaran proyek · ${String(reviewProject.kode_proyek ?? "")}`}
+              title={`Gambaran proyek · ${String(reviewProject.no_kontrak ?? "")}`}
               description={`${String(reviewProject.nama_proyek ?? "Proyek")}${reviewProject.nama_client ? ` · ${String(reviewProject.nama_client)}` : ""} · TA ${String(reviewProject.tahun_fiscal ?? "—")} · Status ${String(reviewProject.status_proyek ?? "—").replaceAll("_", " ")}`}
             >
               <dl className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-y-0 sm:gap-x-8">

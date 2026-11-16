@@ -85,7 +85,7 @@ export default function DanaOperasionalDetailClientPage({ id }: { id: string }) 
         header: "Referensi Proyek",
         render: (row: Row) => {
           const project = row.proyek as Row | null;
-          return project ? `${text(project.kode_proyek)} · ${text(project.nama_proyek)}` : "—";
+          return project ? `${text(project.no_kontrak)} · ${text(project.nama_proyek)}` : "—";
         },
       },
       { key: "debit", header: "Debit", className: "text-right", render: (row: Row) => formatRupiah(row.debit) },

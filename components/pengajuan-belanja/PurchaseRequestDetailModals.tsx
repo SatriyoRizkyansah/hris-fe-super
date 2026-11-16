@@ -111,7 +111,7 @@ export function PurchaseRequestDetailModals(props: Props) {
                   ["Tanggal pengajuan", formatDateTime(detailRequest.diajukan_pada ?? detailRequest.created_at)],
                   ["Nama kegiatan", detailRequest.nama_kegiatan ?? "—"],
                   ["Nominal", formatRupiah(detailRequest.jumlah)],
-                  ["Proyek", `${detailRequest.ro?.proyek?.kode_proyek ?? "—"} · ${detailRequest.ro?.proyek?.nama_proyek ?? "—"}`],
+                  ["Proyek", `${detailRequest.ro?.proyek?.no_kontrak ?? "—"} · ${detailRequest.ro?.proyek?.nama_proyek ?? "—"}`],
                   ["RO", `${detailRequest.ro?.kode_ro ?? "—"} · ${detailRequest.ro?.nama_ro ?? "—"}`],
                   ["Koordinator", detailRequest.ro?.unit_koordinator?.nama_unit ?? "—"],
                   ["MAK", `${detailRequest.ro?.mak?.kode_mak ?? "—"} · ${detailRequest.ro?.mak?.nama_mak ?? "—"}`],

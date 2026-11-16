@@ -29,7 +29,7 @@ import type { CreatePengajuanBelanjaDto } from "@/lib/api/generated/api-generate
 
 type Row = Record<string, any>;
 type Form = { ro_id: string; nama_kegiatan: string; no_kuitansi: string; tanggal: string; jumlah: string; keterangan: string };
-type ProjectRow = { id: string; kode_proyek?: string; nama_proyek?: string; tahun_fiscal?: number };
+type ProjectRow = { id: string; no_kontrak?: string; nama_proyek?: string; tahun_fiscal?: number };
 type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string; dana_sumber_id?: string };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -372,7 +372,7 @@ export default function PanjarPageClient() {
   const filterUnits = Array.isArray(filterOptionData.unit_koordinator_list) ? (filterOptionData.unit_koordinator_list as Row[]) : [];
   const filterProjects = Array.isArray(filterOptionData.proyek_list) ? (filterOptionData.proyek_list as Row[]) : [];
   const coordinatorOptions = useMemo(() => filterUnits.map((unit) => ({ value: String(unit.id), label: `${String(unit.kode_unit ?? "")} · ${String(unit.nama_unit ?? "Koordinator")}` })), [filterUnits]);
-  const projectOptions = useMemo(() => filterProjects.map((project) => ({ value: String(project.id), label: `${String(project.kode_proyek ?? "")} · ${String(project.nama_proyek ?? "Proyek")}` })), [filterProjects]);
+  const projectOptions = useMemo(() => filterProjects.map((project) => ({ value: String(project.id), label: `${String(project.no_kontrak ?? "")} · ${String(project.nama_proyek ?? "Proyek")}` })), [filterProjects]);
   const fiscalYearOptions = useMemo(() => {
     const years = Array.isArray(filterOptionData.tahun_fiscal_list) ? filterOptionData.tahun_fiscal_list.map(Number) : filterRos.map((ro) => Number(ro.tahun_fiscal));
     return Array.from(new Set(years.filter((year) => year > 0)))
@@ -402,7 +402,7 @@ export default function PanjarPageClient() {
     },
   });
   const ros = listRows(rosQuery.data);
-  const projectChoices = projects.map((project) => ({ value: String(project.id), label: `${project.kode_proyek ?? ""} · ${project.nama_proyek ?? "Proyek"} · TA ${project.tahun_fiscal ?? "—"}` }));
+  const projectChoices = projects.map((project) => ({ value: String(project.id), label: `${project.no_kontrak ?? ""} · ${project.nama_proyek ?? "Proyek"} · TA ${project.tahun_fiscal ?? "—"}` }));
   const roOptions = ros.map((ro) => ({
     value: String(ro.id),
     label: [roDisplayName(ro), roAccountingReference(ro), `sisa ${formatRupiah(ro.sisa_saldo ?? ro.total_plafon)}`].filter(Boolean).join(" · "),
@@ -742,7 +742,7 @@ export default function PanjarPageClient() {
                     row.ro ? (
                       <div>
                         <span>
-                          {row.ro.proyek?.kode_proyek ?? ""} · {row.ro.proyek?.nama_proyek ?? "Proyek"}
+                          {row.ro.proyek?.no_kontrak ?? ""} · {row.ro.proyek?.nama_proyek ?? "Proyek"}
                         </span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
                           {row.ro.kode_ro} · {row.ro.nama_ro} · {row.ro.unit_koordinator?.nama_unit ?? "—"}
@@ -940,7 +940,7 @@ export default function PanjarPageClient() {
                   <ModalDetailItem label="Keterangan" className="sm:col-span-2" value={detailRequest.keterangan || "Tidak ada keterangan tambahan."} />
                 </PanjarDetailGroup>
                 <PanjarDetailGroup icon={Building2} title="Proyek & RO" hint={detailContext?.nama_ro ?? "RO belum tercatat"}>
-                  <ModalDetailItem label="Proyek" value={`${detailContext?.proyek?.kode_proyek ?? "—"} · ${detailContext?.proyek?.nama_proyek ?? "—"}`} />
+                  <ModalDetailItem label="Proyek" value={`${detailContext?.proyek?.no_kontrak ?? "—"} · ${detailContext?.proyek?.nama_proyek ?? "—"}`} />
                   <ModalDetailItem label="RO" value={`${detailContext?.kode_ro ?? "—"} · ${detailContext?.nama_ro ?? "—"}`} />
                   <ModalDetailItem label="Koordinator" value={detailContext?.unit_koordinator?.nama_unit ?? "—"} />
                   <ModalDetailItem label="MAK" value={`${detailContext?.mak?.kode_mak ?? "—"} · ${detailContext?.mak?.nama_mak ?? "—"}`} />
@@ -1205,7 +1205,7 @@ export default function PanjarPageClient() {
                     <p className="text-xs font-medium text-muted-foreground">Proyek terpilih</p>
                     <p className="mt-0.5 font-semibold">{selectedProject.nama_proyek}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {selectedProject.kode_proyek} · Tahun fiskal {selectedProject.tahun_fiscal ?? "—"}
+                      {selectedProject.no_kontrak} · Tahun fiskal {selectedProject.tahun_fiscal ?? "—"}
                     </p>
                   </div>
                 )}

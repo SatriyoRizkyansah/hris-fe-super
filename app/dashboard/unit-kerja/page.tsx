@@ -31,6 +31,15 @@ export default function UnitKerjaPage() {
       return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData(p) as any;
     },
   });
+  const unitLookup = use_query({
+    tag: "masterUnitKerja",
+    method: "unitKerjaGetGetDataControllerGetData",
+    params: { page: 1, limit: 500 } as any,
+    queryFn: async (p) => {
+      setBrowserToken();
+      return browserApi.masterUnitKerja.unitKerjaGetGetDataControllerGetData(p) as any;
+    },
+  });
   const people = use_query({
     tag: "masterPegawai",
     method: "pegawaiGetGetDataControllerGetData",
@@ -73,6 +82,8 @@ export default function UnitKerjaPage() {
   const payload: any = unwrap(list.data) ?? {};
   const rows = payload.data ?? [];
   const pagination = payload.pagination ?? {};
+  const lookupPayload: any = unwrap(unitLookup.data) ?? {};
+  const unitNames = new Map<string, any>((lookupPayload.data ?? []).map((unit: any) => [String(unit.id), unit]));
   const units = rows.filter((row: any) => row.tipe_unit === "KOORDINATOR" && row.id !== selected?.id);
   const employees = unwrap(people.data)?.data ?? [];
   const openEdit = (row: any) => {
@@ -125,14 +136,27 @@ export default function UnitKerjaPage() {
                 { key: "kode_unit", header: "Kode", render: (row: any) => row.kode_unit },
                 { key: "kode_dpm", header: "Kode DPM", render: (row: any) => row.kode_dpm || "—" },
                 {
-                  key: "nama_unit",
-                  header: "Nama Unit",
+                  key: "nama_koordinator",
+                  header: "Nama Koordinator",
                   render: (row: any) => (
-                    <>
-                      <b>{row.nama_unit}</b>
-                      <p className="text-xs text-muted-foreground">{row.deskripsi}</p>
-                    </>
+                    <div className="min-w-44">
+                      <b>{row.tipe_unit === "KOORDINATOR" ? row.nama_unit : (unitNames.get(String(row.parent_unit_id))?.nama_unit ?? "Koordinator belum ditentukan")}</b>
+                      <p className="text-xs text-muted-foreground">{row.tipe_unit === "KOORDINATOR" ? row.kode_unit : (unitNames.get(String(row.parent_unit_id))?.kode_unit ?? "—")}</p>
+                    </div>
                   ),
+                },
+                {
+                  key: "nama_subkoordinator",
+                  header: "Nama Subkoordinator",
+                  render: (row: any) =>
+                    row.tipe_unit === "SUB_KOORDINATOR" ? (
+                      <div className="min-w-44">
+                        <b>{row.nama_unit}</b>
+                        <p className="text-xs text-muted-foreground">{row.deskripsi || row.kode_unit}</p>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    ),
                 },
                 { key: "tipe_unit", header: "Tipe", render: (row: any) => row.tipe_unit },
                 { key: "kepala_unit_nama", header: "Kepala Unit", render: (row: any) => row.kepala_unit_nama ?? "—" },

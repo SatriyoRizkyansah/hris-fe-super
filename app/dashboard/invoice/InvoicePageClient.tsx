@@ -69,7 +69,7 @@ const sourceLabel = (row: Row) => {
   const termin = nested(row, "termin");
   const project = nested(termin ?? {}, "proyek");
   const retail = nested(row, "retail_job");
-  if (project) return `${String(project.kode_proyek ?? "")} · ${String(project.nama_proyek ?? "Proyek")} · Termin ${String(termin?.nomor_termin ?? "")}`;
+  if (project) return `${String(project.no_kontrak ?? "")} · ${String(project.nama_proyek ?? "Proyek")} · Termin ${String(termin?.nomor_termin ?? "")}`;
   if (retail) return `${String(retail.nomor_job ?? "")} · ${String(retail.nama_pelanggan ?? "Retail")} · LHU ${String(retail.nomor_lhu ?? "—")}`;
   return "—";
 };
@@ -369,7 +369,7 @@ export default function InvoicePageClient() {
               Termin proyek *
               <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={invoiceForm.termin_id} onChange={(event) => setInvoiceForm((current) => ({ ...current, termin_id: event.target.value }))}>
                 <option value="">Pilih termin</option>
-                {terminRows.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.proyek?.kode_proyek ?? "Proyek")} · Termin {String(item.nomor_termin)} · {formatRupiah(item.nilai_termin)}</option>)}
+                {terminRows.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.proyek?.no_kontrak ?? "Proyek")} · Termin {String(item.nomor_termin)} · {formatRupiah(item.nilai_termin)}</option>)}
               </select>
             </>
           )}
@@ -414,7 +414,7 @@ export default function InvoicePageClient() {
                   {[
                     ["Nomor invoice", detailInvoice.nomor_invoice ?? "—"],
                     ["Jenis invoice", detailInvoice.jenis ?? "—"],
-                    ["Proyek sumber", project ? `${String(project.kode_proyek ?? "—")} · ${String(project.nama_proyek ?? "—")}` : sourceLabel(detailInvoice)],
+                    ["Proyek sumber", project ? `${String(project.no_kontrak ?? "—")} · ${String(project.nama_proyek ?? "—")}` : sourceLabel(detailInvoice)],
                     ["Termin", nested(detailInvoice, "termin") ? `Termin ${String(nested(detailInvoice, "termin")?.nomor_termin ?? "—")}` : "—"],
                     ["Tanggal terbit", date(detailInvoice.tanggal_terbit)],
                     ["Jatuh tempo", date(detailInvoice.tanggal_jatuh_tempo)],

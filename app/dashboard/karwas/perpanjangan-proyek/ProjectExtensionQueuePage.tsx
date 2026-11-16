@@ -31,7 +31,7 @@ type ExtensionRequest = {
   diperiksa_oleh?: { nama?: string } | null;
   diperiksa_pada?: string | null;
   catatan_pemeriksa?: string | null;
-  proyek: { id: string; kode_proyek: string; nama_proyek: string; tahun_fiscal: number; berakhir_kontrak?: string | null };
+  proyek: { id: string; no_kontrak: string; nama_proyek: string; tahun_fiscal: number; berakhir_kontrak?: string | null };
 };
 type QueueParams = { page: number; limit: number; query: string; status: string };
 
@@ -111,7 +111,7 @@ export default function ProjectExtensionQueuePage() {
     {
       key: "proyek",
       header: "PROYEK",
-      render: (row: ExtensionRequest) => <div className="min-w-52"><p className="font-medium text-foreground">{row.proyek.nama_proyek}</p><p className="text-xs text-muted-foreground">{row.proyek.kode_proyek} · TA {row.proyek.tahun_fiscal}</p></div>,
+      render: (row: ExtensionRequest) => <div className="min-w-52"><p className="font-medium text-foreground">{row.proyek.nama_proyek}</p><p className="text-xs text-muted-foreground">{row.proyek.no_kontrak} · TA {row.proyek.tahun_fiscal}</p></div>,
     },
     {
       key: "tanggal_sk",
@@ -205,7 +205,7 @@ export default function ProjectExtensionQueuePage() {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-semibold leading-5">{reviewing.proyek.nama_proyek}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{reviewing.proyek.kode_proyek} · TA {reviewing.proyek.tahun_fiscal}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{reviewing.proyek.no_kontrak} · TA {reviewing.proyek.tahun_fiscal}</p>
                 </div>
                 <StatusBadge status={statusTone(reviewing.status)}>{statusLabel(reviewing.status)}</StatusBadge>
               </div>

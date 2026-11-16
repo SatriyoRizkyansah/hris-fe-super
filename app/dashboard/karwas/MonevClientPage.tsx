@@ -173,7 +173,7 @@ function OverviewExplorer({ units, projects, receivables, unitHref, projectHref,
   const unitRows = useMemo(() => [...units].sort((a, b) => Number(b.pagu_ro_disetujui_saat_ini) - Number(a.pagu_ro_disetujui_saat_ini)), [units]);
   const projectRows = useMemo(() => [...projects].sort((a, b) => Number(b.nilai_kontrak) - Number(a.nilai_kontrak)), [projects]);
   const visibleUnits = unitRows.filter((row) => `${row.nama_unit} ${row.kode_unit}`.toLocaleLowerCase("id-ID").includes(unitQuery.trim().toLocaleLowerCase("id-ID")));
-  const visibleProjects = projectRows.filter((row) => `${row.nama_proyek} ${row.kode_proyek} ${row.nama_client ?? ""}`.toLocaleLowerCase("id-ID").includes(projectQuery.trim().toLocaleLowerCase("id-ID")));
+  const visibleProjects = projectRows.filter((row) => `${row.nama_proyek} ${row.no_kontrak} ${row.nama_client ?? ""}`.toLocaleLowerCase("id-ID").includes(projectQuery.trim().toLocaleLowerCase("id-ID")));
   const activeUnit = unitRows.find((row) => row.id === selectedUnitId) ?? unitRows[0];
   const activeProject = projectRows.find((row) => row.id === selectedProjectId) ?? projectRows[0];
   const tabs = [
@@ -222,13 +222,13 @@ function OverviewExplorer({ units, projects, receivables, unitHref, projectHref,
           <label className="relative block"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={projectQuery} onChange={(event) => setProjectQuery(event.target.value)} placeholder="Cari proyek atau klien..." className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100" /></label>
           <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
             {visibleProjects.map((row) => <button key={row.id} type="button" onClick={() => setSelectedProjectId(row.id)} className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${activeProject?.id === row.id ? "border-slate-300 bg-slate-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50/70"}`}>
-              <span className="block truncate text-sm font-medium text-slate-900">{row.nama_proyek}</span><span className="mt-0.5 flex justify-between gap-2 text-xs text-muted-foreground"><span className="truncate">{row.kode_proyek} · {row.nama_client || "Tanpa klien"}</span><span className="shrink-0">{amount(row.nilai_kontrak)}</span></span>
+              <span className="block truncate text-sm font-medium text-slate-900">{row.nama_proyek}</span><span className="mt-0.5 flex justify-between gap-2 text-xs text-muted-foreground"><span className="truncate">{row.no_kontrak} · {row.nama_client || "Tanpa klien"}</span><span className="shrink-0">{amount(row.nilai_kontrak)}</span></span>
             </button>)}
             {!visibleProjects.length && <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Proyek tidak ditemukan.</p>}
           </div>
         </div>
         {activeProject ? <div className="rounded-xl border border-slate-200 p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Posisi proyek · {shortStatus(activeProject.status)}</p><h3 className="mt-1 text-lg font-semibold text-slate-950">{activeProject.nama_proyek}</h3><p className="text-xs text-muted-foreground">{activeProject.kode_proyek} · {activeProject.nama_client || "Tanpa klien"} · {activeProject.jumlah_ro ?? 0} RO</p></div><Link href={projectHref} className="text-sm font-medium text-slate-700 underline-offset-4 hover:underline">Buka analisis proyek →</Link></div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Posisi proyek · {shortStatus(activeProject.status)}</p><h3 className="mt-1 text-lg font-semibold text-slate-950">{activeProject.nama_proyek}</h3><p className="text-xs text-muted-foreground">{activeProject.no_kontrak} · {activeProject.nama_client || "Tanpa klien"} · {activeProject.jumlah_ro ?? 0} RO</p></div><Link href={projectHref} className="text-sm font-medium text-slate-700 underline-offset-4 hover:underline">Buka analisis proyek →</Link></div>
           <div className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2">
             <DetailValue label="Nilai kontrak" value={amount(activeProject.nilai_kontrak)} />
             <DetailValue label="Direct cost rencana" value={amount(activeProject.direct_cost_rencana)} />
@@ -270,7 +270,7 @@ function UnitActivityExplorer({ units, tahun }: { units: Row[]; tahun: number })
   const selectedRetail = retailRows.find((row) => row.id === selectedRetailId) ?? retailRows[0];
 
   const roColumns = useMemo(() => [
-    { key: "search_text", header: "RO / PROYEK", render: (row: Row) => <div><p className="font-medium text-slate-900">{row.kode_ro} · {row.nama_ro}</p><p className="text-xs text-muted-foreground">{row.proyek?.kode_proyek} · {row.proyek?.nama_proyek}{row.nomor_job ? ` · Job ${row.nomor_job}` : ""}</p></div> },
+    { key: "search_text", header: "RO / PROYEK", render: (row: Row) => <div><p className="font-medium text-slate-900">{row.kode_ro} · {row.nama_ro}</p><p className="text-xs text-muted-foreground">{row.proyek?.no_kontrak} · {row.proyek?.nama_proyek}{row.nomor_job ? ` · Job ${row.nomor_job}` : ""}</p></div> },
     { key: "pagu_disetujui", header: "PAGU", render: (row: Row) => amount(row.pagu_disetujui) },
     { key: "realisasi", header: "REALISASI", render: (row: Row) => amount(row.realisasi) },
     { key: "komitmen_aktif", header: "KOMITMEN", render: (row: Row) => amount(row.komitmen_aktif) },
@@ -345,7 +345,7 @@ function UnitActivityExplorer({ units, tahun }: { units: Row[]; tahun: number })
           <TableSection title="RO dan alokasi anggaran" description="Pilih tombol Ledger pada RO untuk melihat transaksi yang tercatat selama tahun fiskal ini.">
             <DataTable columns={roColumns} rows={roRows} rowKey={(row) => row.id} searchPlaceholder="Cari RO, proyek, atau nomor job..." emptyMessage="Belum ada RO reguler untuk unit ini pada tahun terpilih." />
           </TableSection>
-          {selectedRo && <TableSection title={`Ledger · ${selectedRo.kode_ro} · ${selectedRo.nama_ro}`} description={`${selectedRo.proyek?.kode_proyek ?? "Tanpa proyek"} · ${selectedRo.proyek?.nama_proyek ?? ""}${selectedRo.nomor_job ? ` · Job ${selectedRo.nomor_job}` : ""}`}>
+          {selectedRo && <TableSection title={`Ledger · ${selectedRo.kode_ro} · ${selectedRo.nama_ro}`} description={`${selectedRo.proyek?.no_kontrak ?? "Tanpa proyek"} · ${selectedRo.proyek?.nama_proyek ?? ""}${selectedRo.nomor_job ? ` · Job ${selectedRo.nomor_job}` : ""}`}>
             <div className="mb-3 grid gap-3 sm:grid-cols-4"><DetailValue label="Pagu disetujui" value={amount(selectedRo.pagu_disetujui)} /><DetailValue label="Realisasi" value={amount(selectedRo.realisasi)} /><DetailValue label="Komitmen aktif" value={amount(selectedRo.komitmen_aktif)} /><DetailValue label="Sisa hak belanja" value={amount(selectedRo.sisa_hak_belanja)} emphasis /></div>
             <DataTable columns={ledgerColumns} rows={selectedRo.transaksi ?? []} rowKey={(row) => row.id} searchPlaceholder="Cari kegiatan atau kuitansi..." emptyMessage="Belum ada transaksi ledger pada RO ini di tahun terpilih." />
           </TableSection>}
@@ -508,7 +508,7 @@ export default function MonevClientPage() {
   ], []);
 
   const projectColumns = useMemo(() => [
-    { key: "nama_proyek", header: "PROYEK", render: (row: Row) => <div className="min-w-44"><p className="font-medium text-slate-900">{row.nama_proyek}</p><p className="text-xs text-muted-foreground">{row.kode_proyek} · {shortStatus(row.status)}</p></div> },
+    { key: "nama_proyek", header: "PROYEK", render: (row: Row) => <div className="min-w-44"><p className="font-medium text-slate-900">{row.nama_proyek}</p><p className="text-xs text-muted-foreground">{row.no_kontrak} · {shortStatus(row.status)}</p></div> },
     { key: "nilai_kontrak", header: "NILAI KONTRAK", render: (row: Row) => amount(row.nilai_kontrak) },
     { key: "margin_rencana", header: "MARGIN RENCANA", render: (row: Row) => <div>{amount(row.margin_rencana)}<p className="text-xs text-muted-foreground">Kontrak − direct cost</p></div> },
     { key: "pagu_ro_disetujui_saat_ini", header: "PAGU RO", render: (row: Row) => amount(row.pagu_ro_disetujui_saat_ini) },

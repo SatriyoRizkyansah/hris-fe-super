@@ -46,16 +46,19 @@ const PROJECT_STATUS_FILTERS = [
   { label: "Ditolak Pimpinan", value: "DITOLAK_PIMPINAN" },
 ];
 const currentYear = new Date().getFullYear();
-const normalizeUnitId = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("en-US");
+const normalizeUnitId = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("en-US");
 const blankForm = (): ProjectForm => ({
-  kode_proyek: "",
   nama_proyek: "",
   tahun_fiscal: String(currentYear),
   mulai_kontrak: "",
   berakhir_kontrak: "",
-  sumber_pendanaan: "",
+  sumber_pendanaan: "BLU",
   nama_client: "",
   no_kontrak: "",
+  no_kontrak_reservasi_id: "",
   pj_1: "",
   pj_2: "",
   nilai_kontrak: "",
@@ -132,6 +135,7 @@ export default function ProyekClientPage() {
   const [rab, setRab] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
   const jobNumberRequests = useRef(new Set<string>());
+  const contractNumberRequest = useRef(false);
   const [localDrafts, setLocalDrafts] = useState<ProjectLocalDraft[]>([]);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [validationProject, setValidationProject] = useState<ProyekItemDto | null>(null);
@@ -149,13 +153,30 @@ export default function ProyekClientPage() {
       const reservationResult = unwrapEnvelope<{ id: string; nomor_job: string }>(response);
       const reservation = (reservationResult.data ?? reservationResult) as { id?: string; nomor_job?: string };
       if (!reservation?.id || !reservation.nomor_job) throw new Error("Nomor Job tidak diterima dari server.");
-      setJobs((current) => current.map((job) => job.key === jobKey && !job.id
-        ? { ...job, nomor_job: reservation.nomor_job, nomor_job_reservasi_id: reservation.id }
-        : job));
+      setJobs((current) => current.map((job) => (job.key === jobKey && !job.id ? { ...job, nomor_job: reservation.nomor_job, nomor_job_reservasi_id: reservation.id } : job)));
     } catch (error) {
       setFormError(apiErrorMessage(error, "Nomor Job belum dapat disiapkan. Tutup lalu buka kembali form untuk mencoba lagi."));
     } finally {
       jobNumberRequests.current.delete(jobKey);
+    }
+  }
+
+  async function reserveContractNumber() {
+    if (contractNumberRequest.current) return;
+    contractNumberRequest.current = true;
+    try {
+      setBrowserToken();
+      const response = await requestHrisApi("/api/proyek/contract-number/reserve", { method: "POST" });
+      const result = unwrapEnvelope<{ id: string; no_kontrak: string }>(response);
+      const reservation = (result.data ?? result) as { id?: string; no_kontrak?: string };
+      if (!reservation?.id || !reservation.no_kontrak) {
+        throw new Error("Nomor kontrak tidak diterima dari server.");
+      }
+      setForm((current) => (current.no_kontrak_reservasi_id ? current : { ...current, no_kontrak: reservation.no_kontrak!, no_kontrak_reservasi_id: reservation.id! }));
+    } catch (error) {
+      setFormError(apiErrorMessage(error, "Nomor kontrak belum dapat disiapkan. Tutup lalu buka kembali form untuk mencoba lagi."));
+    } finally {
+      contractNumberRequest.current = false;
     }
   }
 
@@ -174,10 +195,11 @@ export default function ProyekClientPage() {
 
   useEffect(() => {
     if (!open) return;
+    if (!form.no_kontrak_reservasi_id) void reserveContractNumber();
     for (const job of jobs) {
       if (!job.id && !job.nomor_job_reservasi_id) void reserveJobNumber(job.key);
     }
-  }, [open, jobs]);
+  }, [open, jobs, form.no_kontrak_reservasi_id]);
 
   const list = use_query({
     tag: "masterProyek",
@@ -189,7 +211,7 @@ export default function ProyekClientPage() {
         query: search || undefined,
         tahun_fiscal: tahun === "__all" ? undefined : Number(tahun),
         id_unit_koordinator: koordinator === "__all" ? undefined : koordinator,
-        status_proyek: statusProyek === "__all" ? undefined : statusProyek as ProyekItemDto["status_proyek"],
+        status_proyek: statusProyek === "__all" ? undefined : (statusProyek as ProyekItemDto["status_proyek"]),
         page,
         limit: pageSize,
       });
@@ -231,8 +253,20 @@ export default function ProyekClientPage() {
   const currentUnit = unitOptions.find((unit) => unit.id === identity.unitKerjaId);
   const serviceUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_LAYANAN ?? "").trim().toLocaleUpperCase("id-ID");
   const umumUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_KABAG ?? "").trim().toLocaleUpperCase("id-ID");
-  const isServiceValidator = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(serviceUnitCode) && String(currentUnit?.kode_unit ?? "").trim().toLocaleUpperCase("id-ID") === serviceUnitCode);
-  const isUmumValidator = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(umumUnitCode) && String(currentUnit?.kode_unit ?? "").trim().toLocaleUpperCase("id-ID") === umumUnitCode);
+  const isServiceValidator =
+    identity.role === "superadmin" ||
+    (identity.role === "koordinator" &&
+      Boolean(serviceUnitCode) &&
+      String(currentUnit?.kode_unit ?? "")
+        .trim()
+        .toLocaleUpperCase("id-ID") === serviceUnitCode);
+  const isUmumValidator =
+    identity.role === "superadmin" ||
+    (identity.role === "koordinator" &&
+      Boolean(umumUnitCode) &&
+      String(currentUnit?.kode_unit ?? "")
+        .trim()
+        .toLocaleUpperCase("id-ID") === umumUnitCode);
   const isPimpinanValidator = identity.role === "superadmin" || identity.role === "pimpinan";
   const makComboboxOptions = makOptions.map((option) => ({ value: option.id, label: [option.kode_mak, option.nama_mak, option.tipe_akun ? `(${option.tipe_akun})` : ""].filter(Boolean).join(" — ") }));
   const makNameById = Object.fromEntries(makOptions.map((option) => [option.id, String(option.nama_mak ?? "")]));
@@ -255,9 +289,7 @@ export default function ProyekClientPage() {
     successMessage: (_response, variables) => {
       const stageLabel = variables.stage === "layanan" ? "Koordinator Layanan" : variables.stage === "umum" ? "Bagian Umum" : "Pimpinan";
       if (variables.revision) return `Permintaan revisi proyek berhasil dikirim ke ${stageLabel}.`;
-      return variables.approved
-        ? `Proyek berhasil disetujui pada tahap ${stageLabel}.`
-        : `Pengajuan proyek berhasil ditolak pada tahap ${stageLabel}.`;
+      return variables.approved ? `Proyek berhasil disetujui pada tahap ${stageLabel}.` : `Pengajuan proyek berhasil ditolak pada tahap ${stageLabel}.`;
     },
     invalidateKeys: [["api", "masterProyek"]],
   });
@@ -299,9 +331,9 @@ export default function ProyekClientPage() {
   const create = use_mutation({
     tag: "masterProyek",
     method: "create",
-    mutationFn: async (payload: CreateProyekDto) => {
+    mutationFn: async (payload: CreateProyekDto & { no_kontrak_reservasi_id: string }) => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekCreateControllerCreate(payload);
+      return browserApi.masterProyek.proyekCreateControllerCreate(payload as CreateProyekDto);
     },
     invalidateKeys: [["api", "masterProyek"]],
   });
@@ -311,26 +343,36 @@ export default function ProyekClientPage() {
   const roRows = jobs.flatMap((job) => job.ros);
   const roTotal = roRows.reduce((total, row) => total + (Number(row.plafonText) || 0), 0);
   const termsTotal = terms.reduce((total, term) => total + (Number(term.persentaseText) || 0), 0);
-  const assignedRoUnitIds = new Set(roRows.flatMap((row) => [
-    row.id_unit_koordinator,
-    ...(row.unit_kolaborasi_ids ?? []),
-  ]).map(normalizeUnitId).filter(Boolean));
+  const assignedRoUnitIds = new Set(
+    roRows
+      .flatMap((row) => [row.id_unit_koordinator, ...(row.unit_kolaborasi_ids ?? [])])
+      .map(normalizeUnitId)
+      .filter(Boolean),
+  );
   // Unit pengusul may coordinate the project without owning an RO; only project collaborators must be assigned to an RO.
   const unassignedCollaboratorIds = unitKolaborasiIds.filter((unitId) => !assignedRoUnitIds.has(normalizeUnitId(unitId)));
   const collaborationAssigned = unassignedCollaboratorIds.length === 0;
-  const allocationsValid = jobs.length > 0 && jobs.every((job) =>
-    job.nama_job.trim() && job.kategori_job && job.nomor_job && (job.id || job.nomor_job_reservasi_id) && job.ros.length > 0 && job.ros.every((row) =>
-      row.mak_id && projectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) &&
-      (row.unit_kolaborasi_ids ?? []).every((unitId) => projectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator)) &&
-      Number(row.plafonText) > 0 && (row.detailMode === "later" || row.pj.trim()),
-    ),
-  );
+  const allocationsValid =
+    jobs.length > 0 &&
+    jobs.every(
+      (job) =>
+        job.nama_job.trim() &&
+        job.kategori_job &&
+        job.nomor_job &&
+        (job.id || job.nomor_job_reservasi_id) &&
+        job.ros.length > 0 &&
+        job.ros.every(
+          (row) =>
+            row.mak_id &&
+            projectUnitIds.some((unitId) => normalizeUnitId(unitId) === normalizeUnitId(row.id_unit_koordinator)) &&
+            (row.unit_kolaborasi_ids ?? []).every((unitId) => projectUnitIds.some((projectUnitId) => normalizeUnitId(projectUnitId) === normalizeUnitId(unitId)) && normalizeUnitId(unitId) !== normalizeUnitId(row.id_unit_koordinator)) &&
+            Number(row.plafonText) > 0 &&
+            (row.detailMode === "later" || row.pj.trim()),
+        ),
+    );
   const contractDatesRequired = roRows.some((row) => row.detailMode === "detail");
-  const contractDateRangeValid = (
-    !form.mulai_kontrak && !form.berakhir_kontrak && !contractDatesRequired
-  ) || Boolean(form.mulai_kontrak && form.berakhir_kontrak && form.berakhir_kontrak >= form.mulai_kontrak);
+  const contractDateRangeValid = (!form.mulai_kontrak && !form.berakhir_kontrak && !contractDatesRequired) || Boolean(form.mulai_kontrak && form.berakhir_kontrak && form.berakhir_kontrak >= form.mulai_kontrak);
   const valid = Boolean(
-    form.kode_proyek &&
     form.nama_proyek &&
     form.tahun_fiscal &&
     form.nilai_kontrak !== "" &&
@@ -370,29 +412,29 @@ export default function ProyekClientPage() {
     localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(drafts));
   }
   function hasDraftContent() {
-    const projectFieldsChanged = Object.entries(form).some(([key, value]) =>
-      key === "tahun_fiscal" ? value !== String(currentYear) : Boolean(value.trim()),
-    );
-    const allocationChanged = jobs.length > 1 || jobs.some((job) =>
-      Boolean(job.nama_job.trim() || job.kategori_job) || job.ros.length > 1 || job.ros.some((row) =>
-        Boolean(
-          row.mak_id ||
-          row.rekening_id ||
-          row.plafonText.trim() ||
-          row.pj.trim() ||
-          row.no_kontrak.trim() ||
-          row.unit_kolaborasi_ids?.length ||
-          row.detailMode === "detail" ||
-          normalizeUnitId(row.id_unit_koordinator) !== normalizeUnitId(unitPengusulId),
-        ),
-      ),
-    );
-    const termsChanged = terms.length > 1 || terms.some((term, index) =>
-      term.persentaseText !== (index === 0 ? "100" : ""),
-    );
+    const projectFieldsChanged = Object.entries(form).some(([key, value]) => (key === "tahun_fiscal" ? value !== String(currentYear) : Boolean(value.trim())));
+    const allocationChanged =
+      jobs.length > 1 ||
+      jobs.some(
+        (job) =>
+          Boolean(job.nama_job.trim() || job.kategori_job) ||
+          job.ros.length > 1 ||
+          job.ros.some((row) =>
+            Boolean(
+              row.mak_id ||
+              row.rekening_id ||
+              row.plafonText.trim() ||
+              row.pj.trim() ||
+              row.no_kontrak.trim() ||
+              row.unit_kolaborasi_ids?.length ||
+              row.detailMode === "detail" ||
+              normalizeUnitId(row.id_unit_koordinator) !== normalizeUnitId(unitPengusulId),
+            ),
+          ),
+      );
+    const termsChanged = terms.length > 1 || terms.some((term, index) => term.persentaseText !== (index === 0 ? "100" : ""));
 
-    return projectFieldsChanged || allocationChanged || termsChanged ||
-      unitPengusulId !== identity.unitKerjaId || unitKolaborasiIds.length > 0 || Boolean(sk || rab);
+    return projectFieldsChanged || allocationChanged || termsChanged || unitPengusulId !== identity.unitKerjaId || unitKolaborasiIds.length > 0 || Boolean(sk || rab);
   }
   function saveCurrentDraft() {
     if (!hasDraftContent()) return;
@@ -435,17 +477,23 @@ export default function ProyekClientPage() {
     if (editingDraftId === id) resetForm();
   }
   function updateRo(key: string, field: keyof RoDraft, value: string) {
-    setJobs((currentJobs) => currentJobs.map((job) => ({
-      ...job,
-      ros: job.ros.map((row) => (row.key === key ? {
-        ...row,
-        [field]: value,
-        ...(field === "id_unit_koordinator" ? { unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((unitId) => unitId !== value) } : {}),
-      } : row)),
-    })));
+    setJobs((currentJobs) =>
+      currentJobs.map((job) => ({
+        ...job,
+        ros: job.ros.map((row) =>
+          row.key === key
+            ? {
+                ...row,
+                [field]: value,
+                ...(field === "id_unit_koordinator" ? { unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((unitId) => unitId !== value) } : {}),
+              }
+            : row,
+        ),
+      })),
+    );
   }
   function updateJob(key: string, field: JobMetadataField, value: string) {
-    setJobs((currentJobs) => currentJobs.map((job) => job.key === key ? { ...job, [field]: value } : job));
+    setJobs((currentJobs) => currentJobs.map((job) => (job.key === key ? { ...job, [field]: value } : job)));
   }
   function addJob() {
     setJobs((currentJobs) => [...currentJobs, blankJob(unitPengusulId)]);
@@ -455,14 +503,10 @@ export default function ProyekClientPage() {
     setJobs((currentJobs) => currentJobs.filter((job) => job.key !== key));
   }
   function addRo(jobKey: string) {
-    setJobs((currentJobs) => currentJobs.map((job) => job.key === jobKey
-      ? { ...job, ros: [...job.ros, blankRo(unitPengusulId)] }
-      : job));
+    setJobs((currentJobs) => currentJobs.map((job) => (job.key === jobKey ? { ...job, ros: [...job.ros, blankRo(unitPengusulId)] } : job)));
   }
   function removeRo(key: string) {
-    setJobs((currentJobs) => currentJobs.map((job) => job.ros.length > 1
-      ? { ...job, ros: job.ros.filter((row) => row.key !== key) }
-      : job));
+    setJobs((currentJobs) => currentJobs.map((job) => (job.ros.length > 1 ? { ...job, ros: job.ros.filter((row) => row.key !== key) } : job)));
   }
   function addCollaborator(unitId: string) {
     if (!unitId || unitId === unitPengusulId || unitKolaborasiIds.includes(unitId)) return;
@@ -470,35 +514,37 @@ export default function ProyekClientPage() {
   }
   function removeCollaborator(unitId: string) {
     setUnitKolaborasiIds((ids) => ids.filter((id) => id !== unitId));
-    setJobs((currentJobs) => currentJobs.map((job) => ({
-      ...job,
-      ros: job.ros.map((row) => ({
-        ...row,
-        ...(row.id_unit_koordinator === unitId ? { id_unit_koordinator: unitPengusulId } : {}),
-        unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((id) => id !== unitId),
+    setJobs((currentJobs) =>
+      currentJobs.map((job) => ({
+        ...job,
+        ros: job.ros.map((row) => ({
+          ...row,
+          ...(row.id_unit_koordinator === unitId ? { id_unit_koordinator: unitPengusulId } : {}),
+          unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((id) => id !== unitId),
+        })),
       })),
-    })));
+    );
   }
   function addRoCollaborator(roKey: string, unitId: string) {
     if (!unitId) return;
-    setJobs((currentJobs) => currentJobs.map((job) => ({
-      ...job,
-      ros: job.ros.map((row) => {
-        if (row.key !== roKey || normalizeUnitId(row.id_unit_koordinator) === normalizeUnitId(unitId)) return row;
-        const currentIds = row.unit_kolaborasi_ids ?? [];
-        return currentIds.some((id) => normalizeUnitId(id) === normalizeUnitId(unitId))
-          ? row
-          : { ...row, unit_kolaborasi_ids: [...currentIds, unitId] };
-      }),
-    })));
+    setJobs((currentJobs) =>
+      currentJobs.map((job) => ({
+        ...job,
+        ros: job.ros.map((row) => {
+          if (row.key !== roKey || normalizeUnitId(row.id_unit_koordinator) === normalizeUnitId(unitId)) return row;
+          const currentIds = row.unit_kolaborasi_ids ?? [];
+          return currentIds.some((id) => normalizeUnitId(id) === normalizeUnitId(unitId)) ? row : { ...row, unit_kolaborasi_ids: [...currentIds, unitId] };
+        }),
+      })),
+    );
   }
   function removeRoCollaborator(roKey: string, unitId: string) {
-    setJobs((currentJobs) => currentJobs.map((job) => ({
-      ...job,
-      ros: job.ros.map((row) => row.key === roKey
-        ? { ...row, unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((id) => id !== unitId) }
-        : row),
-    })));
+    setJobs((currentJobs) =>
+      currentJobs.map((job) => ({
+        ...job,
+        ros: job.ros.map((row) => (row.key === roKey ? { ...row, unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).filter((id) => id !== unitId) } : row)),
+      })),
+    );
   }
   function changeLeadUnit(unitId: string) {
     const previousLeadId = unitPengusulId;
@@ -508,10 +554,12 @@ export default function ProyekClientPage() {
       if (previousLeadId && previousLeadId !== unitId && roRows.some((row) => row.id_unit_koordinator === previousLeadId) && !next.includes(previousLeadId)) next.push(previousLeadId);
       return next;
     });
-    setJobs((currentJobs) => currentJobs.map((job) => ({
-      ...job,
-      ros: job.ros.map((row) => !row.id_unit_koordinator ? { ...row, id_unit_koordinator: unitId } : row),
-    })));
+    setJobs((currentJobs) =>
+      currentJobs.map((job) => ({
+        ...job,
+        ros: job.ros.map((row) => (!row.id_unit_koordinator ? { ...row, id_unit_koordinator: unitId } : row)),
+      })),
+    );
   }
   function updateTerm(key: string, value: string) {
     setTerms((rows) => rows.map((row) => (row.key === key ? { ...row, persentaseText: value } : row)));
@@ -543,20 +591,24 @@ export default function ProyekClientPage() {
       return;
     }
     if (!valid || create.isPending) {
-      setFormError(!unitPengusulId
-        ? "Pilih unit pengusul proyek."
-        : !collaborationAssigned
-          ? `Unit kolaborator berikut belum ditugaskan ke RO: ${unassignedCollaboratorIds.map((unitId) => unitComboboxOptions.find((option) => normalizeUnitId(option.value) === normalizeUnitId(unitId))?.label ?? unitId).join(", ")}. Pilih sebagai pemilik RO atau tambahkan sebagai kolaborator RO.`
-          : !allocationsValid
-            ? "Lengkapi nomor Job otomatis, nama, kategori, dan seluruh alokasi RO di dalamnya."
-          : "Lengkapi data. Kontrak = direct cost + margin, plafon RO = direct cost, termin = 100%."
+      setFormError(
+        !unitPengusulId
+          ? "Pilih unit pengusul proyek."
+          : !form.no_kontrak_reservasi_id
+            ? "Nomor kontrak otomatis belum siap. Coba tutup dan buka kembali form."
+            : !collaborationAssigned
+              ? `Unit kolaborator berikut belum ditugaskan ke RO: ${unassignedCollaboratorIds.map((unitId) => unitComboboxOptions.find((option) => normalizeUnitId(option.value) === normalizeUnitId(unitId))?.label ?? unitId).join(", ")}. Pilih sebagai pemilik RO atau tambahkan sebagai kolaborator RO.`
+              : !allocationsValid
+                ? "Lengkapi nomor Job otomatis, nama, kategori, dan seluruh alokasi RO di dalamnya."
+                : "Lengkapi data. Kontrak = direct cost + margin, plafon RO = direct cost, termin = 100%.",
       );
       return;
     }
     setFormError("");
     try {
-      const payload: CreateProyekDto = {
+      const payload: CreateProyekDto & { no_kontrak_reservasi_id: string } = {
         ...form,
+        sumber_pendanaan: "BLU",
         tahun_fiscal: Number(form.tahun_fiscal),
         mulai_kontrak: form.mulai_kontrak || undefined,
         berakhir_kontrak: form.berakhir_kontrak || undefined,
@@ -564,6 +616,7 @@ export default function ProyekClientPage() {
         total_direct_cost: numeric("total_direct_cost"),
         total_margin: numeric("total_margin"),
         no_kontrak: form.no_kontrak || undefined,
+        no_kontrak_reservasi_id: form.no_kontrak_reservasi_id!,
         unit_pengusul_id: normalizeUnitId(unitPengusulId),
         unit_kolaborasi_ids: unitKolaborasiIds.map(normalizeUnitId),
         job_list: jobs.map((job) => ({
@@ -612,9 +665,7 @@ export default function ProyekClientPage() {
           <p className="mt-1 text-sm text-muted-foreground">Pengajuan proyek, RO awal, dan rencana termin.</p>
         </div>
         {canCreate && (
-          <Button
-            onClick={openNewApplication}
-          >
+          <Button onClick={openNewApplication}>
             <Plus size={16} /> Ajukan Proyek
           </Button>
         )}
@@ -631,9 +682,9 @@ export default function ProyekClientPage() {
               {localDrafts.map((draft) => (
                 <div key={draft.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
                   <div>
-                    <p className="font-medium">{draft.form.nama_proyek || draft.form.kode_proyek || "Draft tanpa nama"}</p>
+                    <p className="font-medium">{draft.form.nama_proyek || draft.form.no_kontrak || "Draft tanpa nama"}</p>
                     <p className="text-xs text-muted-foreground">
-                      Disimpan {new Date(draft.savedAt).toLocaleString("id-ID")} · {draft.form.kode_proyek || "Kode belum diisi"}
+                      Disimpan {new Date(draft.savedAt).toLocaleString("id-ID")} · {draft.form.no_kontrak || "Nomor kontrak belum tersedia"}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -652,152 +703,171 @@ export default function ProyekClientPage() {
       )}
       <Card id="project-list" className="scroll-mt-6">
         <CardContent className="pt-4">
-          {list.isError ? <EmptyData label="Daftar proyek belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void list.refetch()}>Coba lagi</Button>} /> : <DataTable
-            columns={[
-              {
-                key: "kode",
-                header: "Kode / Proyek",
-                className: "min-w-[15rem]",
-                render: (row: ProyekItemDto) => (
-                  <div className="space-y-1">
-                    <p className="font-medium">{row.kode_proyek}</p>
-                    <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
-                    {row.unit_terlibat?.length ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {row.unit_terlibat.map((unit) => (
-                          <span key={unit.id} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                            {unit.nama_unit}{unit.peran === "PENGUSUL" ? " · Pengusul" : ""}
-                          </span>
-                        ))}
+          {list.isError ? (
+            <EmptyData
+              label="Daftar proyek belum dapat dimuat."
+              action={
+                <Button type="button" variant="outline" size="sm" onClick={() => void list.refetch()}>
+                  Coba lagi
+                </Button>
+              }
+            />
+          ) : (
+            <DataTable
+              columns={[
+                {
+                  key: "kode",
+                  header: "No Kontrak",
+                  className: "min-w-[15rem]",
+                  render: (row: ProyekItemDto) => (
+                    <div className="space-y-1">
+                      <p className="font-medium">{row.no_kontrak}</p>
+                      <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
+                      {row.unit_terlibat?.length ? (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {row.unit_terlibat.map((unit) => (
+                            <span key={unit.id} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                              {unit.nama_unit}
+                              {unit.peran === "PENGUSUL" ? " · Pengusul" : ""}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ),
+                },
+                { key: "tahun", header: "Tahun", className: "w-24 whitespace-nowrap text-center tabular-nums", render: (row: ProyekItemDto) => row.tahun_fiscal },
+                {
+                  key: "periode_kontrak",
+                  header: "Periode kontrak",
+                  className: "min-w-[13rem] whitespace-nowrap",
+                  render: (row: ProyekItemDto) => {
+                    const start = row.mulai_kontrak == null ? null : String(row.mulai_kontrak);
+                    const end = row.berakhir_kontrak == null ? null : String(row.berakhir_kontrak);
+                    const days = start && end ? Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000) + 1 : null;
+                    return (
+                      <div className="text-sm">
+                        <span>
+                          {formatDate(start)} – {formatDate(end)}
+                        </span>
+                        <p className="mt-1 text-xs text-muted-foreground">{days !== null && days > 0 ? `${days} hari kontrak` : "Periode kontrak belum diatur"}</p>
                       </div>
-                    ) : null}
-                  </div>
-                ),
-              },
-              { key: "tahun", header: "Tahun", className: "w-24 whitespace-nowrap text-center tabular-nums", render: (row: ProyekItemDto) => row.tahun_fiscal },
-              {
-                key: "periode_kontrak",
-                header: "Periode kontrak",
-                className: "min-w-[13rem] whitespace-nowrap",
-                render: (row: ProyekItemDto) => {
-                  const start = row.mulai_kontrak == null ? null : String(row.mulai_kontrak);
-                  const end = row.berakhir_kontrak == null ? null : String(row.berakhir_kontrak);
-                  const days = start && end ? Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000) + 1 : null;
-                  return (
+                    );
+                  },
+                },
+                {
+                  key: "pengaju",
+                  header: "Pengaju",
+                  className: "min-w-[12rem]",
+                  render: (row: ProyekItemDto) => (
                     <div className="text-sm">
-                      <span>
-                        {formatDate(start)} – {formatDate(end)}
-                      </span>
-                      <p className="mt-1 text-xs text-muted-foreground">{days !== null && days > 0 ? `${days} hari kontrak` : "Periode kontrak belum diatur"}</p>
+                      {String(row.nama_pengaju ?? "—")}
+                      <p className="mt-1 text-xs text-muted-foreground">{String(row.nama_unit_pengaju ?? "—")}</p>
                     </div>
-                  );
+                  ),
                 },
-              },
-              {
-                key: "pengaju",
-                header: "Pengaju",
-                className: "min-w-[12rem]",
-                render: (row: ProyekItemDto) => (
-                  <div className="text-sm">
-                    {String(row.nama_pengaju ?? "—")}
-                    <p className="mt-1 text-xs text-muted-foreground">{String(row.nama_unit_pengaju ?? "—")}</p>
-                  </div>
-                ),
-              },
-              { key: "kontrak", header: "Nilai Kontrak", className: "min-w-[10rem] whitespace-nowrap text-right tabular-nums", render: (row: ProyekItemDto) => <span>{formatRupiah(row.nilai_kontrak)}</span> },
-              {
-                key: "ro",
-                header: "Pagu RO / Posisi Kas",
-                className: "min-w-[15rem] whitespace-nowrap text-right tabular-nums",
-                render: (row: ProyekItemDto) => {
-                  const financial = row as ProyekItemDto & { total_saldo_ro?: number; total_sisa_hak_belanja_ro?: number };
-                  const cashPosition = Number(financial.total_saldo_ro) || 0;
-                  const remainingRight = Number(financial.total_sisa_hak_belanja_ro) || 0;
-                  return (
-                    <div className="space-y-1 text-sm">
-                      <span className="block">Pagu RO {formatRupiah(row.total_plafon_ro)}</span>
-                      <span className={`block text-xs ${cashPosition < 0 ? "text-rose-700" : "text-emerald-700"}`}>Posisi kas {formatRupiah(cashPosition)}</span>
-                      <span className={`block text-xs ${remainingRight < 0 ? "text-rose-700" : "text-muted-foreground"}`}>Sisa hak belanja {formatRupiah(remainingRight)} · {row.jumlah_ro ?? 0} RO</span>
-                    </div>
-                  );
+                { key: "kontrak", header: "Nilai Kontrak", className: "min-w-[10rem] whitespace-nowrap text-right tabular-nums", render: (row: ProyekItemDto) => <span>{formatRupiah(row.nilai_kontrak)}</span> },
+                {
+                  key: "ro",
+                  header: "Pagu RO / Posisi Kas",
+                  className: "min-w-[15rem] whitespace-nowrap text-right tabular-nums",
+                  render: (row: ProyekItemDto) => {
+                    const financial = row as ProyekItemDto & { total_saldo_ro?: number; total_sisa_hak_belanja_ro?: number };
+                    const cashPosition = Number(financial.total_saldo_ro) || 0;
+                    const remainingRight = Number(financial.total_sisa_hak_belanja_ro) || 0;
+                    return (
+                      <div className="space-y-1 text-sm">
+                        <span className="block">Pagu RO {formatRupiah(row.total_plafon_ro)}</span>
+                        <span className={`block text-xs ${cashPosition < 0 ? "text-rose-700" : "text-emerald-700"}`}>Posisi kas {formatRupiah(cashPosition)}</span>
+                        <span className={`block text-xs ${remainingRight < 0 ? "text-rose-700" : "text-muted-foreground"}`}>
+                          Sisa hak belanja {formatRupiah(remainingRight)} · {row.jumlah_ro ?? 0} RO
+                        </span>
+                      </div>
+                    );
+                  },
                 },
-              },
-              { key: "status", header: "Status", className: "min-w-[14rem] whitespace-nowrap", render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{projectStatusLabel(row.status_proyek)}</StatusBadge> },
-              {
-                key: "aksi",
-                header: "Aksi",
-                className: "min-w-[14rem] whitespace-nowrap text-right",
-                render: (row: ProyekItemDto) => {
-                  const rowStatus = String(row.status_proyek);
-                  const canValidateLayanan = isServiceValidator && rowStatus === "MENUNGGU_VALIDASI_LAYANAN";
-                  const canValidateUmum = isUmumValidator && rowStatus === "MENUNGGU_VALIDASI_UMUM";
-                  const canValidatePimpinan = isPimpinanValidator && rowStatus === "MENUNGGU_VALIDASI_PIMPINAN";
-                  const canUploadMinutes = isServiceValidator && rowStatus === "MENUNGGU_NOTULEN";
-                  return (
-                    <div className="flex justify-end gap-1">
-                      {canUploadMinutes && (
-                        <Button size="sm" variant="outline" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
-                          <Upload size={15} /> Notulen
+                {
+                  key: "status",
+                  header: "Status",
+                  className: "min-w-[14rem] whitespace-nowrap",
+                  render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{projectStatusLabel(row.status_proyek)}</StatusBadge>,
+                },
+                {
+                  key: "aksi",
+                  header: "Aksi",
+                  className: "min-w-[14rem] whitespace-nowrap text-right",
+                  render: (row: ProyekItemDto) => {
+                    const rowStatus = String(row.status_proyek);
+                    const canValidateLayanan = isServiceValidator && rowStatus === "MENUNGGU_VALIDASI_LAYANAN";
+                    const canValidateUmum = isUmumValidator && rowStatus === "MENUNGGU_VALIDASI_UMUM";
+                    const canValidatePimpinan = isPimpinanValidator && rowStatus === "MENUNGGU_VALIDASI_PIMPINAN";
+                    const canUploadMinutes = isServiceValidator && rowStatus === "MENUNGGU_NOTULEN";
+                    return (
+                      <div className="flex justify-end gap-1">
+                        {canUploadMinutes && (
+                          <Button size="sm" variant="outline" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
+                            <Upload size={15} /> Notulen
+                          </Button>
+                        )}
+                        {(canValidateLayanan || canValidateUmum || canValidatePimpinan) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setValidationProject(row);
+                              setValidationApproved(true);
+                              setValidationRevision(false);
+                              setValidationNote("");
+                              setValidationError("");
+                            }}
+                          >
+                            <Check size={15} /> Validasi
+                          </Button>
+                        )}
+                        <ProjectFinalReportButton compact project={row} />
+                        <Button variant="ghost" size="sm" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
+                          <Eye size={15} /> Detail
                         </Button>
-                      )}
-                      {(canValidateLayanan || canValidateUmum || canValidatePimpinan) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setValidationProject(row);
-                            setValidationApproved(true);
-                            setValidationRevision(false);
-                            setValidationNote("");
-                            setValidationError("");
-                          }}
-                        >
-                          <Check size={15} /> Validasi
-                        </Button>
-                      )}
-                      <ProjectFinalReportButton compact project={row} />
-                      <Button variant="ghost" size="sm" render={<Link href={`/dashboard/proyek/${row.id}`} />}>
-                        <Eye size={15} /> Detail
-                      </Button>
-                    </div>
-                  );
+                      </div>
+                    );
+                  },
                 },
-              },
-            ]}
-            rows={projects}
-            rowKey={(row) => row.id}
-            searchValue={search}
-            onSearchChange={(value) => {
-              setSearch(value);
-              setPage(1);
-            }}
-            remoteSearch
-            rowsPerPageOptions={[10, 25, 50]}
-            filters={[
-              { field: "tahun", label: "Tahun Fiscal", options: years.map((value) => ({ label: value, value })) },
-              { field: "koordinator", label: "Koordinator", options: unitComboboxOptions },
-              { field: "status_proyek", label: "Status Proyek", options: PROJECT_STATUS_FILTERS },
-            ]}
-            filterValues={{ tahun, koordinator, status_proyek: statusProyek }}
-            onFilterChange={(field, value) => {
-              if (field === "tahun") setTahun(value);
-              if (field === "koordinator") setKoordinator(value);
-              if (field === "status_proyek") setStatusProyek(value);
-              setPage(1);
-            }}
-            pagination={{
-              page,
-              pageSize,
-              total: pagination?.total_datas ?? projects.length,
-              totalPages: pagination?.total_pages,
-              onPageChange: setPage,
-              onPageSizeChange: (value) => {
-                setPageSize(value);
+              ]}
+              rows={projects}
+              rowKey={(row) => row.id}
+              searchValue={search}
+              onSearchChange={(value) => {
+                setSearch(value);
                 setPage(1);
-              },
-            }}
-            emptyMessage={list.isLoading ? "Memuat proyek..." : "Belum ada proyek."}
-          />}
+              }}
+              remoteSearch
+              rowsPerPageOptions={[10, 25, 50]}
+              filters={[
+                { field: "tahun", label: "Tahun Fiscal", options: years.map((value) => ({ label: value, value })) },
+                { field: "koordinator", label: "Koordinator", options: unitComboboxOptions },
+                { field: "status_proyek", label: "Status Proyek", options: PROJECT_STATUS_FILTERS },
+              ]}
+              filterValues={{ tahun, koordinator, status_proyek: statusProyek }}
+              onFilterChange={(field, value) => {
+                if (field === "tahun") setTahun(value);
+                if (field === "koordinator") setKoordinator(value);
+                if (field === "status_proyek") setStatusProyek(value);
+                setPage(1);
+              }}
+              pagination={{
+                page,
+                pageSize,
+                total: pagination?.total_datas ?? projects.length,
+                totalPages: pagination?.total_pages,
+                onPageChange: setPage,
+                onPageSizeChange: (value) => {
+                  setPageSize(value);
+                  setPage(1);
+                },
+              }}
+              emptyMessage={list.isLoading ? "Memuat proyek..." : "Belum ada proyek."}
+            />
+          )}
         </CardContent>
       </Card>
       <Modal
@@ -805,7 +875,13 @@ export default function ProyekClientPage() {
         onClose={() => {
           if (!validation.isPending) setValidationProject(null);
         }}
-        title={String(validationProject?.status_proyek) === "MENUNGGU_VALIDASI_LAYANAN" ? "Pemeriksaan Koordinator Layanan" : String(validationProject?.status_proyek) === "MENUNGGU_VALIDASI_UMUM" ? "Validasi Bagian Umum" : "Validasi Pengajuan Proyek"}
+        title={
+          String(validationProject?.status_proyek) === "MENUNGGU_VALIDASI_LAYANAN"
+            ? "Pemeriksaan Koordinator Layanan"
+            : String(validationProject?.status_proyek) === "MENUNGGU_VALIDASI_UMUM"
+              ? "Validasi Bagian Umum"
+              : "Validasi Pengajuan Proyek"
+        }
         size="sm"
         bodyClassName="space-y-4"
         footer={
@@ -824,7 +900,7 @@ export default function ProyekClientPage() {
           <div className="rounded-lg bg-muted/40 p-3 text-sm">
             <p className="font-medium">{validationProject?.nama_proyek}</p>
             <p className="text-muted-foreground">
-              {validationProject?.kode_proyek} · {humanizeStatus(validationProject?.status_proyek)}
+              {validationProject?.no_kontrak} · {humanizeStatus(validationProject?.status_proyek)}
             </p>
           </div>
           <fieldset className="grid gap-2">
@@ -847,14 +923,34 @@ export default function ProyekClientPage() {
               </span>
             </label>
             <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${validationRevision ? "border-amber-400 bg-amber-50" : ""}`}>
-              <input type="radio" name="project-validation-decision" checked={validationRevision} onChange={() => { setValidationApproved(false); setValidationRevision(true); setValidationError(""); }} className="mt-1 accent-amber-600" />
+              <input
+                type="radio"
+                name="project-validation-decision"
+                checked={validationRevision}
+                onChange={() => {
+                  setValidationApproved(false);
+                  setValidationRevision(true);
+                  setValidationError("");
+                }}
+                className="mt-1 accent-amber-600"
+              />
               <span>
                 <span className="block text-sm font-medium">Minta revisi</span>
                 <span className="block text-xs text-muted-foreground">Kembalikan kepada pemilik untuk diperbaiki; riwayat versi tetap tersimpan.</span>
               </span>
             </label>
             <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${!validationApproved && !validationRevision ? "border-destructive bg-destructive/5" : ""}`}>
-              <input type="radio" name="project-validation-decision" checked={!validationApproved && !validationRevision} onChange={() => { setValidationApproved(false); setValidationRevision(false); setValidationError(""); }} className="mt-1 accent-destructive" />
+              <input
+                type="radio"
+                name="project-validation-decision"
+                checked={!validationApproved && !validationRevision}
+                onChange={() => {
+                  setValidationApproved(false);
+                  setValidationRevision(false);
+                  setValidationError("");
+                }}
+                className="mt-1 accent-destructive"
+              />
               <span>
                 <span className="block text-sm font-medium">Tolak</span>
                 <span className="block text-xs text-muted-foreground">Pengajuan dikembalikan dengan catatan.</span>

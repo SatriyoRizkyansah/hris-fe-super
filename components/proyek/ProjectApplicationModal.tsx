@@ -144,12 +144,24 @@ export function ProjectApplicationModal(props: Props) {
             <p className="mt-1 text-xs text-muted-foreground">Identitas dan penanggung jawab proyek.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Kode proyek" required value={form.kode_proyek} onChange={(value) => setForm((current) => ({ ...current, kode_proyek: value }))} />
+            <label className="grid gap-1.5 text-sm font-medium">
+              <span>Nomor kontrak</span>
+              <Input
+                value={form.no_kontrak}
+                readOnly
+                placeholder="Menyiapkan nomor kontrak..."
+                className="bg-muted/30 font-mono"
+                aria-label="Nomor kontrak otomatis"
+              />
+              <span className="text-xs font-normal text-muted-foreground">Dibuat otomatis dan dikunci untuk proyek ini.</span>
+            </label>
             <Field label="Tahun fiscal" type="number" required value={form.tahun_fiscal} onChange={(value) => setForm((current) => ({ ...current, tahun_fiscal: value }))} />
             <Field label="Nama proyek" required value={form.nama_proyek} onChange={(value) => setForm((current) => ({ ...current, nama_proyek: value }))} />
             <Field label="Nama client" value={form.nama_client} onChange={(value) => setForm((current) => ({ ...current, nama_client: value }))} />
-            <Field label="Sumber pendanaan" value={form.sumber_pendanaan} onChange={(value) => setForm((current) => ({ ...current, sumber_pendanaan: value }))} />
-            <Field label="Nomor kontrak" value={form.no_kontrak} onChange={(value) => setForm((current) => ({ ...current, no_kontrak: value }))} />
+            <label className="grid gap-1.5 text-sm font-medium">
+              <span>Sumber pendanaan</span>
+              <Input value="BLU" readOnly className="bg-muted/30" aria-label="Sumber pendanaan BLU" />
+            </label>
             <Field label="PJ 1" value={form.pj_1} onChange={(value) => setForm((current) => ({ ...current, pj_1: value }))} />
             <Field label="PJ 2" value={form.pj_2} onChange={(value) => setForm((current) => ({ ...current, pj_2: value }))} />
             <Field label="Mulai Kontrak" type="date" required={contractDatesRequired} value={form.mulai_kontrak} onChange={(value) => setForm((current) => ({ ...current, mulai_kontrak: value }))} />

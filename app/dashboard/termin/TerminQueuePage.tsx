@@ -30,7 +30,7 @@ type TerminRow = {
   invoice?: { id: string; status: string; nominal: number; nominal_dibayar: number } | null;
   proyek?: {
     id: string;
-    kode_proyek: string;
+    no_kontrak: string;
     nama_proyek: string;
     tahun_fiscal: number;
     status_proyek: string;
@@ -219,7 +219,7 @@ export default function TerminQueuePage() {
                     <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
                       <div>
                         <h2 className="font-semibold">{project?.nama_proyek ?? "Proyek tidak diketahui"}</h2>
-                        <p className="text-xs text-muted-foreground">{project?.kode_proyek ?? "—"} · TA {project?.tahun_fiscal ?? "—"} · {termCount} termin</p>
+                        <p className="text-xs text-muted-foreground">{project?.no_kontrak ?? "—"} · TA {project?.tahun_fiscal ?? "—"} · {termCount} termin</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={projectStatusTone(project?.status_proyek)}>{projectStatusLabel(project?.status_proyek)}</StatusBadge>
@@ -419,7 +419,7 @@ export default function TerminQueuePage() {
                     <div>
                       <h3 className="text-lg font-bold">{project?.nama_proyek ?? "Proyek"}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {project?.kode_proyek} · Tahun fiskal {project?.tahun_fiscal}
+                        {project?.no_kontrak} · Tahun fiskal {project?.tahun_fiscal}
                       </p>
                     </div>
                     <StatusBadge status={projectStatusTone(detail.status)}>{statusLabels[detail.status] ?? humanizeStatus(detail.status)}</StatusBadge>

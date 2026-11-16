@@ -28,7 +28,7 @@ type Workflow = ProjectWorkflowAction;
 type LookupRow = { id: string; [key: string]: unknown };
 type Option = { value: string; label: string };
 const blankProjectForm = (): ProjectForm => ({
-  kode_proyek: "",
+  no_kontrak: "",
   nama_proyek: "",
   tahun_fiscal: String(new Date().getFullYear()),
   mulai_kontrak: "",
@@ -409,7 +409,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       return requestHrisApi(`/api/proyek/${id}`, {
         method: "PUT",
         body: JSON.stringify({
-          kode_proyek: revisionForm.kode_proyek.trim(),
+          no_kontrak: revisionForm.no_kontrak.trim(),
           nama_proyek: revisionForm.nama_proyek.trim(),
           tahun_fiscal: Number(revisionForm.tahun_fiscal),
           nama_client: revisionForm.nama_client.trim() || null,
@@ -506,7 +506,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     if (!project) return;
     setRevisionForm({
       ...blankProjectForm(),
-      kode_proyek: String(project.kode_proyek ?? ""),
+      no_kontrak: String(project.no_kontrak ?? ""),
       nama_proyek: String(project.nama_proyek ?? ""),
       tahun_fiscal: String(project.tahun_fiscal ?? new Date().getFullYear()),
       nama_client: String(project.nama_client ?? ""),
@@ -580,7 +580,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   }
   async function submitRevision() {
     setRevisionError("");
-    if (!revisionForm.kode_proyek.trim() || !revisionForm.nama_proyek.trim() || !revisionForm.tahun_fiscal.trim()) {
+    if (!revisionForm.no_kontrak.trim() || !revisionForm.nama_proyek.trim() || !revisionForm.tahun_fiscal.trim()) {
       setRevisionError("Kode, nama, dan tahun fiskal proyek wajib diisi.");
       return;
     }

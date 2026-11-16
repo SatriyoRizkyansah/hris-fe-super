@@ -289,7 +289,6 @@ export interface ProyekExtensionItemDto {
 
 export interface ProyekItemDto {
   id: string;
-  kode_proyek: string;
   nama_proyek: string;
   tahun_fiscal: number;
   sumber_pendanaan?: object | null;
@@ -403,8 +402,6 @@ export interface TerminInputDto {
 }
 
 export interface CreateProyekDto {
-  /** @example "PRJ-2026-001" */
-  kode_proyek: string;
   /** @example "Pengembangan Infrastruktur Migas" */
   nama_proyek: string;
   /** @example 2026 */
@@ -458,7 +455,7 @@ export interface CreateProyekDto {
 
 export interface UpdateProyekDto {
   /** @example "PRJ-2026-001" */
-  kode_proyek?: string;
+  no_kontrak?: string;
   nama_proyek?: string;
   /** @example 2026 */
   tahun_fiscal?: number;
