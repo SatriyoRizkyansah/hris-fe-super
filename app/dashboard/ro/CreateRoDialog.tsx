@@ -246,7 +246,7 @@ export function CreateRoDialog({ open, onOpenChange, onCreated }: { open: boolea
             <option value="">Pilih proyek</option>
             {projects.map((row) => (
               <option key={row.id} value={row.id}>
-                {row.no_kontrak} — {row.nama_proyek}
+                {String(row.no_kontrak ?? "")} — {row.nama_proyek}
               </option>
             ))}
           </select>

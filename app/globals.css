@@ -1524,6 +1524,7 @@ button {
 }
 .finance-unit-details {
   margin-top: 7px;
+  flex-wrap: wrap;
   color: #778195;
   font-size: 0.7rem;
   font-variant-numeric: tabular-nums;

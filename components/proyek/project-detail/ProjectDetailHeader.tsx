@@ -27,7 +27,7 @@ export function ProjectDetailHeader({ project, status, hasActions, canExtend, pe
           </Button>
           <h1 className="text-2xl font-bold">{project.nama_proyek}</h1>
           <p className="text-sm text-muted-foreground">
-            {project.no_kontrak} · Tahun {project.tahun_fiscal} · Diajukan {formatDate(project.created_at)}
+            {String(project.no_kontrak ?? "")} · Tahun {project.tahun_fiscal} · Diajukan {formatDate(project.created_at)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor kontrak · {display(project.no_kontrak)}</span>

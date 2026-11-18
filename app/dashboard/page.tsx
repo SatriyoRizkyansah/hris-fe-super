@@ -92,6 +92,8 @@ export default function DashboardPage() {
       {
         id_unit_koordinator: summary.unit.id,
         nama_unit: summary.unit.nama_unit,
+        nilai_proyek_terkait: Number(summary.nilai_proyek_terkait ?? 0),
+        jumlah_proyek_terkait: Number(summary.jumlah_proyek_terkait ?? 0),
         total_plafon: ros.reduce((sum: number, row: any) => sum + Number(row.pagu_disetujui ?? row.total_plafon ?? 0), 0),
         total_terpakai: ros.reduce((sum: number, row: any) => sum + Number(row.realisasi ?? row.total_terpakai ?? 0), 0),
         sisa_saldo: ros.reduce((sum: number, row: any) => sum + Number(row.sisa_hak_belanja ?? 0), 0),
@@ -312,8 +314,8 @@ export default function DashboardPage() {
       <Card className="finance-panel">
         <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
           <div>
-            <CardTitle className="text-base font-bold">Anggaran dan kas per koordinator</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">Realisasi, sisa hak belanja, serta posisi kas pada masing-masing unit.</p>
+            <CardTitle className="text-base font-bold">Nilai proyek, anggaran, dan kas per DPM</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Nilai kontrak proyek disetujui yang terkait dengan RO unit, beserta realisasi dan posisi kasnya.</p>
           </div>
           <Link href="/dashboard/ro" className="finance-text-link">
             Lihat RO <ArrowRight size={15} />
@@ -337,6 +339,7 @@ export default function DashboardPage() {
                     <div className="finance-chart-bar h-full rounded-full" style={{ width: `${pct}%` }} />
                   </div>
                   <div className="finance-unit-details">
+                    <span>{number(item.jumlah_proyek_terkait)} proyek · Nilai kontrak {money(item.nilai_proyek_terkait)}</span>
                     <span>Terpakai {money(spent)} dari pagu RO {money(budget)}</span>
                     <span>Sisa hak {money(right)}</span>
                   </div>
@@ -355,6 +358,7 @@ export default function DashboardPage() {
               <span>{stats.isLoading ? "Memuat posisi unit…" : "Belum ada ringkasan anggaran unit."}</span>
             </div>
           )}
+          <p className="text-xs text-muted-foreground">Nilai kontrak proyek kolaborasi ditampilkan pada setiap DPM yang memiliki RO di proyek tersebut, sehingga angka antarunit tidak dijumlahkan sebagai total organisasi.</p>
         </CardContent>
       </Card>
 

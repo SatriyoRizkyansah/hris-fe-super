@@ -721,7 +721,7 @@ export default function ProyekClientPage() {
                   className: "min-w-[15rem]",
                   render: (row: ProyekItemDto) => (
                     <div className="space-y-1">
-                      <p className="font-medium">{row.no_kontrak}</p>
+                      <p className="font-medium">{String(row.no_kontrak ?? "")}</p>
                       <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
                       {row.unit_terlibat?.length ? (
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -900,7 +900,7 @@ export default function ProyekClientPage() {
           <div className="rounded-lg bg-muted/40 p-3 text-sm">
             <p className="font-medium">{validationProject?.nama_proyek}</p>
             <p className="text-muted-foreground">
-              {validationProject?.no_kontrak} · {humanizeStatus(validationProject?.status_proyek)}
+              {String(validationProject?.no_kontrak ?? "")} · {humanizeStatus(validationProject?.status_proyek)}
             </p>
           </div>
           <fieldset className="grid gap-2">

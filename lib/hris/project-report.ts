@@ -11,7 +11,6 @@ export type ProjectReportSource = {
   nama_proyek?: unknown;
   nama_client?: unknown;
   no_kontrak?: unknown;
-  no_kontrak?: unknown;
   tahun_fiscal?: unknown;
   nilai_kontrak?: unknown;
   total_direct_cost?: unknown;

@@ -35,7 +35,6 @@ const blankProjectForm = (): ProjectForm => ({
   berakhir_kontrak: "",
   sumber_pendanaan: "",
   nama_client: "",
-  no_kontrak: "",
   pj_1: "",
   pj_2: "",
   nilai_kontrak: "",
@@ -409,7 +408,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       return requestHrisApi(`/api/proyek/${id}`, {
         method: "PUT",
         body: JSON.stringify({
-          no_kontrak: revisionForm.no_kontrak.trim(),
           nama_proyek: revisionForm.nama_proyek.trim(),
           tahun_fiscal: Number(revisionForm.tahun_fiscal),
           nama_client: revisionForm.nama_client.trim() || null,
@@ -511,7 +509,6 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
       tahun_fiscal: String(project.tahun_fiscal ?? new Date().getFullYear()),
       nama_client: String(project.nama_client ?? ""),
       sumber_pendanaan: String(project.sumber_pendanaan ?? ""),
-      no_kontrak: String(project.no_kontrak ?? ""),
       pj_1: String(project.pj_1 ?? ""),
       pj_2: String(project.pj_2 ?? ""),
       mulai_kontrak: dateKey(project.mulai_kontrak),

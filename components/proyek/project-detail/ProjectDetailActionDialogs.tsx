@@ -61,7 +61,7 @@ export function ProjectDetailActionDialogs({ project, workflow, setWorkflow, app
             <div className="space-y-3">
               <div className="rounded-lg bg-muted/40 p-3 text-sm">
                 <p className="font-medium">{project.nama_proyek || "—"}</p>
-                <p className="text-muted-foreground">{project.no_kontrak} · {humanizeStatus(project.status_proyek)}</p>
+                <p className="text-muted-foreground">{String(project.no_kontrak ?? "")} · {humanizeStatus(project.status_proyek)}</p>
               </div>
               <fieldset className="grid gap-2">
                 <legend className="mb-1 text-sm font-medium">Keputusan validasi</legend>
