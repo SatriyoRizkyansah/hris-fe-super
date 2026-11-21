@@ -90,7 +90,7 @@ export default function InvoicePageClient() {
   const role = user.data?.role?.toLowerCase() ?? "";
   useEffect(() => setMounted(true), []);
   const canCreate = mounted && ["superadmin", "keuangan", "keu_billing"].includes(role);
-  const canSettle = ["superadmin", "keuangan", "keu_bendahara"].includes(role);
+  const canSettle = ["superadmin", "keuangan", "keu_bendahara", "keu_bendahara_pendapatan"].includes(role);
   useEffect(() => {
     if (!canCreate) return;
     const params = new URLSearchParams(window.location.search);

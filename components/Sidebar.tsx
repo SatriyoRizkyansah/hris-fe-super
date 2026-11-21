@@ -119,7 +119,7 @@ const allowedPath: Record<string, string[]> = {
   "/dashboard/karwas": ["superadmin", "keu_karwas"],
   "/dashboard/karwas/perpanjangan-proyek": ["superadmin", "keu_karwas"],
   "/dashboard/dana-operasional": ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"],
-  "/dashboard/rekening": ["superadmin", "keuangan", "keu_bendahara"],
+  "/dashboard/rekening": ["superadmin", "keuangan", "keu_bendahara", "keu_bendahara_pendapatan"],
   "/dashboard/mak": ["superadmin", "keuangan"],
   "/dashboard/sk": ["superadmin", "koordinator", "keuangan"],
   "/dashboard/alokasi-gaji": ["superadmin", "koordinator", "keuangan"],
@@ -154,7 +154,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
   const currentUser = useCurrentUser();
   const isGeneralCoordinator = role === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM";
   const canViewRetail = currentUser.data?.canViewRetail === true;
-  const canSeeOperationalFunds = isGeneralCoordinator || ["superadmin", "keuangan", "keu_bendahara", "keu_bendahara_pendapatan", "keu_karwas"].includes(role);
+  const canSeeOperationalFunds = isGeneralCoordinator || ["superadmin", "keuangan", "keu_bendahara", "keu_karwas"].includes(role);
   const [switching, setSwitching] = useState(false);
   const [accessPanelOpen, setAccessPanelOpen] = useState(false);
   const [storedAccesses, setStoredAccesses] = useState<RoleAccess[]>(accesses);
@@ -206,7 +206,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
       .find((path) => pathname === path || pathname.startsWith(`${path}/`));
     if (match === "/dashboard/dana-operasional" && nextRole === "koordinator") return isGeneralCoordinator;
     if (match === "/dashboard/retail") {
-      if (["superadmin", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_bendahara_pendapatan", "keu_karwas"].includes(nextRole)) return true;
+      if (["superadmin", "keuangan", "keu_billing", "keu_bendahara", "keu_bendahara_pengeluaran", "keu_karwas"].includes(nextRole)) return true;
       if (nextRole === "koordinator" && currentUser.data?.unitKerjaKode === "ORG-UMUM") return true;
       return ["koordinator", "subkoor"].includes(nextRole) && currentUser.data?.role?.toLowerCase() !== "superadmin" && currentUser.data?.canManageRetail === true;
     }
@@ -235,6 +235,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
                 <p className="sidebar-title">{section.title}</p>
                 <ul className="nav">
                   {visibleItems.map(({ href, label, icon: Icon }) => {
+                    const visibleLabel = role === "keu_bendahara_pendapatan" && href === "/dashboard/invoice" ? "Penerimaan Invoice" : label;
                     const active = href === "/dashboard" || href === "/dashboard/karwas" || href === "/dashboard/alokasi-gaji" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
                     return (
                       <li key={href}>
@@ -242,7 +243,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
                           href={href}
                           className="nav-link"
                           aria-current={active ? "page" : undefined}
-                          title={collapsed ? label : undefined}
+                          title={collapsed ? visibleLabel : undefined}
                           onClick={
                             href === "/dashboard/dana-operasional"
                               ? (event) => {
@@ -253,7 +254,7 @@ export default function Sidebar({ collapsed, open, onToggle, role = "", accesses
                           }
                         >
                           <Icon size={20} aria-hidden="true" />
-                          <span className="nav-label">{label}</span>
+                          <span className="nav-label">{visibleLabel}</span>
                         </Link>
                       </li>
                     );

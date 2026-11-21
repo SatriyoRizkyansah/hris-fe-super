@@ -64,6 +64,7 @@ export default function DashboardPage() {
     tag: "dashboard",
     method: "dashboardGetSuperadminDashboardControllerGetSuperadminDashboard",
     params: {},
+    enabled: hasMounted && sessionRole !== "keu_bendahara_pendapatan",
     queryFn: async () => {
       setBrowserToken();
       const rawCookie = document.cookie
@@ -172,6 +173,78 @@ export default function DashboardPage() {
       tone: "violet",
     },
   ];
+
+  if (hasMounted && sessionRole === "keu_bendahara_pendapatan") {
+    const incomeShortcuts = [
+      {
+        href: "/dashboard/invoice",
+        title: "Penerimaan Invoice",
+        description: "Periksa tagihan terbit, catat penerimaan, dan lihat status pelunasan klien.",
+        icon: ReceiptText,
+      },
+      {
+        href: "/dashboard/rekonsiliasi-bank",
+        title: "Rekonsiliasi Bank",
+        description: "Cocokkan saldo rekening dengan transaksi yang sudah dicatat di aplikasi.",
+        icon: Landmark,
+      },
+      {
+        href: "/dashboard/rekening",
+        title: "Rekening Bank",
+        description: "Pilih dan tinjau rekening yang digunakan untuk pencatatan penerimaan.",
+        icon: Building2,
+      },
+    ];
+
+    return (
+      <section className="hris-page dashboard-page space-y-6" aria-labelledby="dashboard-title">
+        <header className="finance-dashboard-hero">
+          <div className="relative z-10 max-w-2xl">
+            <span className="finance-dashboard-eyebrow"><Activity size={15} /> KEUANGAN · BENDAHARA PENDAPATAN</span>
+            <h1 id="dashboard-title">Penerimaan dana dan rekonsiliasi.</h1>
+            <p>Kelola penerimaan invoice dari klien dan pastikan pencatatannya sesuai dengan mutasi rekening bank.</p>
+          </div>
+          <div className="finance-hero-mark" aria-hidden="true"><CircleDollarSign size={118} strokeWidth={1.1} /></div>
+        </header>
+
+        <Card className="finance-panel">
+          <CardHeader>
+            <CardTitle className="text-base font-bold">Alur kerja penerimaan</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Mulai dari invoice yang sudah diterbitkan sampai saldo bank direkonsiliasi.</p>
+          </CardHeader>
+          <CardContent>
+            <ol className="grid gap-3 md:grid-cols-3">
+              {[
+                { title: "Tinjau invoice", detail: "Periksa tagihan yang menunggu pembayaran dari klien." },
+                { title: "Catat penerimaan", detail: "Cocokkan mutasi bank dan catat pembayaran pada invoice." },
+                { title: "Rekonsiliasi", detail: "Bandingkan saldo rekening dengan saldo yang tercatat di sistem." },
+              ].map((step, index) => (
+                <li key={step.title} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <span className="inline-flex size-7 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-700">{index + 1}</span>
+                  <h2 className="mt-3 text-sm font-bold text-slate-900">{step.title}</h2>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">{step.detail}</p>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Menu penerimaan</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Pilih pekerjaan yang ingin dilanjutkan.</p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {incomeShortcuts.map(({ href, title, description, icon: Icon }) => (
+            <Link key={href} href={href} className="dashboard-shortcut">
+              <span className="dashboard-shortcut-icon"><Icon size={21} /></span>
+              <span className="min-w-0 flex-1"><strong>{title}</strong><small>{description}</small></span>
+              <ArrowRight size={18} className="dashboard-shortcut-arrow" />
+            </Link>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="hris-page dashboard-page space-y-6" aria-labelledby="dashboard-title">

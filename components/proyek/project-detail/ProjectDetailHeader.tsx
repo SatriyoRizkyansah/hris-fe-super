@@ -6,9 +6,18 @@ import { ProjectFinalReportButton } from "@/components/proyek/ProjectFinalReport
 import { formatDate, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import type { ProjectDetail } from "./types";
 
-const display = (value: unknown) => value == null || value === "" ? "—" : String(value);
+const display = (value: unknown) => (value == null || value === "" ? "—" : String(value));
 
-export function ProjectDetailHeader({ project, status, hasActions, canExtend, pendingExtension, isSubmitter, onExtend, onWorkflow }: {
+export function ProjectDetailHeader({
+  project,
+  status,
+  hasActions,
+  canExtend,
+  pendingExtension,
+  isSubmitter,
+  onExtend,
+  onWorkflow,
+}: {
   project: ProjectDetail;
   status: string;
   hasActions: boolean;
@@ -31,13 +40,16 @@ export function ProjectDetailHeader({ project, status, hasActions, canExtend, pe
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor kontrak · {display(project.no_kontrak)}</span>
-            <span className="rounded-md bg-muted px-2.5 py-1.5">Periode kontrak · {formatDate(String(project.mulai_kontrak ?? ""))} – {formatDate(String(project.berakhir_kontrak ?? ""))}</span>
+            <span className="rounded-md bg-muted px-2.5 py-1.5">
+              Periode kontrak · {formatDate(String(project.mulai_kontrak ?? ""))} – {formatDate(String(project.berakhir_kontrak ?? ""))}
+            </span>
           </div>
           {project.unit_terlibat?.length ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {project.unit_terlibat.map((unit) => (
                 <span key={unit.id} className={`rounded-full px-2.5 py-1 text-xs ${unit.peran === "PENGUSUL" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                  {unit.nama_unit}{unit.peran === "PENGUSUL" ? " · Pengusul" : " · Kolaborator"}
+                  {unit.nama_unit}
+                  {unit.peran === "PENGUSUL" ? " · Pengusul" : " · Kolaborator"}
                 </span>
               ))}
             </div>
@@ -55,8 +67,16 @@ export function ProjectDetailHeader({ project, status, hasActions, canExtend, pe
               <p className="mt-0.5 text-xs text-muted-foreground">Ajukan perpanjangan masa SK atau unggah BAST untuk menyelesaikan proyek.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {canExtend && <Button type="button" size="sm" variant="outline" onClick={onExtend}><FileClock size={15} /> Ajukan perpanjangan SK</Button>}
-              {isSubmitter && status === "DISETUJUI_PIMPINAN" && <Button type="button" size="sm" onClick={() => onWorkflow("bast")}><Upload size={15} /> Unggah BAST untuk menyelesaikan</Button>}
+              {canExtend && (
+                <Button type="button" size="sm" variant="outline" onClick={onExtend}>
+                  <FileClock size={15} /> Ajukan perpanjangan SK
+                </Button>
+              )}
+              {isSubmitter && status === "DISETUJUI_PIMPINAN" && (
+                <Button type="button" size="sm" onClick={() => onWorkflow("bast")}>
+                  <Upload size={15} /> Unggah BAST untuk menyelesaikan
+                </Button>
+              )}
               {pendingExtension && isSubmitter && <span className="rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">Perpanjangan SK sedang diperiksa KARWAS</span>}
             </div>
           </>
