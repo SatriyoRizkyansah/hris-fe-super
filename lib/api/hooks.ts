@@ -25,7 +25,7 @@ export type CurrentUser = {
   canViewRetail?: boolean;
 };
 
-export function setBrowserToken() {
+export function getBrowserToken(): string | null {
   const cookie =
     typeof document === "undefined"
       ? undefined
@@ -34,7 +34,11 @@ export function setBrowserToken() {
           .map((item) => item.trim())
           .find((item) => item.startsWith(`${SESSION_COOKIE}=`))
           ?.slice(SESSION_COOKIE.length + 1);
-  browserApi.setSecurityData(readSession(cookie)?.token ?? null);
+  return readSession(cookie)?.token ?? null;
+}
+
+export function setBrowserToken() {
+  browserApi.setSecurityData(getBrowserToken());
 }
 
 export async function apiData<T>(request: Promise<{ data: T }>): Promise<T> {

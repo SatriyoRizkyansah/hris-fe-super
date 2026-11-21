@@ -426,6 +426,8 @@ export interface CreateProyekDto {
   nama_client?: string;
   /** Nomor kontrak bersama untuk seluruh RO proyek */
   no_kontrak?: string;
+  /** ID reservasi nomor kontrak otomatis untuk proyek baru */
+  no_kontrak_reservasi_id?: string;
   /** Unit pengusul proyek; untuk Koordinator harus sama dengan unit pada token */
   unit_pengusul_id?: string;
   /** Unit koordinator yang berkolaborasi dalam proyek */
@@ -454,8 +456,6 @@ export interface CreateProyekDto {
 }
 
 export interface UpdateProyekDto {
-  /** @example "PRJ-2026-001" */
-  no_kontrak?: string;
   nama_proyek?: string;
   /** @example 2026 */
   tahun_fiscal?: number;
@@ -473,6 +473,7 @@ export interface UpdateProyekDto {
   pj_1?: string;
   pj_2?: string;
   nama_client?: string;
+  /** Nomor kontrak proyek yang dibuat otomatis */
   no_kontrak?: string;
   /** Unit pengusul proyek */
   unit_pengusul_id?: string;
@@ -495,6 +496,13 @@ export interface JobProyekNumberReservationDto {
   id: string;
   /** @example "2026110001" */
   nomor_job: string;
+}
+
+export interface ProyekContractNumberReservationDto {
+  /** @format uuid */
+  id: string;
+  /** @example "202602694" */
+  no_kontrak: string;
 }
 
 export interface ProyekValidationDto {
@@ -1202,18 +1210,97 @@ export interface CreateInvoiceDto {
   jenis: "PROYEK" | "RETAIL";
   termin_id?: string;
   retail_job_id?: string;
-  /** @example "INV/2026/001" */
-  nomor_invoice: string;
+  /**
+   * Nomor referensi invoice (16 digit). Bila kosong, sistem membuat otomatis dari kode_program.
+   * @example "8868050926100114"
+   */
+  nomor_invoice?: string;
+  /**
+   * Kode program untuk generator nomor invoice (16 digit) dan kwitansi.
+   * @example "5.09"
+   */
+  kode_program?: string;
+  /** @example "INV/5.09.00/26100114" */
+  no_kwitansi?: string;
+  /** @example "04002600420989765" */
+  nsfp?: string;
+  /**
+   * Tarif PPN (%) untuk perhitungan DPP nilai lain 11/12.
+   * @default 12
+   * @example 12
+   */
+  tarif_ppn?: number;
   /** @example "2026-10-26" */
   tanggal_terbit: string;
   /** @example "2026-11-25" */
   tanggal_jatuh_tempo?: string;
 }
 
+export interface AlokasiPenerimaanInputDto {
+  /** RO / kode program tujuan alokasi */
+  ro_id?: string;
+  /** MAK / MAP penerimaan (tipe PENDAPATAN) */
+  mak_id?: string;
+  /** @example "5.07.11.4.99" */
+  kode_program?: string;
+  /** Nominal netto yang dialokasikan */
+  nominal: number;
+  keterangan?: string;
+}
+
 export interface BayarInvoiceDto {
   mutasi_bank_id: string;
   nominal: number;
+  /** Izinkan selisih kurang bayar ditanggung sebagai nilai_kurang_bayar invoice (mis. potongan PPN / biaya administrasi Rp 2.900). */
+  izinkan_selisih?: object;
+  /** Split alokasi netto ke beberapa kode program/MAP. Bila kosong, sistem memakai alokasi otomatis ke pagu RO. */
+  alokasi?: AlokasiPenerimaanInputDto[];
   catatan?: string;
+}
+
+export interface PostingBatchInvoiceDto {
+  /**
+   * Nomor bukti posting lunas dari sistem akuntansi (JLT/GLT). Bila kosong sistem membuat nomor internal otomatis.
+   * @example "JLT/2026/11/000123"
+   */
+  no_posting?: string;
+  /**
+   * Tanggal posting. Default: hari ini.
+   * @example "2026-11-19"
+   */
+  tanggal_posting?: string;
+  catatan?: string;
+  /** Daftar id invoice yang akan diposting lunas. */
+  invoice_ids: string[];
+}
+
+export interface PostingInvoiceDto {
+  /**
+   * Nomor bukti posting lunas dari sistem akuntansi (JLT/GLT). Bila kosong sistem membuat nomor internal otomatis.
+   * @example "JLT/2026/11/000123"
+   */
+  no_posting?: string;
+  /**
+   * Tanggal posting. Default: hari ini.
+   * @example "2026-11-19"
+   */
+  tanggal_posting?: string;
+  catatan?: string;
+}
+
+export interface SelesaikanSelisihInvoiceDto {
+  jenis: "KURANG" | "LEBIH";
+  /** Nominal yang diselesaikan. Default: seluruh selisih tercatat. */
+  nominal?: number;
+  /** @example "Kurang bayar Rp 2.900 tidak ditagih sesuai surat pernyataan." */
+  alasan: string;
+  /** @example "SP/001/KEU/2026" */
+  nomor_bukti?: string;
+}
+
+export interface BatalkanInvoiceDto {
+  /** @example "Salah input nominal invoice" */
+  alasan_pembatalan: string;
 }
 
 export interface CreateRetailJobItemDto {
@@ -2321,6 +2408,31 @@ export class Api<
      * No description
      *
      * @tags Master - Proyek
+     * @name ProyekReserveContractNumberControllerReserve
+     * @summary Siapkan nomor kontrak proyek otomatis (Superadmin, Koordinator)
+     * @request POST:/api/proyek/contract-number/reserve
+     * @secure
+     */
+    proyekReserveContractNumberControllerReserve: (
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        StandartResponseCreate & {
+          data?: ProyekContractNumberReservationDto;
+        },
+        void
+      >({
+        path: `/api/proyek/contract-number/reserve`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
      * @name ProyekUploadSkControllerUploadSk
      * @summary Upload kontrak proyek (Superadmin, Koordinator)
      * @request POST:/api/proyek/{id}/sk
@@ -2790,7 +2902,7 @@ export class Api<
      *
      * @tags Master - RO Transaksi
      * @name RoTransaksiCreateControllerCreate
-     * @summary Tambah transaksi RO (Superadmin, Keuangan - Bendahara)
+     * @summary Tambah transaksi RO (Superadmin, Bendahara Pengeluaran)
      * @request POST:/api/ro/{id}/transaksi
      * @secure
      */
@@ -2813,7 +2925,7 @@ export class Api<
      *
      * @tags Master - RO Transaksi
      * @name RoTransaksiUpdateControllerUpdate
-     * @summary Update transaksi RO (Superadmin, Keuangan - Bendahara)
+     * @summary Update transaksi RO (Superadmin, Bendahara Pengeluaran)
      * @request PUT:/api/ro/{id}/transaksi/{tid}
      * @secure
      */
@@ -2837,7 +2949,7 @@ export class Api<
      *
      * @tags Master - RO Transaksi
      * @name RoTransaksiRemoveControllerRemove
-     * @summary Hapus transaksi RO (Superadmin, Keuangan - Bendahara)
+     * @summary Hapus transaksi RO (Superadmin, Bendahara Pengeluaran)
      * @request DELETE:/api/ro/{id}/transaksi/{tid}
      * @secure
      */
@@ -4034,7 +4146,7 @@ export class Api<
      *
      * @tags Master - Rekening Bank
      * @name MasterRekeningFindAllControllerFindAll
-     * @summary Get daftar rekening bank (Superadmin, Koordinator, Keuangan (Legacy), Keuangan - Bendahara)
+     * @summary Get daftar rekening bank (Superadmin, Koordinator, Keuangan (Legacy), Keuangan - Bendahara, Bendahara Pendapatan)
      * @request GET:/api/master-rekening
      * @secure
      */
@@ -4073,7 +4185,7 @@ export class Api<
      *
      * @tags Master - Rekening Bank
      * @name MasterRekeningFindOneControllerFindOne
-     * @summary Get detail rekening bank (Superadmin, Keuangan (Legacy), Keuangan - Bendahara)
+     * @summary Get detail rekening bank (Superadmin, Keuangan (Legacy), Keuangan - Bendahara, Bendahara Pendapatan)
      * @request GET:/api/master-rekening/{id}
      * @secure
      */
@@ -4137,7 +4249,7 @@ export class Api<
      *
      * @tags Rekonsiliasi Bank
      * @name RekonsiliasiBankGetSaldoSistemControllerGetSaldoSistem
-     * @summary Hitung saldo kas virtual sistem (Superadmin, Keuangan (Legacy))
+     * @summary Hitung saldo kas virtual sistem (Superadmin, Keuangan (Legacy), Bendahara Pendapatan)
      * @request GET:/api/rekonsiliasi/saldo-sistem
      * @secure
      */
@@ -4163,7 +4275,7 @@ export class Api<
      *
      * @tags Rekonsiliasi Bank
      * @name RekonsiliasiBankFindAllControllerFindAll
-     * @summary Get riwayat rekonsiliasi bank (Superadmin, Keuangan (Legacy))
+     * @summary Get riwayat rekonsiliasi bank (Superadmin, Keuangan (Legacy), Bendahara Pendapatan)
      * @request GET:/api/rekonsiliasi
      * @secure
      */
@@ -4189,7 +4301,7 @@ export class Api<
      *
      * @tags Rekonsiliasi Bank
      * @name RekonsiliasiBankCreateControllerCreate
-     * @summary Buat rekonsiliasi bank (Superadmin, Keuangan (Legacy))
+     * @summary Buat rekonsiliasi bank (Superadmin, Keuangan (Legacy), Bendahara Pendapatan)
      * @request POST:/api/rekonsiliasi
      * @secure
      */
@@ -4697,6 +4809,12 @@ export class Api<
         /** @default 1 */
         page?: number;
         status?: string;
+        /** Filter jenis invoice */
+        jenis?: string;
+        /** Filter rekening bank termutasi */
+        rekening_id?: string;
+        /** Filter diposting / belum diposting */
+        diposting?: string;
       },
       params: RequestParams = {},
     ) =>
@@ -4727,6 +4845,81 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceSummaryControllerSummary
+     * @summary Rekap validasi penerimaan invoice (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @request GET:/api/keuangan/invoice/summary
+     * @secure
+     */
+    invoiceSummaryControllerSummary: (
+      query?: {
+        /** @example 2026 */
+        tahun?: number;
+        /**
+         * 1-12. Kosong = seluruh tahun.
+         * @example 11
+         */
+        bulan?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/summary`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceDetailControllerDetail
+     * @summary Detail invoice (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @request GET:/api/keuangan/invoice/detail/{id}
+     * @secure
+     */
+    invoiceDetailControllerDetail: (id: string, params: RequestParams = {}) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/detail/${id}`,
+        method: "GET",
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceTitipanPpnControllerTitipanPpn
+     * @summary Saldo PPN titipan penerimaan (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @request GET:/api/keuangan/invoice/ppn-titipan
+     * @secure
+     */
+    invoiceTitipanPpnControllerTitipanPpn: (
+      query?: {
+        /** @example 2026 */
+        tahun?: number;
+        /**
+         * 1-12. Kosong = seluruh tahun.
+         * @example 11
+         */
+        bulan?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/ppn-titipan`,
+        method: "GET",
+        query: query,
+        secure: true,
         ...params,
       }),
 
@@ -4767,6 +4960,42 @@ export class Api<
      * No description
      *
      * @tags Keuangan - Invoice dan Settlement
+     * @name MutasiBankListControllerList
+     * @summary Daftar mutasi bank (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI))
+     * @request GET:/api/keuangan/mutasi-bank
+     * @secure
+     */
+    mutasiBankListControllerList: (
+      query?: {
+        /** Pencarian / filter bebas */
+        query?: string;
+        /** @default 10 */
+        limit?: number;
+        /** @default 1 */
+        page?: number;
+        rekening_id?: string;
+        status?: string;
+        /** @example "2026-11-01" */
+        tanggal_dari?: string;
+        /** @example "2026-11-30" */
+        tanggal_sampai?: string;
+        /** Hanya mutasi yang belum dicocokkan penuh */
+        belum_dicocokkan?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/mutasi-bank`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
      * @name InvoiceBayarControllerBayar
      * @summary Validasi pembayaran invoice (Superadmin, Bendahara Pendapatan)
      * @request POST:/api/keuangan/invoice/{id}/bayar
@@ -4783,6 +5012,300 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoicePostingControllerSiapPosting
+     * @summary Daftar invoice siap diposting lunas (Superadmin, Keuangan (Legacy), Bendahara Pendapatan)
+     * @request GET:/api/keuangan/invoice/siap-posting
+     * @secure
+     */
+    invoicePostingControllerSiapPosting: (
+      query?: {
+        /** @example 2026 */
+        tahun?: number;
+        /**
+         * 1-12. Kosong = seluruh tahun.
+         * @example 11
+         */
+        bulan?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/siap-posting`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoicePostingControllerPostingBatch
+     * @summary Posting lunas batch invoice (Superadmin, Bendahara Pendapatan)
+     * @request POST:/api/keuangan/invoice/posting-batch
+     * @secure
+     */
+    invoicePostingControllerPostingBatch: (
+      data: PostingBatchInvoiceDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/posting-batch`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoicePostingControllerPosting
+     * @summary Posting lunas invoice (Superadmin, Bendahara Pendapatan)
+     * @request POST:/api/keuangan/invoice/{id}/posting
+     * @secure
+     */
+    invoicePostingControllerPosting: (
+      id: string,
+      data: PostingInvoiceDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/${id}/posting`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoicePostingControllerSelesaikanSelisih
+     * @summary Selesaikan selisih penerimaan invoice (Superadmin, Bendahara Pendapatan)
+     * @request POST:/api/keuangan/invoice/{id}/selisih
+     * @secure
+     */
+    invoicePostingControllerSelesaikanSelisih: (
+      id: string,
+      data: SelesaikanSelisihInvoiceDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/${id}/selisih`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoiceCancelControllerBatal
+     * @summary Batalkan invoice (Superadmin, Bendahara Pendapatan)
+     * @request POST:/api/keuangan/invoice/{id}/batal
+     * @secure
+     */
+    invoiceCancelControllerBatal: (
+      id: string,
+      data: BatalkanInvoiceDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/${id}/batal`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+  };
+  keuanganLaporanBendaharaPenerimaan = {
+    /**
+     * No description
+     *
+     * @tags Keuangan - Laporan Bendahara Penerimaan
+     * @name InvoiceReportControllerSptj
+     * @summary SPTJ Penerimaan (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI), Bendahara Pendapatan)
+     * @request GET:/api/keuangan/laporan/sptj
+     * @secure
+     */
+    invoiceReportControllerSptj: (
+      query?: {
+        /** @example 2026 */
+        tahun?: number;
+        /**
+         * 1-12.
+         * @example 10
+         */
+        bulan?: number;
+        /**
+         * 1-4. Diabaikan jika bulan diisi.
+         * @example 4
+         */
+        triwulan?: number;
+        /**
+         * Filter kode program (opsional).
+         * @example "5.09"
+         */
+        kode_program?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/laporan/sptj`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Laporan Bendahara Penerimaan
+     * @name InvoiceReportControllerExportSptj
+     * @summary Export SPTJ Penerimaan (Excel) (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI), Bendahara Pendapatan)
+     * @request GET:/api/keuangan/laporan/sptj/export
+     * @secure
+     */
+    invoiceReportControllerExportSptj: (
+      query?: {
+        /** @example 2026 */
+        tahun?: number;
+        /**
+         * 1-12.
+         * @example 10
+         */
+        bulan?: number;
+        /**
+         * 1-4. Diabaikan jika bulan diisi.
+         * @example 4
+         */
+        triwulan?: number;
+        /**
+         * Filter kode program (opsional).
+         * @example "5.09"
+         */
+        kode_program?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/laporan/sptj/export`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Laporan Bendahara Penerimaan
+     * @name InvoiceReportControllerRealisasi
+     * @summary Laporan Realisasi Penerimaan per MAK (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI), Bendahara Pendapatan)
+     * @request GET:/api/keuangan/laporan/realisasi-penerimaan
+     * @secure
+     */
+    invoiceReportControllerRealisasi: (
+      query?: {
+        /** @example 2026 */
+        tahun?: number;
+        /**
+         * 1-12.
+         * @example 10
+         */
+        bulan?: number;
+        /**
+         * 1-4. Diabaikan jika bulan diisi.
+         * @example 4
+         */
+        triwulan?: number;
+        /**
+         * Filter kode program (opsional).
+         * @example "5.09"
+         */
+        kode_program?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/laporan/realisasi-penerimaan`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Laporan Bendahara Penerimaan
+     * @name InvoiceReportControllerExportRealisasi
+     * @summary Export Laporan Realisasi Penerimaan (Excel) (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI), Bendahara Pendapatan)
+     * @request GET:/api/keuangan/laporan/realisasi-penerimaan/export
+     * @secure
+     */
+    invoiceReportControllerExportRealisasi: (
+      query?: {
+        /** @example 2026 */
+        tahun?: number;
+        /**
+         * 1-12.
+         * @example 10
+         */
+        bulan?: number;
+        /**
+         * 1-4. Diabaikan jika bulan diisi.
+         * @example 4
+         */
+        triwulan?: number;
+        /**
+         * Filter kode program (opsional).
+         * @example "5.09"
+         */
+        kode_program?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/laporan/realisasi-penerimaan/export`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Laporan Bendahara Penerimaan
+     * @name InvoiceReportControllerMapPendapatan
+     * @summary Daftar MAP penerimaan (Superadmin, Keuangan (Legacy), Keuangan - Billing, Keuangan - Bendahara, Bendahara Pengeluaran, Bendahara Pendapatan, Pimpinan, Satuan Pengawasan Intern (SPI), Bendahara Pendapatan)
+     * @request GET:/api/keuangan/laporan/map-pendapatan
+     * @secure
+     */
+    invoiceReportControllerMapPendapatan: (params: RequestParams = {}) =>
+      this.request<void, any>({
+        path: `/api/keuangan/laporan/map-pendapatan`,
+        method: "GET",
+        secure: true,
         ...params,
       }),
   };
@@ -5180,7 +5703,7 @@ export class Api<
      *
      * @tags Pembukuan - Buku Kas
      * @name BukuKasListControllerList
-     * @summary Daftar baris buku kas Bendahara Pengeluaran (Superadmin, Bendahara Pengeluaran)
+     * @summary Daftar baris buku kas Bendahara Pengeluaran (Superadmin, Bendahara Pengeluaran, Bendahara Pendapatan)
      * @request GET:/api/pembukuan
      * @secure
      */
@@ -5223,7 +5746,7 @@ export class Api<
      *
      * @tags Pembukuan - Buku Kas
      * @name BukuKasCreateControllerCreate
-     * @summary Tambah baris buku kas (Superadmin, Bendahara Pengeluaran)
+     * @summary Tambah baris buku kas (Superadmin, Bendahara Pengeluaran, Bendahara Pendapatan)
      * @request POST:/api/pembukuan
      * @secure
      */
@@ -5245,7 +5768,7 @@ export class Api<
      *
      * @tags Pembukuan - Buku Kas
      * @name BukuKasListControllerDetail
-     * @summary Detail baris buku kas (Superadmin, Bendahara Pengeluaran)
+     * @summary Detail baris buku kas (Superadmin, Bendahara Pengeluaran, Bendahara Pendapatan)
      * @request GET:/api/pembukuan/detail/{id}
      * @secure
      */
@@ -5262,7 +5785,7 @@ export class Api<
      *
      * @tags Pembukuan - Buku Kas
      * @name BukuKasRekapControllerRekap
-     * @summary Rekap bulanan buku kas (Superadmin, Bendahara Pengeluaran)
+     * @summary Rekap bulanan buku kas (Superadmin, Bendahara Pengeluaran, Bendahara Pendapatan)
      * @request GET:/api/pembukuan/rekap
      * @secure
      */
@@ -5286,7 +5809,7 @@ export class Api<
      *
      * @tags Pembukuan - Buku Kas
      * @name BukuKasUpdateControllerUpdate
-     * @summary Ubah baris buku kas (Superadmin, Bendahara Pengeluaran)
+     * @summary Ubah baris buku kas (Superadmin, Bendahara Pengeluaran, Bendahara Pendapatan)
      * @request PATCH:/api/pembukuan/{id}
      * @secure
      */
@@ -5309,7 +5832,7 @@ export class Api<
      *
      * @tags Pembukuan - Buku Kas
      * @name BukuKasRemoveControllerRemove
-     * @summary Hapus baris buku kas (Superadmin, Bendahara Pengeluaran)
+     * @summary Hapus baris buku kas (Superadmin, Bendahara Pengeluaran, Bendahara Pendapatan)
      * @request DELETE:/api/pembukuan/{id}
      * @secure
      */
@@ -5326,7 +5849,7 @@ export class Api<
      *
      * @tags Pembukuan - Buku Kas
      * @name BukuKasSaldoTarikControllerSetSaldoAwal
-     * @summary Simpan saldo awal buku kas (Superadmin, Bendahara Pengeluaran)
+     * @summary Simpan saldo awal buku kas (Superadmin, Bendahara Pengeluaran, Bendahara Pendapatan)
      * @request POST:/api/pembukuan/saldo-awal
      * @secure
      */
@@ -5348,7 +5871,7 @@ export class Api<
      *
      * @tags Pembukuan - Buku Kas
      * @name BukuKasSaldoTarikControllerTarik
-     * @summary Tarik transaksi arus kas keuangan ke buku kas (Superadmin, Bendahara Pengeluaran)
+     * @summary Tarik transaksi arus kas keuangan ke buku kas (Superadmin, Bendahara Pengeluaran, Bendahara Pendapatan)
      * @request POST:/api/pembukuan/tarik-arus-kas
      * @secure
      */
