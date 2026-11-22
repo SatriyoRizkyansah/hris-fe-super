@@ -52,14 +52,39 @@ type Props = {
 
 export function RoDetailModals(props: Props) {
   const {
-    ro, editOpen, setEditOpen, edit, setEdit, collaboratorCandidate,
-    setCollaboratorCandidate, collaborationUnitOptions, units, notice,
-    updatePending, saveEdit, transactionOpen, setTransactionOpen, transactionId,
-    transaction, setTransaction, transactionDirection, setTransactionDirection,
-    saveTransactionPending, submitTransaction, receiptFile, setReceiptFile,
-    receiptUploading, ledgerRows, spendRequestOpen, setSpendRequestOpen,
-    spendRequest, setSpendRequest, createSpendRequestPending, submitSpendRequest,
-    spendRequestError, remainingRight,
+    ro,
+    editOpen,
+    setEditOpen,
+    edit,
+    setEdit,
+    collaboratorCandidate,
+    setCollaboratorCandidate,
+    collaborationUnitOptions,
+    units,
+    notice,
+    updatePending,
+    saveEdit,
+    transactionOpen,
+    setTransactionOpen,
+    transactionId,
+    transaction,
+    setTransaction,
+    transactionDirection,
+    setTransactionDirection,
+    saveTransactionPending,
+    submitTransaction,
+    receiptFile,
+    setReceiptFile,
+    receiptUploading,
+    ledgerRows,
+    spendRequestOpen,
+    setSpendRequestOpen,
+    spendRequest,
+    setSpendRequest,
+    createSpendRequestPending,
+    submitSpendRequest,
+    spendRequestError,
+    remainingRight,
   } = props;
   return (
     <>
@@ -102,23 +127,50 @@ export function RoDetailModals(props: Props) {
               <div className="min-w-0 flex-1">
                 <FilterCombobox options={collaborationUnitOptions} value={collaboratorCandidate} onValueChange={setCollaboratorCandidate} label="Pilih unit kolaborasi" />
               </div>
-              <Button type="button" variant="outline" disabled={!collaboratorCandidate} onClick={() => {
-                if (collaboratorCandidate) setEdit((state) => ({ ...state, unit_kolaborasi_ids: [...new Set([...state.unit_kolaborasi_ids, collaboratorCandidate])] }));
-                setCollaboratorCandidate("");
-              }}><Plus size={14} /> Tambah</Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!collaboratorCandidate}
+                onClick={() => {
+                  if (collaboratorCandidate) setEdit((state) => ({ ...state, unit_kolaborasi_ids: [...new Set([...state.unit_kolaborasi_ids, collaboratorCandidate])] }));
+                  setCollaboratorCandidate("");
+                }}
+              >
+                <Plus size={14} /> Tambah
+              </Button>
             </div>
-            {edit.unit_kolaborasi_ids.length ? <div className="flex flex-wrap gap-1.5">{edit.unit_kolaborasi_ids.map((unitId) => {
-              const unitName = units.find((unit) => String(unit.id) === unitId)?.nama_unit;
-              return <span key={unitId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{String(unitName ?? "Unit")}
-                <button type="button" aria-label="Hapus unit kolaborasi" className="rounded-full px-1 hover:bg-background" onClick={() => setEdit((state) => ({ ...state, unit_kolaborasi_ids: state.unit_kolaborasi_ids.filter((id) => id !== unitId) }))}>×</button>
-              </span>;
-            })}</div> : <span className="text-xs text-muted-foreground">Opsional. RO split menggunakan nomor Job yang sama.</span>}
+            {edit.unit_kolaborasi_ids.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {edit.unit_kolaborasi_ids.map((unitId) => {
+                  const unitName = units.find((unit) => String(unit.id) === unitId)?.nama_unit;
+                  return (
+                    <span key={unitId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                      {String(unitName ?? "Unit")}
+                      <button
+                        type="button"
+                        aria-label="Hapus unit kolaborasi"
+                        className="rounded-full px-1 hover:bg-background"
+                        onClick={() => setEdit((state) => ({ ...state, unit_kolaborasi_ids: state.unit_kolaborasi_ids.filter((id) => id !== unitId) }))}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground">Opsional. RO split menggunakan nomor Job yang sama.</span>
+            )}
           </div>
           <label className="grid gap-1 text-sm">
             PJ
             <Input value={edit.pj} onChange={(event) => setEdit((state) => ({ ...state, pj: event.target.value }))} />
           </label>
-          {ro.id_proyek && <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">Periode kontrak mengikuti proyek: {formatDate(ro.mulai_kontrak)} – {formatDate(ro.berakhir_kontrak)}. Ubah periode dari detail proyek.</p>}
+          {ro.id_proyek && (
+            <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground sm:col-span-2">
+              Periode kontrak mengikuti proyek: {formatDate(ro.mulai_kontrak)} – {formatDate(ro.berakhir_kontrak)}. Ubah periode dari detail proyek.
+            </p>
+          )}
         </div>
       </Modal>
       <Modal
@@ -235,9 +287,7 @@ export function RoDetailModals(props: Props) {
             <div className="border-t border-border/70 pt-2">
               <p className="text-xs font-medium text-muted-foreground">RO sumber dana terkunci</p>
               <p className="font-semibold">{ro.nama_ro}</p>
-              <p className="text-xs text-muted-foreground">
-                {[ro.kode_mak ? `MAK ${String(ro.kode_mak)}` : null, `Sisa hak belanja ${formatRupiah(remainingRight)}`].filter(Boolean).join(" · ")}
-              </p>
+              <p className="text-xs text-muted-foreground">{[ro.kode_mak ? `MAK ${String(ro.kode_mak)}` : null, `Sisa hak belanja ${formatRupiah(remainingRight)}`].filter(Boolean).join(" · ")}</p>
             </div>
           </section>
           <label className="grid gap-1 text-sm sm:col-span-2">
@@ -263,19 +313,32 @@ export function RoDetailModals(props: Props) {
             Tanggal *
             <Input type="date" value={spendRequest.tanggal} onChange={(event) => setSpendRequest((current) => ({ ...current, tanggal: event.target.value }))} />
           </label>
-          <label className="grid gap-1 text-sm">
-            Nomor kuitansi
-            <Input maxLength={100} value={spendRequest.no_kuitansi} onChange={(event) => setSpendRequest((current) => ({ ...current, no_kuitansi: event.target.value }))} />
-          </label>
+          {/* Panjar perjalanan tidak memakai nomor kuitansi, jadi field ini disembunyikan. */}
+          {spendRequest.jenis === "BELANJA_LANGSUNG" && (
+            <label className="grid gap-1 text-sm">
+              Nomor kuitansi
+              <Input maxLength={100} value={spendRequest.no_kuitansi} onChange={(event) => setSpendRequest((current) => ({ ...current, no_kuitansi: event.target.value }))} />
+            </label>
+          )}
           <label className="grid gap-1 text-sm sm:col-span-2">
             Jumlah *
             <MoneyInput value={spendRequest.jumlah} onValueChange={(value) => setSpendRequest((current) => ({ ...current, jumlah: value }))} />
           </label>
           <label className="grid gap-1 text-sm sm:col-span-2">
             Keterangan
-            <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={1000} value={spendRequest.keterangan} onChange={(event) => setSpendRequest((current) => ({ ...current, keterangan: event.target.value }))} placeholder="Rincian kebutuhan belanja (opsional)" />
+            <textarea
+              className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              maxLength={1000}
+              value={spendRequest.keterangan}
+              onChange={(event) => setSpendRequest((current) => ({ ...current, keterangan: event.target.value }))}
+              placeholder="Rincian kebutuhan belanja (opsional)"
+            />
           </label>
-          {spendRequestError && <Alert variant="destructive" className="sm:col-span-2"><AlertDescription>{spendRequestError}</AlertDescription></Alert>}
+          {spendRequestError && (
+            <Alert variant="destructive" className="sm:col-span-2">
+              <AlertDescription>{spendRequestError}</AlertDescription>
+            </Alert>
+          )}
         </div>
       </Modal>
     </>

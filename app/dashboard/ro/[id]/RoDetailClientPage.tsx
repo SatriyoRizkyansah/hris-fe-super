@@ -27,7 +27,13 @@ const emptyEdit = (): EditForm => ({ total_plafon: "", no_kontrak: "", unit_kola
 const emptyTransaction = (): TransactionForm => ({ nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), debit: "", kredit: "", keterangan: "" });
 const emptySpendRequest = (): SpendRequestForm => ({ jenis: "BELANJA_LANGSUNG", nama_kegiatan: "", no_kuitansi: "", tanggal: new Date().toISOString().slice(0, 10), jumlah: "", keterangan: "" });
 function missing(row: RoItemDto) {
-  return [!row.no_kontrak && "No Kontrak", !row.pj && "PJ", row.id_proyek && !row.nomor_job && "Nomor Job", row.id_proyek && !row.mulai_kontrak && "Mulai kontrak proyek", row.id_proyek && !row.berakhir_kontrak && "Berakhir kontrak proyek"].filter(Boolean);
+  return [
+    !row.no_kontrak && "No Kontrak",
+    !row.pj && "PJ",
+    row.id_proyek && !row.nomor_job && "Nomor Job",
+    row.id_proyek && !row.mulai_kontrak && "Mulai kontrak proyek",
+    row.id_proyek && !row.berakhir_kontrak && "Berakhir kontrak proyek",
+  ].filter(Boolean);
 }
 
 export default function RoDetailClientPage({ id }: { id: string }) {
@@ -189,7 +195,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
     setEdit({
       total_plafon: String((ro as RoItemDto & { nilai_rencana?: number }).nilai_rencana ?? ro.total_plafon ?? ""),
       no_kontrak: String(ro.no_kontrak ?? ""),
-      unit_kolaborasi_ids: (ro.unit_kolaborasi as Array<{ id: string }> | undefined ?? []).map((unit) => unit.id),
+      unit_kolaborasi_ids: ((ro.unit_kolaborasi as Array<{ id: string }> | undefined) ?? []).map((unit) => unit.id),
       pj: String(ro.pj ?? ""),
       status_ro: (ro.status_ro as EditForm["status_ro"]) ?? "AKTIF",
     });
@@ -273,7 +279,8 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         ro_id: ro.id,
         jenis: spendRequest.jenis,
         nama_kegiatan: spendRequest.nama_kegiatan.trim(),
-        no_kuitansi: spendRequest.no_kuitansi.trim() || undefined,
+        // Panjar perjalanan tidak memakai nomor kuitansi.
+        no_kuitansi: spendRequest.jenis === "PANJAR_PERJALANAN" ? undefined : spendRequest.no_kuitansi.trim() || undefined,
         tanggal: spendRequest.tanggal,
         jumlah: Number(spendRequest.jumlah),
         keterangan: spendRequest.keterangan.trim() || undefined,
@@ -308,7 +315,14 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   if (!ro)
     return (
       <div className="space-y-4 p-6">
-        <EmptyData label="Detail RO belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void detail.refetch()}>Coba lagi</Button>} />
+        <EmptyData
+          label="Detail RO belum dapat dimuat."
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={() => void detail.refetch()}>
+              Coba lagi
+            </Button>
+          }
+        />
         <Button variant="outline" render={<Link href="/dashboard/ro" />}>
           <ArrowLeft size={16} /> Kembali
         </Button>
@@ -319,9 +333,9 @@ export default function RoDetailClientPage({ id }: { id: string }) {
   const finance = ((ro as unknown as AnyRow).balance as AnyRow | undefined) ?? {};
   const approvedBudget = Number(finance.pagu_disetujui ?? plannedPlafon) || 0;
   const totalUsed = Number(finance.realisasi ?? ro.total_terpakai) || 0;
-  const remainingRight = Number(finance.sisa_dapat_direservasi ?? (approvedBudget - totalUsed)) || 0;
+  const remainingRight = Number(finance.sisa_dapat_direservasi ?? approvedBudget - totalUsed) || 0;
   const cashIn = Number(finance.penerimaan_kas ?? (ro as unknown as AnyRow).total_debit) || 0;
-  const cashPosition = Number(finance.posisi_kas ?? (cashIn - totalUsed)) || 0;
+  const cashPosition = Number(finance.posisi_kas ?? cashIn - totalUsed) || 0;
   const outstandingAdvance = Number(finance.saldo_talangan) || 0;
   const percent = approvedBudget ? Math.min(100, (totalUsed / approvedBudget) * 100) : 0;
   return (
@@ -356,23 +370,27 @@ export default function RoDetailClientPage({ id }: { id: string }) {
       <section className="space-y-4 rounded-2xl border border-border bg-background p-5 shadow-sm">
         <header>
           <h2 className="text-base font-semibold">Pagu dan arus kas RO</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Ringkasan menampilkan pagu, realisasi, dan sisa hak belanja. Posisi kas dihitung terpisah dari penerimaan kas dikurangi realisasi.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Ringkasan menampilkan pagu, Dana Terpakai, dan sisa hak belanja. Posisi kas dihitung terpisah dari penerimaan kas dikurangi dana terpakai.</p>
         </header>
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hak belanja</p>
-          <MoneyFlow items={[
-            { label: "Pagu disetujui", amount: approvedBudget },
-            { label: "Realisasi", amount: totalUsed, operator: "−", tone: "text-rose-700" },
-            { label: "Sisa hak belanja", amount: remainingRight, operator: "", tone: remainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
-          ]} />
+          <MoneyFlow
+            items={[
+              { label: "Pagu disetujui", amount: approvedBudget },
+              { label: "Dana Terpakai", amount: totalUsed, operator: "−", tone: "text-rose-700" },
+              { label: "Sisa hak belanja", amount: remainingRight, operator: "", tone: remainingRight < 0 ? "text-rose-700" : "text-emerald-700" },
+            ]}
+          />
         </div>
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Arus kas</p>
-          <MoneyFlow items={[
-            { label: "Penerimaan kas", amount: cashIn, tone: "text-sky-700" },
-            { label: "Realisasi", amount: totalUsed, operator: "−", tone: "text-rose-700" },
-            { label: "Posisi kas", amount: cashPosition, operator: "=", tone: cashPosition < 0 ? "text-rose-700" : "text-foreground" },
-          ]} />
+          <MoneyFlow
+            items={[
+              { label: "Penerimaan kas", amount: cashIn, tone: "text-sky-700" },
+              { label: "Dana Terpakai", amount: totalUsed, operator: "−", tone: "text-rose-700" },
+              { label: "Posisi kas", amount: cashPosition, operator: "=", tone: cashPosition < 0 ? "text-rose-700" : "text-foreground" },
+            ]}
+          />
         </div>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -394,11 +412,22 @@ export default function RoDetailClientPage({ id }: { id: string }) {
           <span className="block text-xs text-muted-foreground">No Kontrak / PJ</span>
           {String(ro.no_kontrak ?? "—")} / {String(ro.pj ?? "—")}
         </p>
-        <p>
+        {/* <p>
           <span className="block text-xs text-muted-foreground">Nomor Job</span>
           {String(ro.nomor_job ?? "—")}
           {Number(ro.jumlah_ro_split_nomor_job ?? 0) > 1 ? <span className="mt-1 block text-xs text-violet-700">RO split · {ro.jumlah_ro_split_nomor_job} bagian dengan nomor Job yang sama</span> : null}
-        </p>
+        </p> */}
+        <div>
+          <span className="block text-xs text-muted-foreground">Nomor Job</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-medium">{String(ro.nomor_job ?? "—")}</span>
+            {Number(ro.jumlah_ro_split_nomor_job ?? 0) > 1 && (
+              <span title="Satu Nomor Job ini dikerjakan bersama oleh beberapa RO/Unit" className="inline-flex items-center rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700 ring-1 ring-inset ring-violet-700/15">
+                Job Bersama · {ro.jumlah_ro_split_nomor_job} RO
+              </span>
+            )}
+          </div>
+        </div>
         <p>
           <span className="block text-xs text-muted-foreground">Unit kolaborasi RO</span>
           {ro.unit_kolaborasi?.length ? (ro.unit_kolaborasi as Array<{ nama_unit?: string }>).map((unit) => unit.nama_unit).join(", ") : "Tidak ada"}
@@ -448,20 +477,43 @@ export default function RoDetailClientPage({ id }: { id: string }) {
               searchPlaceholder="Cari tanggal, kegiatan, atau kuitansi..."
               columns={[
                 { key: "tanggal", header: "Tanggal", render: (row) => formatDate(row.tanggal) },
-                { key: "nama_kegiatan", header: "Kegiatan", render: (row) => (
-                  <div className="min-w-40">
-                    <p>{String(row.nama_kegiatan ?? "—")}</p>
-                    {row.row_type === "PENGAJUAN_BELANJA" && <>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{String(row.nomor_pengajuan ?? "Pengajuan belanja")} · {formatRupiah(row.jumlah)}</p>
-                      <div className="mt-1"><StatusBadge status={row.status === "DIAJUKAN" ? "warn" : "ok"}>{row.status === "DIAJUKAN" ? "Menunggu KARWAS" : "Disetujui · menunggu pembayaran"}</StatusBadge></div>
-                    </>}
-                  </div>
-                ) },
+                {
+                  key: "nama_kegiatan",
+                  header: "Kegiatan",
+                  render: (row) => (
+                    <div className="min-w-40">
+                      <p>{String(row.nama_kegiatan ?? "—")}</p>
+                      {row.row_type === "PENGAJUAN_BELANJA" && (
+                        <>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {String(row.nomor_pengajuan ?? "Pengajuan belanja")} · {formatRupiah(row.jumlah)}
+                          </p>
+                          <div className="mt-1">
+                            <StatusBadge status={row.status === "DIAJUKAN" ? "warn" : "ok"}>{row.status === "DIAJUKAN" ? "Menunggu KARWAS" : "Disetujui · menunggu pembayaran"}</StatusBadge>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ),
+                },
                 { key: "no_kuitansi", header: "Kuitansi", render: (row) => String(row.no_kuitansi ?? "—") },
-                { key: "debit", header: "Debit", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? "—" : Number(row.debit) ? formatRupiah(row.debit) : "—" },
-                { key: "kredit", header: "Kredit", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? "—" : Number(row.kredit) ? formatRupiah(row.kredit) : "—" },
-                { key: "saldo", header: "Saldo", className: "text-right tabular-nums", render: (row) => row.row_type === "PENGAJUAN_BELANJA" ? <span className="text-xs text-muted-foreground">Belum dibukukan</span> : formatRupiah(row.saldo) },
-                { key: "rincian", header: "Rincian", render: (row: AnyRow) => <Button size="sm" variant="outline" onClick={() => setLedgerDetailRow(row)}><Eye size={14} /> Detail</Button> },
+                { key: "debit", header: "Debit", className: "text-right tabular-nums", render: (row) => (row.row_type === "PENGAJUAN_BELANJA" ? "—" : Number(row.debit) ? formatRupiah(row.debit) : "—") },
+                { key: "kredit", header: "Kredit", className: "text-right tabular-nums", render: (row) => (row.row_type === "PENGAJUAN_BELANJA" ? "—" : Number(row.kredit) ? formatRupiah(row.kredit) : "—") },
+                {
+                  key: "saldo",
+                  header: "Saldo",
+                  className: "text-right tabular-nums",
+                  render: (row) => (row.row_type === "PENGAJUAN_BELANJA" ? <span className="text-xs text-muted-foreground">Belum dibukukan</span> : formatRupiah(row.saldo)),
+                },
+                {
+                  key: "rincian",
+                  header: "Rincian",
+                  render: (row: AnyRow) => (
+                    <Button size="sm" variant="outline" onClick={() => setLedgerDetailRow(row)}>
+                      <Eye size={14} /> Detail
+                    </Button>
+                  ),
+                },
                 {
                   key: "aksi",
                   header: "Aksi",
@@ -479,8 +531,12 @@ export default function RoDetailClientPage({ id }: { id: string }) {
                     if (!canManage) return <span className="text-muted-foreground">—</span>;
                     return (
                       <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => openTransaction(row)}>Ubah</Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTransaction(row)}>Hapus</Button>
+                        <Button size="sm" variant="ghost" onClick={() => openTransaction(row)}>
+                          Ubah
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTransaction(row)}>
+                          Hapus
+                        </Button>
                       </div>
                     );
                   },
@@ -548,12 +604,7 @@ export default function RoDetailClientPage({ id }: { id: string }) {
         spendRequestError={spendRequestError}
         remainingRight={remainingRight}
       />
-      <RoLedgerDetailModal
-        row={ledgerDetailRow}
-        onClose={() => setLedgerDetailRow(null)}
-        roName={String(ro.nama_ro ?? ro.kode_ro ?? "RO")}
-        projectName={String(ro.nama_proyek ?? "—")}
-      />
+      <RoLedgerDetailModal row={ledgerDetailRow} onClose={() => setLedgerDetailRow(null)} roName={String(ro.nama_ro ?? ro.kode_ro ?? "RO")} projectName={String(ro.nama_proyek ?? "—")} />
       <AlertDialog open={Boolean(deleteTransaction)} onOpenChange={(open) => !open && setDeleteTransaction(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

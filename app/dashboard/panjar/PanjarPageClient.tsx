@@ -16,6 +16,7 @@ import { MoneyFlow, type MoneyFlowItem } from "@/components/common/MoneyFlow";
 import { DocumentLinks } from "@/components/common/DocumentLinks";
 import { WorkflowDiagram, type WorkflowAction, type WorkflowStage } from "@/components/common/WorkflowDiagram";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
+import { NomorPembayaranPreview, useNomorPembayaranPreview } from "@/components/common/NomorPembayaranPreview";
 import { PurchaseRequestReviewModal } from "@/components/pengajuan-belanja/PurchaseRequestReviewModal";
 import { PanjarActionModal, PANJAR_STATUS_LABELS, panjarModeOf } from "@/components/panjar/PanjarActionModal";
 import { browserApi } from "@/lib/api/browser-client";
@@ -28,12 +29,12 @@ import { formatRupiah } from "@/lib/hris/format";
 import type { CreatePengajuanBelanjaDto } from "@/lib/api/generated/api-generated";
 
 type Row = Record<string, any>;
-type Form = { ro_id: string; nama_kegiatan: string; no_kuitansi: string; tanggal: string; jumlah: string; keterangan: string };
+type Form = { ro_id: string; nama_kegiatan: string; tanggal: string; jumlah: string; keterangan: string };
 type ProjectRow = { id: string; no_kontrak?: string; nama_proyek?: string; tahun_fiscal?: number };
-type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string; dana_sumber_id?: string };
+type PaymentForm = { nomor_pembayaran?: string; tanggal_bayar: string; catatan?: string; dana_sumber_id?: string };
 
 const today = () => new Date().toISOString().slice(0, 10);
-const blankForm = (): Form => ({ ro_id: "", nama_kegiatan: "", no_kuitansi: "", tanggal: today(), jumlah: "", keterangan: "" });
+const blankForm = (): Form => ({ ro_id: "", nama_kegiatan: "", tanggal: today(), jumlah: "", keterangan: "" });
 const blankPayment = (): PaymentForm => ({ nomor_pembayaran: "", tanggal_bayar: today(), catatan: "" });
 
 function listRows(value: unknown): Row[] {
@@ -296,6 +297,8 @@ export default function PanjarPageClient() {
   const canReviewKeuangan = isSuperadmin || (role === "subkoor" && !!financeUnit && unitCode === financeUnit);
   const canReviewKabag = isSuperadmin || ((role === "koordinator" || role === "subkoor") && !!kabagUnit && unitCode === kabagUnit);
   const canPay = isSuperadmin || role === "keu_bendahara_pengeluaran";
+  // Pratinjau nomor pembayaran otomatis untuk modal pencairan panjar.
+  const paymentNomor = useNomorPembayaranPreview({ enabled: canPay && Boolean(paying) && !(payment.nomor_pembayaran ?? "").trim(), tanggal: payment.tanggal_bayar });
   const canSubmitPanjar = canCreate || role === "koordinator" || role === "subkoor";
   // Pertanggungjawaban panjar hanya boleh dilaporkan oleh pemohon (pemilik pengajuan).
   const isPanjarOwner = (request: Row | null) => Boolean(request) && String(request?.pembuat?.id ?? request?.dibuat_oleh_id ?? "") === String(user.data?.id ?? "");
@@ -472,7 +475,7 @@ export default function PanjarPageClient() {
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
     mutationFn: async ({ id, data, file }) =>
       uploadHrisFile(`/api/pengajuan-belanja/${id}/bayar`, file, {
-        nomor_pembayaran: data.nomor_pembayaran,
+        ...(data.nomor_pembayaran ? { nomor_pembayaran: data.nomor_pembayaran } : {}),
         tanggal_bayar: data.tanggal_bayar,
         ...(data.dana_sumber_id ? { dana_sumber_id: data.dana_sumber_id } : {}),
         ...(data.catatan ? { catatan: data.catatan } : {}),
@@ -499,8 +502,8 @@ export default function PanjarPageClient() {
 
   async function pay() {
     if (!paying) return;
-    if (!payment.nomor_pembayaran.trim() || !payment.tanggal_bayar || !paymentFile) {
-      setError("Nomor pembayaran, tanggal, dan bukti pembayaran PDF wajib diisi.");
+    if (!payment.tanggal_bayar || !paymentFile) {
+      setError("Tanggal dan bukti pembayaran PDF wajib diisi.");
       return;
     }
     if (!paymentFile.name.toLowerCase().endsWith(".pdf") || paymentFile.size > 10 * 1024 * 1024) {
@@ -516,7 +519,7 @@ export default function PanjarPageClient() {
       await payMutation.mutateAsync({
         id: String(paying.id),
         data: {
-          nomor_pembayaran: payment.nomor_pembayaran.trim(),
+          nomor_pembayaran: payment.nomor_pembayaran?.trim() || undefined,
           tanggal_bayar: payment.tanggal_bayar,
           dana_sumber_id: payment.dana_sumber_id,
           catatan: payment.catatan?.trim() || undefined,
@@ -553,7 +556,6 @@ export default function PanjarPageClient() {
       await createMutation.mutateAsync({
         ro_id: form.ro_id,
         nama_kegiatan: form.nama_kegiatan.trim(),
-        no_kuitansi: form.no_kuitansi.trim() || undefined,
         tanggal: form.tanggal,
         jumlah: Number(form.jumlah),
         jenis: "PANJAR_PERJALANAN",
@@ -688,7 +690,7 @@ export default function PanjarPageClient() {
               rowKey={(row, index) => String(row.id ?? index)}
               remoteSearch
               searchValue={search}
-              searchPlaceholder="Cari kegiatan, nomor pengajuan, atau kuitansi…"
+              searchPlaceholder="Cari kegiatan atau nomor pengajuan…"
               onSearchChange={setSearch}
               filters={[
                 {
@@ -892,7 +894,6 @@ export default function PanjarPageClient() {
                     <p className="truncate text-sm font-semibold text-foreground">{detailRequest.nama_kegiatan ?? "Kegiatan perjalanan"}</p>
                     <p className="truncate text-xs text-muted-foreground">
                       {detailRequest.nomor_pengajuan ?? "—"}
-                      {detailRequest.no_kuitansi ? ` · Kuitansi ${String(detailRequest.no_kuitansi)}` : ""}
                       {detailContext ? ` · ${String(detailContext.kode_ro ?? "RO")}` : ""}
                     </p>
                   </div>
@@ -936,7 +937,6 @@ export default function PanjarPageClient() {
                     label="Kamar sumber"
                     value={detailPanjar?.dana_sumber ? `${String(detailPanjar.dana_sumber?.kategori_kamar ?? "—").replaceAll("_", " ")} · TA ${detailPanjar.dana_sumber?.tahun_fiscal ?? "—"}` : "Belum dicairkan"}
                   />
-                  <ModalDetailItem label="Nomor kuitansi" value={detailRequest.no_kuitansi || "Belum dicantumkan"} />
                   <ModalDetailItem label="Keterangan" className="sm:col-span-2" value={detailRequest.keterangan || "Tidak ada keterangan tambahan."} />
                 </PanjarDetailGroup>
                 <PanjarDetailGroup icon={Building2} title="Proyek & RO" hint={detailContext?.nama_ro ?? "RO belum tercatat"}>
@@ -1134,8 +1134,8 @@ export default function PanjarPageClient() {
         )}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1 text-sm">
-            <span className="font-medium">Nomor pembayaran</span>
-            <Input value={payment.nomor_pembayaran} onChange={(event) => setPayment((current) => ({ ...current, nomor_pembayaran: event.target.value }))} placeholder="Nomor bukti pembayaran" />
+            <span className="font-medium">Nomor pembayaran (opsional)</span>
+            <Input value={payment.nomor_pembayaran ?? ""} onChange={(event) => setPayment((current) => ({ ...current, nomor_pembayaran: event.target.value }))} placeholder={paymentNomor.placeholder} />
           </label>
           <label className="space-y-1 text-sm">
             <span className="font-medium">Tanggal bayar</span>
@@ -1163,6 +1163,7 @@ export default function PanjarPageClient() {
             <DocumentUploadField label="Bukti pembayaran (PDF) *" accept=".pdf" value={paymentFile} onChange={setPaymentFile} disabled={payMutation.isPending} className="p-3 sm:p-3" />
           </div>
         </div>
+        {!(payment.nomor_pembayaran ?? "").trim() && <NomorPembayaranPreview nomor={paymentNomor.nomorOtomatis} />}
       </Modal>
 
       <Modal
@@ -1245,10 +1246,7 @@ export default function PanjarPageClient() {
           <label className="grid gap-1 text-sm">
             Jumlah panjar *<MoneyInput value={form.jumlah} onValueChange={(value) => field("jumlah", value)} />
           </label>
-          <label className="grid gap-1 text-sm sm:col-span-2">
-            Nomor kuitansi
-            <Input maxLength={100} value={form.no_kuitansi} onChange={(event) => field("no_kuitansi", event.target.value)} />
-          </label>
+          {/* Panjar perjalanan tidak memakai nomor kuitansi. */}
           <label className="grid gap-1 text-sm sm:col-span-2">
             Keterangan
             <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={form.keterangan} onChange={(event) => field("keterangan", event.target.value)} />

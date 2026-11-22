@@ -13,6 +13,7 @@ import { EmptyData } from "@/components/loading/EmptyData";
 import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
+import { NomorPembayaranPreview, useNomorPembayaranPreview } from "@/components/common/NomorPembayaranPreview";
 import { WorkflowDiagram, type WorkflowAction, type WorkflowStage } from "@/components/common/WorkflowDiagram";
 import { PurchaseRequestDetailModals } from "@/components/pengajuan-belanja/PurchaseRequestDetailModals";
 import { PurchaseRequestReviewModal } from "@/components/pengajuan-belanja/PurchaseRequestReviewModal";
@@ -28,9 +29,9 @@ import type { CreatePengajuanBelanjaDto } from "@/lib/api/generated/api-generate
 type Row = Record<string, any>;
 type Form = { ro_id: string; nama_kegiatan: string; no_kuitansi: string; tanggal: string; jumlah: string; keterangan: string; jenis: "BELANJA_LANGSUNG" | "PANJAR_PERJALANAN" };
 type ProjectRow = { id: string; no_kontrak?: string; nama_proyek?: string; tahun_fiscal?: number };
-type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string; dana_sumber_id?: string };
+type PaymentForm = { nomor_pembayaran?: string; tanggal_bayar: string; catatan?: string; dana_sumber_id?: string };
 type ReviewPengajuanBelanjaDto = { disetujui: boolean; catatan?: string };
-type BayarPengajuanBelanjaDto = { nomor_pembayaran: string; tanggal_bayar: string; catatan?: string; dana_sumber_id: string };
+type BayarPengajuanBelanjaDto = { nomor_pembayaran?: string; tanggal_bayar: string; catatan?: string; dana_sumber_id: string };
 const today = () => new Date().toISOString().slice(0, 10);
 const blankForm = (): Form => ({ ro_id: "", nama_kegiatan: "", no_kuitansi: "", tanggal: today(), jumlah: "", keterangan: "", jenis: "BELANJA_LANGSUNG" });
 const blankPayment = (): PaymentForm => ({ nomor_pembayaran: "", tanggal_bayar: today(), catatan: "" });
@@ -199,6 +200,9 @@ export default function PengajuanBelanjaPageClient() {
   const canReview = canReviewKarwas || canReviewKeuangan || canReviewKabag;
   const canPay = isSuperadmin || role === "keu_bendahara_pengeluaran";
   const payingPanjar = paying?.jenis === "PANJAR_PERJALANAN";
+  // Pratinjau nomor pembayaran otomatis untuk setiap modal pembayaran.
+  const paymentNomor = useNomorPembayaranPreview({ enabled: canPay && Boolean(paying) && !(payment.nomor_pembayaran ?? "").trim(), tanggal: payment.tanggal_bayar });
+  const retailPaymentNomor = useNomorPembayaranPreview({ enabled: canPay && Boolean(retailPaying) && !(retailPayment.nomor_pembayaran ?? "").trim(), tanggal: retailPayment.tanggal_bayar });
   // Pertanggungjawaban panjar hanya boleh dilaporkan oleh pemohon pengajuan.
   const canSubmitPanjar = (request: Row | null) => canCreate && Boolean(request) && String(request?.pembuat?.id ?? request?.dibuat_oleh_id ?? "") === String(user.data?.id ?? "");
 
@@ -229,6 +233,7 @@ export default function PengajuanBelanjaPageClient() {
 
   const panjarMode =
     panjarAction?.panjar?.status === "DIAJUKAN_PERTANGGUNGJAWABAN" ? "review" : panjarAction?.panjar?.status === "MENUNGGU_DANA_TAMBAHAN" ? "topup" : panjarAction?.panjar?.status === "MENUNGGU_PENGEMBALIAN" ? "refund" : "accountability";
+  const panjarFundingNomor = useNomorPembayaranPreview({ enabled: canPay && panjarMode === "topup" && !panjarFunding.nomor_pembayaran.trim(), tanggal: panjarFunding.tanggal_bayar });
   // Kamar dana dipakai untuk pencairan dana tambahan (topup) dan penerimaan pengembalian (refund).
   const needsPanjarWallet = panjarMode === "refund" || panjarMode === "topup";
   useEffect(() => {
@@ -560,7 +565,7 @@ export default function PengajuanBelanjaPageClient() {
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
     mutationFn: async ({ id, data, file }) =>
       uploadHrisFile(`/api/pengajuan-belanja/${id}/bayar`, file, {
-        nomor_pembayaran: data.nomor_pembayaran,
+        ...(data.nomor_pembayaran ? { nomor_pembayaran: data.nomor_pembayaran } : {}),
         tanggal_bayar: data.tanggal_bayar,
         ...(data.dana_sumber_id ? { dana_sumber_id: data.dana_sumber_id } : {}),
         ...(data.catatan ? { catatan: data.catatan } : {}),
@@ -614,11 +619,17 @@ export default function PengajuanBelanjaPageClient() {
     },
     onError: (cause) => setPanjarError(apiErrorMessage(cause, "Penerimaan pengembalian panjar gagal dicatat.")),
   });
-  const panjarTopupMutation = use_mutation<unknown, Error, { id: string; file: File; nomor_pembayaran: string; tanggal_bayar: string; dana_sumber_id: string; catatan: string }>({
+  const panjarTopupMutation = use_mutation<unknown, Error, { id: string; file: File; nomor_pembayaran?: string; tanggal_bayar: string; dana_sumber_id: string; catatan: string }>({
     tag: "keuanganPengajuanBelanja",
     method: "payTravelAdvanceShortfall",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: ({ id, file, ...data }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/dana-tambahan`, file, data),
+    mutationFn: ({ id, file, ...data }) =>
+      uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/dana-tambahan`, file, {
+        ...(data.nomor_pembayaran ? { nomor_pembayaran: data.nomor_pembayaran } : {}),
+        tanggal_bayar: data.tanggal_bayar,
+        dana_sumber_id: data.dana_sumber_id,
+        ...(data.catatan ? { catatan: data.catatan } : {}),
+      }),
     successMessage: "Pencairan dana tambahan panjar berhasil dicatat.",
     onSuccess: async () => {
       await refreshPanjarDetail();
@@ -665,7 +676,12 @@ export default function PengajuanBelanjaPageClient() {
     tag: "keuanganPengajuanBelanja",
     method: "payRetailExpense",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("retail"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: async ({ id, form, file }) => uploadHrisFile(`/api/retail/pengajuan-belanja/${id}/bayar`, file, form),
+    mutationFn: async ({ id, form, file }) =>
+      uploadHrisFile(`/api/retail/pengajuan-belanja/${id}/bayar`, file, {
+        ...(form.nomor_pembayaran ? { nomor_pembayaran: form.nomor_pembayaran } : {}),
+        tanggal_bayar: form.tanggal_bayar,
+        ...(form.catatan ? { catatan: form.catatan } : {}),
+      }),
     successMessage: "Pembayaran pengajuan retail berhasil dicatat.",
     onSuccess: (response) => {
       const updated = objectData(response);
@@ -722,8 +738,8 @@ export default function PengajuanBelanjaPageClient() {
         }
         await panjarReviewMutation.mutateAsync({ id: String(panjarAction.id), disetujui: approved === true, catatan: panjarForm.catatan.trim() });
       } else if (panjarMode === "topup") {
-        if (!panjarFunding.nomor_pembayaran.trim() || !panjarFunding.tanggal_bayar || !panjarFunding.dana_sumber_id || !panjarFile) {
-          setPanjarError("Nomor, tanggal, kamar sumber dana, dan bukti pembayaran wajib diisi.");
+        if (!panjarFunding.tanggal_bayar || !panjarFunding.dana_sumber_id || !panjarFile) {
+          setPanjarError("Tanggal, kamar sumber dana, dan bukti pembayaran wajib diisi.");
           return;
         }
         if (!panjarFile.name.toLowerCase().endsWith(".pdf") || panjarFile.size > 10 * 1024 * 1024) {
@@ -732,7 +748,7 @@ export default function PengajuanBelanjaPageClient() {
         }
         await panjarTopupMutation.mutateAsync({
           id: String(panjarAction.id),
-          nomor_pembayaran: panjarFunding.nomor_pembayaran.trim(),
+          nomor_pembayaran: panjarFunding.nomor_pembayaran?.trim() ?? "",
           tanggal_bayar: panjarFunding.tanggal_bayar,
           dana_sumber_id: panjarFunding.dana_sumber_id,
           catatan: panjarFunding.catatan.trim(),
@@ -770,7 +786,7 @@ export default function PengajuanBelanjaPageClient() {
       await createMutation.mutateAsync({
         ro_id: form.ro_id,
         nama_kegiatan: form.nama_kegiatan.trim(),
-        no_kuitansi: form.no_kuitansi.trim() || undefined,
+        no_kuitansi: form.jenis === "PANJAR_PERJALANAN" ? undefined : form.no_kuitansi.trim() || undefined,
         tanggal: form.tanggal,
         jumlah: Number(form.jumlah),
         jenis: form.jenis,
@@ -792,8 +808,8 @@ export default function PengajuanBelanjaPageClient() {
   }
   async function pay() {
     if (!paying) return;
-    if (!payment.nomor_pembayaran.trim() || !payment.tanggal_bayar || !paymentFile) {
-      setError("Nomor pembayaran, tanggal, dan bukti pembayaran PDF wajib diisi.");
+    if (!payment.tanggal_bayar || !paymentFile) {
+      setError("Tanggal dan bukti pembayaran PDF wajib diisi.");
       return;
     }
     if (!paymentFile.name.toLowerCase().endsWith(".pdf") || paymentFile.size > 10 * 1024 * 1024) {
@@ -809,7 +825,7 @@ export default function PengajuanBelanjaPageClient() {
       await payMutation.mutateAsync({
         id: String(paying.id),
         data: {
-          nomor_pembayaran: payment.nomor_pembayaran.trim(),
+          nomor_pembayaran: payment.nomor_pembayaran?.trim() || undefined,
           tanggal_bayar: payment.tanggal_bayar,
           dana_sumber_id: payment.dana_sumber_id!,
           catatan: payment.catatan?.trim() || undefined,
@@ -838,15 +854,15 @@ export default function PengajuanBelanjaPageClient() {
 
   async function payRetail() {
     if (!retailPaying) return;
-    if (!retailPayment.nomor_pembayaran.trim() || !retailPayment.tanggal_bayar || !retailPaymentFile) {
-      setRetailPaymentError("Nomor pembayaran, tanggal bayar, dan bukti pembayaran wajib diisi.");
+    if (!retailPayment.tanggal_bayar || !retailPaymentFile) {
+      setRetailPaymentError("Tanggal bayar dan bukti pembayaran wajib diisi.");
       return;
     }
     try {
       setRetailPaymentError("");
       await retailPayMutation.mutateAsync({
         id: String(retailPaying.id),
-        form: { ...retailPayment, nomor_pembayaran: retailPayment.nomor_pembayaran.trim(), catatan: retailPayment.catatan?.trim() },
+        form: { ...retailPayment, nomor_pembayaran: retailPayment.nomor_pembayaran?.trim() || undefined, catatan: retailPayment.catatan?.trim() },
         file: retailPaymentFile,
       });
     } catch (cause) {
@@ -1195,8 +1211,8 @@ export default function PengajuanBelanjaPageClient() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">
-                Nomor pembayaran *
-                <Input maxLength={100} value={retailPayment.nomor_pembayaran} onChange={(event) => setRetailPayment((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
+                Nomor pembayaran
+                <Input maxLength={100} placeholder={retailPaymentNomor.placeholder} value={retailPayment.nomor_pembayaran ?? ""} onChange={(event) => setRetailPayment((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
               </label>
               <label className="grid gap-1 text-sm">
                 Tanggal bayar *
@@ -1217,6 +1233,7 @@ export default function PengajuanBelanjaPageClient() {
                 />
               </label>
             </div>
+            {!(retailPayment.nomor_pembayaran ?? "").trim() && <NomorPembayaranPreview nomor={retailPaymentNomor.nomorOtomatis} />}
             {retailPaymentError && (
               <Alert variant="destructive">
                 <AlertDescription>{retailPaymentError}</AlertDescription>
@@ -1341,10 +1358,13 @@ export default function PengajuanBelanjaPageClient() {
           <label className="grid gap-1 text-sm">
             Jumlah *<MoneyInput value={form.jumlah} onValueChange={(value) => field("jumlah", value)} />
           </label>
-          <label className="grid gap-1 text-sm sm:col-span-2">
-            Nomor kuitansi
-            <Input maxLength={100} value={form.no_kuitansi} onChange={(event) => field("no_kuitansi", event.target.value)} />
-          </label>
+          {/* Panjar perjalanan tidak memakai nomor kuitansi, jadi field ini disembunyikan. */}
+          {form.jenis === "BELANJA_LANGSUNG" && (
+            <label className="grid gap-1 text-sm sm:col-span-2">
+              Nomor kuitansi
+              <Input maxLength={100} value={form.no_kuitansi} onChange={(event) => field("no_kuitansi", event.target.value)} />
+            </label>
+          )}
           <label className="grid gap-1 text-sm sm:col-span-2">
             Keterangan
             <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={form.keterangan} onChange={(event) => field("keterangan", event.target.value)} />
@@ -1406,14 +1426,15 @@ export default function PengajuanBelanjaPageClient() {
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-sm">
-            Nomor pembayaran *
-            <Input maxLength={100} value={payment.nomor_pembayaran} onChange={(event) => setPayment((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
+            Nomor pembayaran
+            <Input maxLength={100} placeholder={paymentNomor.placeholder} value={payment.nomor_pembayaran ?? ""} onChange={(event) => setPayment((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
           </label>
           <label className="grid gap-1 text-sm">
             Tanggal bayar *
             <Input type="date" value={payment.tanggal_bayar} onChange={(event) => setPayment((current) => ({ ...current, tanggal_bayar: event.target.value }))} />
           </label>
         </div>
+        {!(payment.nomor_pembayaran ?? "").trim() && <NomorPembayaranPreview nomor={paymentNomor.nomorOtomatis} />}
         <section className={`space-y-3 rounded-lg border p-4 ${payingPanjar ? "border-sky-200 bg-sky-50/60" : "border-emerald-200 bg-emerald-50/60"}`}>
           <div>
             <h3 className={`font-semibold ${payingPanjar ? "text-sky-950" : "text-emerald-950"}`}>Pilih kamar sumber dana</h3>
@@ -1568,12 +1589,14 @@ export default function PengajuanBelanjaPageClient() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">
-                Nomor pembayaran *<Input maxLength={100} value={panjarFunding.nomor_pembayaran} onChange={(event) => setPanjarFunding((form) => ({ ...form, nomor_pembayaran: event.target.value }))} />
+                Nomor pembayaran
+                <Input maxLength={100} placeholder={panjarFundingNomor.placeholder} value={panjarFunding.nomor_pembayaran} onChange={(event) => setPanjarFunding((form) => ({ ...form, nomor_pembayaran: event.target.value }))} />
               </label>
               <label className="grid gap-1 text-sm">
                 Tanggal bayar *<Input type="date" value={panjarFunding.tanggal_bayar} onChange={(event) => setPanjarFunding((form) => ({ ...form, tanggal_bayar: event.target.value }))} />
               </label>
             </div>
+            {!panjarFunding.nomor_pembayaran.trim() && <NomorPembayaranPreview nomor={panjarFundingNomor.nomorOtomatis} />}
             <FilterCombobox
               label="Kamar sumber dana"
               value={panjarFunding.dana_sumber_id}

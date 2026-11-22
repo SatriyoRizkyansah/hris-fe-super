@@ -19,7 +19,7 @@ import { apiData, getBrowserToken, setBrowserToken, useCurrentUser } from "@/lib
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
+import { apiErrorMessage, bodyData, envelopeData, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
 import { formatRupiah } from "@/lib/hris/format";
 import type { BayarInvoiceDto, CreateInvoiceDto } from "@/lib/api/generated/api-generated";
 
@@ -390,6 +390,27 @@ export default function InvoicePageClient() {
     if (!Number.isFinite(tarif)) return null;
     return hitungPajak(netto, tarif);
   }, [invoiceForm.retail_job_id, invoiceForm.tarif_ppn, invoiceForm.termin_id, invoiceSource, retailJobRows, terminRows]);
+  // Pratinjau nomor invoice & kwitansi yang akan dibuat sistem (tanpa memakai
+  // urutan, jadi aman dibuka berulang kali).
+  const nomorPreviewQuery = use_query({
+    tag: "keuanganInvoiceDanSettlement",
+    method: "invoiceNomorPreview",
+    params: {
+      jenis: invoiceSource === "retail" ? "RETAIL" : "PROYEK",
+      sumber_id: invoiceSource === "retail" ? invoiceForm.retail_job_id : invoiceForm.termin_id,
+      kode_program: invoiceForm.kode_program.trim(),
+    },
+    enabled: creating && (invoiceSource === "retail" ? Boolean(invoiceForm.retail_job_id) : Boolean(invoiceForm.termin_id)),
+    queryFn: async ({ jenis, sumber_id, kode_program }) => {
+      const search = new URLSearchParams({ jenis, tanggal_terbit: today() });
+      search.set(invoiceSource === "retail" ? "retail_job_id" : "termin_id", sumber_id);
+      if (kode_program) search.set("kode_program", kode_program);
+      return requestHrisApi(`/api/keuangan/invoice/nomor-preview?${search.toString()}`);
+    },
+  });
+  // `requestHrisApi` mengembalikan envelope mentah, jadi cukup buka satu lapis `data`.
+  const nomorPreview = bodyData<{ nomor_invoice: string; no_kwitansi: string }>(nomorPreviewQuery.data);
+  const nomorOtomatis = nomorPreview?.nomor_invoice ?? "";
   // RO/MAK yang boleh menerima alokasi netto pada invoice yang sedang disettle.
   const settlingRoOptions = useMemo(() => {
     if (!settling) return [] as { value: string; label: string }[];
@@ -1532,9 +1553,14 @@ export default function InvoicePageClient() {
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-sm">
-            Nomor invoice
-            <Input maxLength={100} placeholder="Kosongkan agar sistem membuat otomatis" value={invoiceForm.nomor_invoice} onChange={(event) => setInvoiceForm((current) => ({ ...current, nomor_invoice: event.target.value }))} />
-            <span className="text-xs text-muted-foreground">16 digit: prefix + kode program + YYMM + urut.</span>
+            Nomor invoice (opsional)
+            <Input
+              maxLength={100}
+              placeholder={invoiceForm.nomor_invoice.trim() ? undefined : nomorOtomatis || (nomorPreviewQuery.isLoading ? "Menyiapkan nomor otomatis..." : "Nomor otomatis belum tersedia")}
+              value={invoiceForm.nomor_invoice}
+              onChange={(event) => setInvoiceForm((current) => ({ ...current, nomor_invoice: event.target.value }))}
+            />
+            <span className="text-xs text-muted-foreground">Biarkan kosong untuk memakai nomor otomatis dari sistem; isi hanya bila ingin menimpa nomor tersebut.</span>
           </label>
           <label className="grid gap-1 text-sm">
             Kode program
@@ -1542,6 +1568,22 @@ export default function InvoicePageClient() {
             <span className="text-xs text-muted-foreground">Dipakai untuk nomor invoice &amp; kwitansi. Kosong = RO pertama proyek.</span>
           </label>
         </div>
+        {!invoiceForm.nomor_invoice.trim() && nomorOtomatis && (
+          <div className="rounded-md border border-dashed bg-muted/40 px-3 py-2.5 text-xs">
+            <p className="font-semibold">Nomor yang akan dibuat sistem</p>
+            <dl className="mt-1.5 grid gap-2 sm:grid-cols-2">
+              <div>
+                <dt className="text-muted-foreground">Nomor invoice</dt>
+                <dd className="font-mono text-sm font-medium">{nomorOtomatis}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Nomor kwitansi</dt>
+                <dd className="font-mono text-sm font-medium">{nomorPreview?.no_kwitansi ?? "—"}</dd>
+              </div>
+            </dl>
+            <p className="mt-1.5 text-muted-foreground">Nomor ini baru terpakai setelah invoice diterbitkan.</p>
+          </div>
+        )}
         <label className="grid gap-1 text-sm">
           NSFP Coretax (opsional)
           <Input maxLength={20} inputMode="numeric" placeholder="mis. 04002600420989765" value={invoiceForm.nsfp} onChange={(event) => setInvoiceForm((current) => ({ ...current, nsfp: event.target.value }))} />

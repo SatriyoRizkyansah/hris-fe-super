@@ -115,7 +115,8 @@ export function PurchaseRequestDetailModals(props: Props) {
                   ["RO", `${detailRequest.ro?.kode_ro ?? "—"} · ${detailRequest.ro?.nama_ro ?? "—"}`],
                   ["Koordinator", detailRequest.ro?.unit_koordinator?.nama_unit ?? "—"],
                   ["MAK", `${detailRequest.ro?.mak?.kode_mak ?? "—"} · ${detailRequest.ro?.mak?.nama_mak ?? "—"}`],
-                  ["Nomor kuitansi", detailRequest.no_kuitansi || "Belum dicantumkan"],
+                  // Panjar perjalanan tidak memakai nomor kuitansi.
+                  ...(detailRequest.jenis === "PANJAR_PERJALANAN" ? [] : [["Nomor kuitansi", detailRequest.no_kuitansi || "Belum dicantumkan"]]),
                   ["Keterangan", detailRequest.keterangan || "Tidak ada keterangan tambahan.", "sm:col-span-2"],
                 ].map(([label, value, className]) => (
                   <div key={String(label)} className={`min-w-0 py-3 sm:border-b ${className ?? ""}`}>

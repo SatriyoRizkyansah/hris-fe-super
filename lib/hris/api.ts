@@ -39,6 +39,19 @@ export function envelopeData<T>(value: unknown): T | null {
   return envelope.data ?? null;
 }
 
+/**
+ * Payload dari respons mentah `requestHrisApi` yang berbentuk `{ status, message, data }`.
+ *
+ * `unwrapEnvelope` sudah membuka bungkus `{ data: ... }` milik generated client,
+ * sehingga memakai `.data` lagi akan membuka **dua** lapis. Fungsi ini hanya
+ * membuka **satu** lapis `data` — pakai ini untuk hasil `requestHrisApi`.
+ */
+export function bodyData<T>(value: unknown): T | null {
+  if (!value || typeof value !== "object" || !("data" in value)) return null;
+  const payload = (value as { data?: unknown }).data;
+  return payload === undefined || payload === null ? null : (payload as T);
+}
+
 export function apiErrorMessage(error: unknown, fallback = "Permintaan gagal diproses.") {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error) return error;

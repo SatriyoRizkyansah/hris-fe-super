@@ -9,6 +9,7 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { Modal } from "@/components/modal/Modal";
 import { FilterCombobox } from "@/components/ui/filter-combobox";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
+import { NomorPembayaranPreview, useNomorPembayaranPreview } from "@/components/common/NomorPembayaranPreview";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { setBrowserToken } from "@/lib/api/hooks";
@@ -70,6 +71,8 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
   const autoShortfall = Math.max(0, actualInput - panjarNominal);
   const panjarShortfall = Number(request?.panjar?.jumlah_kekurangan ?? 0);
   const needsWallet = mode === "refund" || mode === "topup";
+  // Pratinjau nomor pembayaran otomatis untuk pencairan dana tambahan (topup).
+  const fundingNomor = useNomorPembayaranPreview({ enabled: mode === "topup" && !funding.nomor_pembayaran.trim(), tanggal: funding.tanggal_bayar });
 
   useEffect(() => {
     if (!request) return;
@@ -133,11 +136,17 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
     onError: (cause) => setError(apiErrorMessage(cause, "Review pertanggungjawaban gagal disimpan.")),
   });
 
-  const topupMutation = use_mutation<unknown, Error, { id: string; file: File; nomor_pembayaran: string; tanggal_bayar: string; dana_sumber_id: string; catatan: string }>({
+  const topupMutation = use_mutation<unknown, Error, { id: string; file: File; nomor_pembayaran?: string; tanggal_bayar: string; dana_sumber_id: string; catatan: string }>({
     tag: "keuanganPengajuanBelanja",
     method: "payTravelAdvanceShortfall",
     invalidateKeys: [apiQueryKeys.resource("keuanganPengajuanBelanja"), apiQueryKeys.resource("masterDanaOperasional")],
-    mutationFn: ({ id, file: uploadFile, ...data }) => uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/dana-tambahan`, uploadFile, data),
+    mutationFn: ({ id, file: uploadFile, ...data }) =>
+      uploadHrisFile(`/api/pengajuan-belanja/${id}/panjar/dana-tambahan`, uploadFile, {
+        ...(data.nomor_pembayaran ? { nomor_pembayaran: data.nomor_pembayaran } : {}),
+        tanggal_bayar: data.tanggal_bayar,
+        dana_sumber_id: data.dana_sumber_id,
+        ...(data.catatan ? { catatan: data.catatan } : {}),
+      }),
     successMessage: "Pencairan dana tambahan panjar berhasil dicatat.",
     onSuccess: async () => {
       await onCompleted?.();
@@ -189,15 +198,15 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
         }
         await reviewMutation.mutateAsync({ id: String(request.id), disetujui: approved === true, catatan: form.catatan.trim() });
       } else if (mode === "topup") {
-        if (!funding.nomor_pembayaran.trim() || !funding.tanggal_bayar || !funding.dana_sumber_id) {
-          setError("Nomor, tanggal, dan kamar sumber dana wajib diisi.");
+        if (!funding.tanggal_bayar || !funding.dana_sumber_id) {
+          setError("Tanggal dan kamar sumber dana wajib diisi.");
           return;
         }
         const proof = assertPdf("Bukti pembayaran dana tambahan");
         if (!proof) return;
         await topupMutation.mutateAsync({
           id: String(request.id),
-          nomor_pembayaran: funding.nomor_pembayaran.trim(),
+          nomor_pembayaran: funding.nomor_pembayaran.trim() || undefined,
           tanggal_bayar: funding.tanggal_bayar,
           dana_sumber_id: funding.dana_sumber_id,
           catatan: funding.catatan.trim(),
@@ -325,14 +334,15 @@ export function PanjarActionModal({ request, onClose, onCompleted }: Props) {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-1 text-sm">
-              Nomor pembayaran *
-              <Input maxLength={100} value={funding.nomor_pembayaran} onChange={(event) => setFunding((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
+              Nomor pembayaran
+              <Input maxLength={100} placeholder={fundingNomor.placeholder} value={funding.nomor_pembayaran} onChange={(event) => setFunding((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
             </label>
             <label className="grid gap-1 text-sm">
               Tanggal bayar *
               <Input type="date" value={funding.tanggal_bayar} onChange={(event) => setFunding((current) => ({ ...current, tanggal_bayar: event.target.value }))} />
             </label>
           </div>
+          {!funding.nomor_pembayaran.trim() && <NomorPembayaranPreview nomor={fundingNomor.nomorOtomatis} />}
           <FilterCombobox
             label="Kamar sumber dana"
             value={funding.dana_sumber_id}

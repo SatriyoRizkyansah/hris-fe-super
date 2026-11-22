@@ -2,20 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import {
-  ArrowLeft,
-  Check,
-  CircleDollarSign,
-  Eye,
-  FileCheck2,
-  FileText,
-  LoaderCircle,
-  PackageCheck,
-  Paperclip,
-  Printer,
-  Wallet,
-  X,
-} from "lucide-react";
+import { ArrowLeft, Check, CircleDollarSign, Eye, FileCheck2, FileText, LoaderCircle, PackageCheck, Paperclip, Printer, Wallet, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +12,7 @@ import { Modal, ModalSection } from "@/components/modal/Modal";
 import { DocumentUploadField } from "@/components/common/DocumentUploadField";
 import { EmptyData } from "@/components/loading/EmptyData";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { NomorPembayaranPreview, useNomorPembayaranPreview } from "@/components/common/NomorPembayaranPreview";
 import { apiQueryKeys } from "@/lib/api/query-keys";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
@@ -34,7 +22,7 @@ import { formatRupiah } from "@/lib/hris/format";
 
 type Row = Record<string, any>;
 type ExpenseForm = { nama_kegiatan: string; tanggal: string; jumlah: string; keterangan: string };
-type PaymentForm = { nomor_pembayaran: string; tanggal_bayar: string; catatan: string };
+type PaymentForm = { nomor_pembayaran?: string; tanggal_bayar: string; catatan: string };
 type HandoverForm = { tanggal_serah_terima: string; nama_penerima: string };
 const today = () => {
   const date = new Date();
@@ -57,7 +45,10 @@ function dateLabel(value: unknown) {
 }
 
 function fileUrl(path: string) {
-  const normalized = path.replace(/^\/+/, "").replace(/^uploads\//, "").replace(/^api\//, "");
+  const normalized = path
+    .replace(/^\/+/, "")
+    .replace(/^uploads\//, "")
+    .replace(/^api\//, "");
   const base = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
   return `${base}/api/${normalized.startsWith("uploaded/") ? normalized : `uploaded/${normalized}`}`;
 }
@@ -146,6 +137,8 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   const canReviewKabag = role === "superadmin" || ((role === "koordinator" || role === "keuangan") && !!process.env.NEXT_PUBLIC_UNIT_KODE_KABAG && unitCode === process.env.NEXT_PUBLIC_UNIT_KODE_KABAG.trim().toLocaleUpperCase("id-ID"));
   const canReviewExpense = canReviewKarwas || canReviewKeuangan || canReviewKabag;
   const canPayExpense = ["superadmin", "keu_bendahara_pengeluaran"].includes(role);
+  // Pratinjau nomor pembayaran otomatis untuk modal pembayaran belanja retail.
+  const paymentNomor = useNomorPembayaranPreview({ enabled: canPayExpense && Boolean(paymentExpense) && !(paymentForm.nomor_pembayaran ?? "").trim(), tanggal: paymentForm.tanggal_bayar });
   const invalidate = [apiQueryKeys.resource("retail")];
   const detail = use_query({
     tag: "retail",
@@ -156,10 +149,10 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   });
   const job = payload(detail.data);
   const status = String(job.status ?? "");
-  const invoice = job.invoice && typeof job.invoice === "object" ? job.invoice as Row : {};
-  const expenses = Array.isArray(job.pengajuan_belanja) ? job.pengajuan_belanja as Row[] : [];
-  const serviceItems = Array.isArray(job.rincian_layanan) ? job.rincian_layanan as Row[] : [];
-  const documents = Array.isArray(job.dokumen) ? job.dokumen as Row[] : [];
+  const invoice = job.invoice && typeof job.invoice === "object" ? (job.invoice as Row) : {};
+  const expenses = Array.isArray(job.pengajuan_belanja) ? (job.pengajuan_belanja as Row[]) : [];
+  const serviceItems = Array.isArray(job.rincian_layanan) ? (job.rincian_layanan as Row[]) : [];
+  const documents = Array.isArray(job.dokumen) ? (job.dokumen as Row[]) : [];
   const handoverDocument = documents.find((document) => document.jenis === "BUKTI_SERAH_TERIMA_LHU") ?? null;
   const paid = Number(invoice.nominal_dibayar ?? 0);
   const invoiceAmount = Number(invoice.nominal ?? 0);
@@ -170,10 +163,11 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     tag: "retail",
     method: "createRetailExpense",
     invalidateKeys: invalidate,
-    mutationFn: async (form) => requestHrisApi(`/api/retail/jobs/${id}/pengajuan-belanja`, {
-      method: "POST",
-      body: JSON.stringify({ ...form, jumlah: Number(form.jumlah) }),
-    }),
+    mutationFn: async (form) =>
+      requestHrisApi(`/api/retail/jobs/${id}/pengajuan-belanja`, {
+        method: "POST",
+        body: JSON.stringify({ ...form, jumlah: Number(form.jumlah) }),
+      }),
     onSuccess: async () => {
       await detail.refetch();
       setExpenseOpen(false);
@@ -187,10 +181,11 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     tag: "retail",
     method: "reviewRetailExpense",
     invalidateKeys: invalidate,
-    mutationFn: async ({ id: expenseId, disetujui, catatan }) => requestHrisApi(`/api/retail/pengajuan-belanja/${expenseId}/${expenseDetail?.status === "DIAJUKAN" ? "review" : expenseDetail?.status === "DISETUJUI_KARWAS" ? "validasi-keuangan" : "validasi-kabag"}`, {
-      method: "POST",
-      body: JSON.stringify({ disetujui, catatan }),
-    }),
+    mutationFn: async ({ id: expenseId, disetujui, catatan }) =>
+      requestHrisApi(`/api/retail/pengajuan-belanja/${expenseId}/${expenseDetail?.status === "DIAJUKAN" ? "review" : expenseDetail?.status === "DISETUJUI_KARWAS" ? "validasi-keuangan" : "validasi-kabag"}`, {
+        method: "POST",
+        body: JSON.stringify({ disetujui, catatan }),
+      }),
     onSuccess: async () => {
       await detail.refetch();
       setExpenseDetail(null);
@@ -205,7 +200,12 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     tag: "retail",
     method: "payRetailExpense",
     invalidateKeys: invalidate,
-    mutationFn: async ({ id: expenseId, form, file }) => uploadHrisFile(`/api/retail/pengajuan-belanja/${expenseId}/bayar`, file, form),
+    mutationFn: async ({ id: expenseId, form, file }) =>
+      uploadHrisFile(`/api/retail/pengajuan-belanja/${expenseId}/bayar`, file, {
+        ...(form.nomor_pembayaran ? { nomor_pembayaran: form.nomor_pembayaran } : {}),
+        tanggal_bayar: form.tanggal_bayar,
+        ...(form.catatan ? { catatan: form.catatan } : {}),
+      }),
     onSuccess: async () => {
       await detail.refetch();
       setPaymentExpense(null);
@@ -224,7 +224,7 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     onSuccess: async (response) => {
       await detail.refetch();
       const updated = payload(response);
-      setExpenseDetail((current) => current ? { ...current, ...updated } : current);
+      setExpenseDetail((current) => (current ? { ...current, ...updated } : current));
       setSupportFile(null);
       setSupportError("");
     },
@@ -255,10 +255,11 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
     tag: "retail",
     method: "recordRetailLhuHandover",
     invalidateKeys: invalidate,
-    mutationFn: async ({ form, file }) => uploadHrisFile(`/api/retail/jobs/${id}/serah-terima-lhu`, file, {
-      tanggal_serah_terima: form.tanggal_serah_terima,
-      nama_penerima: form.nama_penerima.trim(),
-    }),
+    mutationFn: async ({ form, file }) =>
+      uploadHrisFile(`/api/retail/jobs/${id}/serah-terima-lhu`, file, {
+        tanggal_serah_terima: form.tanggal_serah_terima,
+        nama_penerima: form.nama_penerima.trim(),
+      }),
     onSuccess: async () => {
       await detail.refetch();
       setHandoverOpen(false);
@@ -310,8 +311,8 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   }
 
   async function payExpense() {
-    if (!paymentExpense || !paymentForm.nomor_pembayaran.trim() || !paymentForm.tanggal_bayar || !paymentFile) {
-      setPaymentError("Nomor pembayaran, tanggal bayar, dan bukti pembayaran wajib diisi.");
+    if (!paymentExpense || !paymentForm.tanggal_bayar || !paymentFile) {
+      setPaymentError("Tanggal bayar dan bukti pembayaran wajib diisi.");
       return;
     }
     try {
@@ -349,259 +350,689 @@ export default function RetailOrderDetailPage({ id }: { id: string }) {
   }
 
   if (user.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memeriksa akses...</div>;
-  if (!canViewRetail) return <Alert variant="destructive" className="m-6"><AlertTitle>Akses ditolak</AlertTitle><AlertDescription>Detail Proyek Retail hanya tersedia untuk Superadmin, role Keuangan, Koordinator Umum, dan operator retail yang ditetapkan.</AlertDescription></Alert>;
+  if (!canViewRetail)
+    return (
+      <Alert variant="destructive" className="m-6">
+        <AlertTitle>Akses ditolak</AlertTitle>
+        <AlertDescription>Detail Proyek Retail hanya tersedia untuk Superadmin, role Keuangan, Koordinator Umum, dan operator retail yang ditetapkan.</AlertDescription>
+      </Alert>
+    );
   if (detail.isLoading) return <div className="p-6 text-sm text-muted-foreground">Memuat order retail...</div>;
-  if (detail.isError || !job.id) return <div className="space-y-4 p-6"><EmptyData label="Detail order retail belum dapat dimuat." action={<Button type="button" variant="outline" size="sm" onClick={() => void detail.refetch()}>Coba lagi</Button>} /><Button variant="outline" render={<Link href="/dashboard/retail" />}><ArrowLeft size={16} /> Kembali ke Layanan Retail</Button></div>;
+  if (detail.isError || !job.id)
+    return (
+      <div className="space-y-4 p-6">
+        <EmptyData
+          label="Detail order retail belum dapat dimuat."
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={() => void detail.refetch()}>
+              Coba lagi
+            </Button>
+          }
+        />
+        <Button variant="outline" render={<Link href="/dashboard/retail" />}>
+          <ArrowLeft size={16} /> Kembali ke Layanan Retail
+        </Button>
+      </div>
+    );
 
   const progressIndex = currentFlowIndex(status, Boolean(handoverDocument), isInvoicePaid);
   const currentStatus = statusInfo(isInvoicePaid && ["INVOICE_DITERBITKAN", "LUNAS"].includes(status) ? "LUNAS" : status);
 
-  return <section className="hris-page space-y-6">
-    <header className="flex flex-wrap items-center justify-between gap-4 !p-6 sm:!p-7">
-      <div>
-        <Button variant="ghost" size="sm" className="mb-2 -ml-2" render={<Link href="/dashboard/retail" />}><ArrowLeft size={16} /> Semua Order Retail</Button>
-        <h1 className="text-2xl font-bold">{job.nama_pelanggan}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{job.nomor_job} · {job.unit_pelaksana?.nama_unit ?? "Unit belum tersedia"} · Diterima {dateLabel(job.tanggal_perconto_diterima ?? job.tanggal_permohonan)}</p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2"><StatusBadge status={currentStatus.tone}>{currentStatus.label}</StatusBadge>{invoice.nomor_invoice && <span className="rounded-full border bg-background px-3 py-1 text-xs font-medium">Invoice {invoice.nomor_invoice}</span>}</div>
-    </header>
+  return (
+    <section className="hris-page space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-4 !p-6 sm:!p-7">
+        <div>
+          <Button variant="ghost" size="sm" className="mb-2 -ml-2" render={<Link href="/dashboard/retail" />}>
+            <ArrowLeft size={16} /> Semua Order Retail
+          </Button>
+          <h1 className="text-2xl font-bold">{job.nama_pelanggan}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {job.nomor_job} · {job.unit_pelaksana?.nama_unit ?? "Unit belum tersedia"} · Diterima {dateLabel(job.tanggal_perconto_diterima ?? job.tanggal_permohonan)}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={currentStatus.tone}>{currentStatus.label}</StatusBadge>
+          {invoice.nomor_invoice && <span className="rounded-full border bg-background px-3 py-1 text-xs font-medium">Invoice {invoice.nomor_invoice}</span>}
+        </div>
+      </header>
 
-    <section className="rounded-2xl border bg-background p-5 shadow-sm sm:p-6">
-      <div className="mb-5">
-        <h2 className="font-semibold">Alur order dan penagihan</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Setiap tahap menunjukkan siapa yang memproses dan kapan langkah berikutnya tersedia.</p>
-      </div>
-      {status === "DIBATALKAN" ? <Alert variant="destructive"><AlertDescription>Order dibatalkan dan tidak dapat dilanjutkan.</AlertDescription></Alert> : <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {flowSteps.map((step, index) => {
-          const complete = index < progressIndex;
-          const active = index === progressIndex && progressIndex < flowSteps.length;
-          return <li key={step.title} className="relative min-w-0">
-            <div className="flex items-start gap-3">
-              <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${complete ? "bg-emerald-600 text-white" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{complete ? <Check size={15} /> : index + 1}</span>
-              <div className="min-w-0 pt-0.5">
-                <p className={`text-sm font-semibold leading-snug ${active ? "text-foreground" : complete ? "text-emerald-800" : "text-muted-foreground"}`}>{step.title}</p>
-                <p className="mt-1 text-[11px] font-semibold tracking-wide text-muted-foreground">{step.role}</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.detail}</p>
-                <p className={`mt-2 text-xs font-medium ${complete ? "text-emerald-700" : active ? "text-primary" : "text-muted-foreground"}`}>{complete ? "Selesai" : active ? "Tahap saat ini" : "Menunggu"}</p>
-              </div>
-            </div>
-          </li>;
-        })}
-      </ol>}
-      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t pt-4">
-        {canManage && ["PENGUJIAN", "LHU_TERBIT"].includes(status) && <Button onClick={() => { setLhuNumber(String(job.nomor_lhu ?? "")); setLhuDate(String(job.tanggal_lhu ?? today()).slice(0, 10)); setLhuFile(null); setLhuError(""); setLhuOpen(true); }}><FileCheck2 size={15} /> Input LHU · Siap Ditagih</Button>}
-        {canBill && status === "SIAP_DITAGIH" && !invoice.id && <Button onClick={issueInvoice}><FileText size={15} /> Terbitkan Invoice</Button>}
-        {canSettle && status === "INVOICE_DITERBITKAN" && <Button onClick={recordReceipt}><CircleDollarSign size={15} /> Catat Penerimaan</Button>}
-        {canManage && isInvoicePaid && job.file_lhu && <a className="inline-flex h-9 items-center gap-2 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted" href={fileUrl(String(job.file_lhu))} target="_blank" rel="noreferrer"><Printer size={15} /> Lihat / Cetak LHU</a>}
-        {canRecordHandover && isInvoicePaid && job.file_lhu && !handoverDocument && <Button onClick={() => { setHandoverForm(blankHandover()); setHandoverFile(null); setHandoverError(""); setHandoverOpen(true); }}><FileCheck2 size={15} /> Catat Serah Terima</Button>}
-        {handoverDocument && <StatusBadge status="ok">Serah terima tercatat</StatusBadge>}
-      </div>
-      <div className="mt-5 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 sm:flex-row sm:items-center">
-        <Wallet className="size-4 shrink-0 text-amber-700" />
-        <p className="text-sm leading-relaxed text-amber-950"><strong>Belanja bahan bila diperlukan:</strong> ajukan dari tahap pengujian, KARWAS meninjau dan mencadangkan OPS_KANTOR, lalu Bendahara mencatat pembayaran.</p>
-      </div>
-    </section>
+      <section className="rounded-2xl border bg-background p-5 shadow-sm sm:p-6">
+        <div className="mb-5">
+          <h2 className="font-semibold">Alur order dan penagihan</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Setiap tahap menunjukkan siapa yang memproses dan kapan langkah berikutnya tersedia.</p>
+        </div>
+        {status === "DIBATALKAN" ? (
+          <Alert variant="destructive">
+            <AlertDescription>Order dibatalkan dan tidak dapat dilanjutkan.</AlertDescription>
+          </Alert>
+        ) : (
+          <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {flowSteps.map((step, index) => {
+              const complete = index < progressIndex;
+              const active = index === progressIndex && progressIndex < flowSteps.length;
+              return (
+                <li key={step.title} className="relative min-w-0">
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${complete ? "bg-emerald-600 text-white" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                    >
+                      {complete ? <Check size={15} /> : index + 1}
+                    </span>
+                    <div className="min-w-0 pt-0.5">
+                      <p className={`text-sm font-semibold leading-snug ${active ? "text-foreground" : complete ? "text-emerald-800" : "text-muted-foreground"}`}>{step.title}</p>
+                      <p className="mt-1 text-[11px] font-semibold tracking-wide text-muted-foreground">{step.role}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.detail}</p>
+                      <p className={`mt-2 text-xs font-medium ${complete ? "text-emerald-700" : active ? "text-primary" : "text-muted-foreground"}`}>{complete ? "Selesai" : active ? "Tahap saat ini" : "Menunggu"}</p>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t pt-4">
+          {canManage && ["PENGUJIAN", "LHU_TERBIT"].includes(status) && (
+            <Button
+              onClick={() => {
+                setLhuNumber(String(job.nomor_lhu ?? ""));
+                setLhuDate(String(job.tanggal_lhu ?? today()).slice(0, 10));
+                setLhuFile(null);
+                setLhuError("");
+                setLhuOpen(true);
+              }}
+            >
+              <FileCheck2 size={15} /> Input LHU · Siap Ditagih
+            </Button>
+          )}
+          {canBill && status === "SIAP_DITAGIH" && !invoice.id && (
+            <Button onClick={issueInvoice}>
+              <FileText size={15} /> Terbitkan Invoice
+            </Button>
+          )}
+          {canSettle && status === "INVOICE_DITERBITKAN" && (
+            <Button onClick={recordReceipt}>
+              <CircleDollarSign size={15} /> Catat Penerimaan
+            </Button>
+          )}
+          {canManage && isInvoicePaid && job.file_lhu && (
+            <a className="inline-flex h-9 items-center gap-2 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted" href={fileUrl(String(job.file_lhu))} target="_blank" rel="noreferrer">
+              <Printer size={15} /> Lihat / Cetak LHU
+            </a>
+          )}
+          {canRecordHandover && isInvoicePaid && job.file_lhu && !handoverDocument && (
+            <Button
+              onClick={() => {
+                setHandoverForm(blankHandover());
+                setHandoverFile(null);
+                setHandoverError("");
+                setHandoverOpen(true);
+              }}
+            >
+              <FileCheck2 size={15} /> Catat Serah Terima
+            </Button>
+          )}
+          {handoverDocument && <StatusBadge status="ok">Serah terima tercatat</StatusBadge>}
+        </div>
+        <div className="mt-5 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 sm:flex-row sm:items-center">
+          <Wallet className="size-4 shrink-0 text-amber-700" />
+          <p className="text-sm leading-relaxed text-amber-950">
+            <strong>Belanja bahan bila diperlukan:</strong> ajukan dari tahap pengujian, KARWAS meninjau dan mencadangkan OPS_KANTOR, lalu Bendahara mencatat pembayaran.
+          </p>
+        </div>
+      </section>
 
-    <div className="grid gap-3 sm:grid-cols-3">
-      {[
-        { label: "Nilai layanan", value: formatRupiah(job.nilai_layanan), icon: PackageCheck, accent: "bg-sky-50 text-sky-700" },
-        { label: "Penerimaan tercatat", value: formatRupiah(paid), icon: CircleDollarSign, accent: "bg-emerald-50 text-emerald-700" },
-        { label: "Sisa piutang", value: formatRupiah(receivable), icon: Wallet, accent: "bg-amber-50 text-amber-700" },
-      ].map(({ label, value, icon: Icon, accent }) => <Card key={label}><CardContent className="flex min-h-[112px] items-center justify-between gap-4 !p-5 sm:!p-6"><div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="mt-2 break-words text-xl font-semibold tracking-tight tabular-nums">{value}</p></div><span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${accent}`}><Icon size={19} /></span></CardContent></Card>)}
-    </div>
-
-    <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
-      <div className="border-b bg-muted/30 px-5 py-4 sm:px-6">
-        <h2 className="font-semibold">Informasi order dan sampel</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Identitas klien, tanda terima perconto, rincian pengujian, dan dokumen terkait.</p>
-      </div>
-      <dl className="grid gap-x-8 px-5 py-2 sm:grid-cols-2 sm:px-6">
+      <div className="grid gap-3 sm:grid-cols-3">
         {[
-          ["Nomor job", job.nomor_job],
-          ["Nama klien", job.nama_pelanggan],
-          ["Unit pelaksana", job.unit_pelaksana?.nama_unit ?? "—"],
-          ["Nomor tanda terima perconto", job.nomor_tanda_terima_perconto ?? "—"],
-          ["Tanggal sampel diterima", dateLabel(job.tanggal_perconto_diterima)],
-          ["Nomor LHU", job.nomor_lhu ?? "Belum dicatat"],
-          ["Tanggal LHU", dateLabel(job.tanggal_lhu)],
-          ["Catatan umum order", job.detail_perconto ?? "—"],
-          ["Nomor invoice", invoice.nomor_invoice ?? "Belum diterbitkan"],
-          ["Status tagihan", invoice.status ? String(invoice.status).replaceAll("_", " ") : "Belum ditagihkan"],
-        ].map(([label, value]) => <div key={String(label)} className="border-b py-3"><dt className="text-xs font-medium text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium">{value}</dd></div>)}
-      </dl>
-      <div className="flex flex-wrap gap-4 border-t px-5 py-4 text-sm sm:px-6">
-        {job.file_tanda_terima && <a className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline" href={fileUrl(String(job.file_tanda_terima))} target="_blank" rel="noreferrer"><Paperclip size={14} /> Tanda terima perconto</a>}
+          { label: "Nilai layanan", value: formatRupiah(job.nilai_layanan), icon: PackageCheck, accent: "bg-sky-50 text-sky-700" },
+          { label: "Penerimaan tercatat", value: formatRupiah(paid), icon: CircleDollarSign, accent: "bg-emerald-50 text-emerald-700" },
+          { label: "Sisa piutang", value: formatRupiah(receivable), icon: Wallet, accent: "bg-amber-50 text-amber-700" },
+        ].map(({ label, value, icon: Icon, accent }) => (
+          <Card key={label}>
+            <CardContent className="flex min-h-[112px] items-center justify-between gap-4 !p-5 sm:!p-6">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                <p className="mt-2 break-words text-xl font-semibold tracking-tight tabular-nums">{value}</p>
+              </div>
+              <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${accent}`}>
+                <Icon size={19} />
+              </span>
+            </CardContent>
+          </Card>
+        ))}
       </div>
-    </section>
 
-    <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
-      <div className="border-b bg-muted/30 px-5 py-4 sm:px-6">
-        <h2 className="font-semibold">Dokumen LHU dan serah terima</h2>
-        <p className="mt-1 text-sm text-muted-foreground">LHU dapat dibuka setelah invoice lunas. Bukti dan catatan serah terima tersimpan di sini.</p>
-      </div>
-      <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
-        <div className="min-w-0 rounded-xl border p-4">
-          <p className="text-sm font-semibold">Laporan Hasil Uji (LHU)</p>
-          <p className="mt-1 text-xs text-muted-foreground">{job.nomor_lhu || "Nomor LHU belum dicatat"}{job.tanggal_lhu ? ` · ${dateLabel(job.tanggal_lhu)}` : ""}</p>
-          {job.file_lhu && isInvoicePaid
-            ? <a className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline" href={fileUrl(String(job.file_lhu))} target="_blank" rel="noreferrer"><FileText size={15} /> Buka / unduh LHU</a>
-            : <p className="mt-3 text-sm text-muted-foreground">{job.file_lhu ? "LHU tersedia setelah invoice lunas." : "File LHU belum diunggah."}</p>}
+      <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+        <div className="border-b bg-muted/30 px-5 py-4 sm:px-6">
+          <h2 className="font-semibold">Informasi order dan sampel</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Identitas klien, tanda terima perconto, rincian pengujian, dan dokumen terkait.</p>
         </div>
-        <div className="min-w-0 rounded-xl border p-4">
-          <p className="text-sm font-semibold">Bukti serah terima</p>
-          {handoverDocument
-            ? <>
-                <p className="mt-1 text-xs text-muted-foreground">Diterima oleh {handoverDocument.nama_penerima || "—"} · {dateLabel(handoverDocument.tanggal_serah_terima)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Dicatat oleh {handoverDocument.pengunggah?.nama || "—"} · {dateLabel(handoverDocument.created_at)}</p>
-                <a className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline" href={fileUrl(String(handoverDocument.path_file))} target="_blank" rel="noreferrer"><Paperclip size={15} /> {handoverDocument.nama_file || "Buka bukti serah terima"}</a>
-              </>
-            : <p className="mt-1 text-sm text-muted-foreground">Belum ada bukti serah terima yang diunggah.</p>}
+        <dl className="grid gap-x-8 px-5 py-2 sm:grid-cols-2 sm:px-6">
+          {[
+            ["Nomor job", job.nomor_job],
+            ["Nama klien", job.nama_pelanggan],
+            ["Unit pelaksana", job.unit_pelaksana?.nama_unit ?? "—"],
+            ["Nomor tanda terima perconto", job.nomor_tanda_terima_perconto ?? "—"],
+            ["Tanggal sampel diterima", dateLabel(job.tanggal_perconto_diterima)],
+            ["Nomor LHU", job.nomor_lhu ?? "Belum dicatat"],
+            ["Tanggal LHU", dateLabel(job.tanggal_lhu)],
+            ["Catatan umum order", job.detail_perconto ?? "—"],
+            ["Nomor invoice", invoice.nomor_invoice ?? "Belum diterbitkan"],
+            ["Status tagihan", invoice.status ? String(invoice.status).replaceAll("_", " ") : "Belum ditagihkan"],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="border-b py-3">
+              <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+              <dd className="mt-1 break-words text-sm font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="flex flex-wrap gap-4 border-t px-5 py-4 text-sm sm:px-6">
+          {job.file_tanda_terima && (
+            <a className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline" href={fileUrl(String(job.file_tanda_terima))} target="_blank" rel="noreferrer">
+              <Paperclip size={14} /> Tanda terima perconto
+            </a>
+          )}
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
-      <div className="border-b bg-muted/30 px-5 py-4 sm:px-6">
-        <h2 className="font-semibold">Daftar sampel dan rincian pengujian</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Rincian perconto yang dicatat dari tanda terima sampel.</p>
-      </div>
-      {serviceItems.length ? <div className="overflow-x-auto p-4 sm:p-5">
-        <table className="w-full min-w-[52rem] text-left text-sm">
-          <thead><tr className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground"><th className="w-12 p-3">No.</th><th className="p-3">Nama</th><th className="w-24 p-3 text-right">Jumlah</th><th className="w-32 p-3">Satuan</th><th className="w-40 p-3">ID sampel</th><th className="min-w-64 p-3">Keterangan / analisa</th></tr></thead>
-          <tbody>{serviceItems.map((item, index) => <tr key={String(item.id ?? index)} className="border-b last:border-0 align-top"><td className="p-3 text-muted-foreground">{index + 1}</td><td className="p-3 font-medium">{item.nama_layanan || "—"}</td><td className="p-3 text-right tabular-nums">{item.jumlah ?? 1}</td><td className="p-3">{item.satuan || "—"}</td><td className="p-3">{item.id_sampel || "—"}</td><td className="whitespace-pre-wrap p-3 text-muted-foreground">{item.catatan || item.parameter_uji || item.metode_uji || "—"}</td></tr>)}</tbody>
-        </table>
-      </div> : <div className="px-5 py-8 text-sm text-muted-foreground sm:px-6">{job.detail_perconto || "Belum ada rincian sampel yang dicatat."}</div>}
-    </section>
-
-    <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-5 py-4 sm:px-6">
-        <div><h2 className="font-semibold">Pengajuan belanja bahan</h2><p className="mt-1 text-sm text-muted-foreground">Riwayat kebutuhan bahan untuk order ini dan status pemeriksaan/pembayarannya.</p></div>
-        {canManage && status === "PENGUJIAN" && <Button onClick={() => { setExpenseForm(blankExpense()); setExpenseError(""); setExpenseOpen(true); }}><Wallet size={15} /> Ajukan Belanja</Button>}
-      </div>
-      {expenses.length ? <div className="overflow-x-auto p-4 sm:p-5"><table className="w-full min-w-[54rem] text-left text-sm"><thead><tr className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground"><th className="rounded-l-lg p-3">Pengajuan</th><th className="p-3">Kebutuhan</th><th className="p-3 text-right">Nominal</th><th className="p-3">Status</th><th className="rounded-r-lg p-3">Aksi</th></tr></thead><tbody>{expenses.map((expense) => { const value = expenseStatus(String(expense.status ?? "")); return <tr key={String(expense.id)} className="border-b last:border-0"><td className="p-3"><p className="font-medium">{expense.nomor_pengajuan}</p><p className="text-xs text-muted-foreground">{dateLabel(expense.tanggal)}</p></td><td className="p-3"><p>{expense.nama_kegiatan}</p>{expense.keterangan && <p className="mt-0.5 text-xs text-muted-foreground">{expense.keterangan}</p>}</td><td className="p-3 text-right font-medium tabular-nums">{formatRupiah(expense.jumlah)}</td><td className="p-3"><StatusBadge status={value.tone}>{value.label}</StatusBadge></td><td className="p-3"><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => { setExpenseDetail(expense); setReviewMode(false); setReviewNote(""); setReviewError(""); }}><Eye size={14} /> Rincian</Button>{((canReviewKarwas && expense.status === "DIAJUKAN") || (canReviewKeuangan && expense.status === "DISETUJUI_KARWAS") || (canReviewKabag && expense.status === "DISETUJUI_KEUANGAN")) && <Button size="sm" onClick={() => { setExpenseDetail(expense); setReviewMode(true); setReviewNote(""); setReviewError(""); }}><Check size={14} /> Review</Button>}{canPayExpense && expense.status === "DISETUJUI_KABAG" && <Button size="sm" onClick={() => { setPaymentExpense(expense); setPaymentForm(blankPayment()); setPaymentFile(null); setPaymentError(""); }}><CircleDollarSign size={14} /> Catat Bayar</Button>}</div></td></tr>; })}</tbody></table></div> : <div className="px-5 py-10 text-center text-sm text-muted-foreground">Belum ada pengajuan belanja bahan untuk order ini.</div>}
-    </section>
-
-    <Modal open={expenseOpen} onClose={() => setExpenseOpen(false)} title="Ajukan Belanja Layanan Retail" description={`${job.nomor_job} · ${job.nama_pelanggan} · sumber dana OPS_KANTOR`} size="md" bodyClassName="space-y-4" footer={<><Button variant="outline" onClick={() => setExpenseOpen(false)}>Batal</Button><Button disabled={createExpenseMutation.isPending} onClick={submitExpense}>{createExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Wallet size={15} />} Kirim ke KARWAS</Button></>}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm sm:col-span-2">Barang / kebutuhan *<Input maxLength={200} value={expenseForm.nama_kegiatan} onChange={(event) => setExpenseForm((current) => ({ ...current, nama_kegiatan: event.target.value }))} placeholder="Contoh: reagen untuk pengujian sampel" /></label>
-        <label className="grid gap-1 text-sm">Tanggal pengajuan *<Input type="date" value={expenseForm.tanggal} onChange={(event) => setExpenseForm((current) => ({ ...current, tanggal: event.target.value }))} /></label>
-        <label className="grid gap-1 text-sm">Nominal *<MoneyInput value={expenseForm.jumlah} onValueChange={(value) => setExpenseForm((current) => ({ ...current, jumlah: value }))} placeholder="0" /></label>
-        <label className="grid gap-1 text-sm sm:col-span-2">Rincian dan alasan<textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={expenseForm.keterangan} onChange={(event) => setExpenseForm((current) => ({ ...current, keterangan: event.target.value }))} placeholder="Jumlah dan satuan barang untuk order ini" /></label>
-      </div>
-      <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">Saldo OPS_KANTOR dicadangkan setelah KARWAS menyetujui. Bendahara mencatat pengeluaran setelah pembayaran dilakukan.</p>
-      {expenseError && <Alert variant="destructive"><AlertDescription>{expenseError}</AlertDescription></Alert>}
-    </Modal>
-
-    <Modal
-      open={Boolean(expenseDetail)}
-      onClose={() => { setExpenseDetail(null); setReviewMode(false); setReviewError(""); }}
-      title={reviewMode ? expenseDetail?.status === "DIAJUKAN" ? "Validasi KARWAS" : expenseDetail?.status === "DISETUJUI_KARWAS" ? "Validasi Keuangan" : "Persetujuan Kabag" : "Rincian Pengajuan Belanja Retail"}
-      description={expenseDetail ? `${expenseDetail.nomor_pengajuan} · ${job.nomor_job} · ${job.nama_pelanggan}` : undefined}
-      size="lg"
-      bodyClassName="space-y-4"
-      footer={<>
-        <Button variant="outline" onClick={() => { setExpenseDetail(null); setReviewMode(false); }}>Tutup</Button>
-        {expenseDetail && !reviewMode && canManage && expenseDetail.status === "DIAJUKAN" && <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm hover:bg-muted"><Paperclip size={14} />{supportFile ? supportFile.name : "Lampirkan dokumen"}<input className="sr-only" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => { setSupportFile(event.target.files?.[0] ?? null); setSupportError(""); }} /></label>}
-        {expenseDetail && !reviewMode && supportFile && <Button variant="outline" disabled={uploadSupportMutation.isPending} onClick={() => uploadSupportMutation.mutate({ id: String(expenseDetail.id), file: supportFile })}>{uploadSupportMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Paperclip size={15} />} Unggah</Button>}
-        {expenseDetail && reviewMode && canReviewExpense && ((canReviewKarwas && expenseDetail.status === "DIAJUKAN") || (canReviewKeuangan && expenseDetail.status === "DISETUJUI_KARWAS") || (canReviewKabag && expenseDetail.status === "DISETUJUI_KEUANGAN")) && <>
-          <Button variant="destructive" disabled={reviewExpenseMutation.isPending} onClick={() => reviewExpense(false)}>{reviewExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <X size={15} />} Tolak</Button>
-          <Button disabled={reviewExpenseMutation.isPending} onClick={() => reviewExpense(true)}>{reviewExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Check size={15} />} {expenseDetail.status === "DIAJUKAN" ? "Setujui & Reservasi" : expenseDetail.status === "DISETUJUI_KARWAS" ? "Setujui Validasi Keuangan" : "Setujui sebagai Kabag"}</Button>
-        </>}
-      </>}
-    >
-      {expenseDetail && <>
-        <ModalSection title="Rincian kebutuhan dan sumber dana">
-          <dl className="grid gap-x-6 sm:grid-cols-2">
-            {[
-              ["Nomor pengajuan", expenseDetail.nomor_pengajuan],
-              ["Status", expenseStatus(String(expenseDetail.status ?? "")).label],
-              ["Order retail", `${job.nomor_job} · ${job.nama_pelanggan}`],
-              ["Unit pelaksana", job.unit_pelaksana?.nama_unit ?? "—"],
-              ["Barang / kebutuhan", expenseDetail.nama_kegiatan],
-              ["Tanggal pengajuan", dateLabel(expenseDetail.tanggal)],
-              ["Nominal", formatRupiah(expenseDetail.jumlah)],
-              ["Sumber dana", `OPS_KANTOR · TA ${job.tahun_fiscal ?? "—"}`],
-              ["Diajukan oleh", expenseDetail.pembuat?.nama ?? "—"],
-              ["Keterangan", expenseDetail.keterangan ?? "—"],
-            ].map(([label, value]) => <div key={String(label)} className="border-b py-2.5"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium tabular-nums">{value}</dd></div>)}
-          </dl>
-        </ModalSection>
-        <ModalSection title="Riwayat persetujuan dan pembayaran" description="Rincian pemeriksa, catatan keputusan, dan pembayaran untuk setiap tahap.">
-          <dl className="grid gap-x-6 sm:grid-cols-2">
-            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Validasi KARWAS</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.pemeriksa?.nama ? `${expenseDetail.pemeriksa.nama} · ${dateLabel(expenseDetail.diperiksa_pada)}` : "Belum diproses"}</dd><dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_pemeriksa || "Tidak ada catatan."}</dd></div>
-            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Validasi Keuangan</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.validator_keuangan?.nama ? `${expenseDetail.validator_keuangan.nama} · ${dateLabel(expenseDetail.divalidasi_keuangan_pada)}` : "Belum diproses"}</dd><dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_keuangan || "Tidak ada catatan."}</dd></div>
-            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Persetujuan Kabag</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.validator_kabag?.nama ? `${expenseDetail.validator_kabag.nama} · ${dateLabel(expenseDetail.divalidasi_kabag_pada)}` : "Belum diproses"}</dd><dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_kabag || "Tidak ada catatan."}</dd></div>
-            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Nomor pembayaran</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.nomor_pembayaran ?? "Belum dibayar"}</dd></div>
-            <div className="border-b py-2.5"><dt className="text-xs text-muted-foreground">Tanggal bayar / Bendahara</dt><dd className="mt-1 text-sm font-medium">{expenseDetail.tanggal_bayar ? `${dateLabel(expenseDetail.tanggal_bayar)} · ${expenseDetail.pembayar?.nama ?? "—"}` : "—"}</dd></div>
-          </dl>
-          <div className="flex flex-wrap gap-3 text-sm">
-            {expenseDetail.file_dokumen && <a className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline" href={fileUrl(String(expenseDetail.file_dokumen))} target="_blank" rel="noreferrer"><Paperclip size={14} /> Dokumen pendukung</a>}
-            {expenseDetail.file_bukti_bayar && <a className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline" href={fileUrl(String(expenseDetail.file_bukti_bayar))} target="_blank" rel="noreferrer"><FileText size={14} /> Bukti pembayaran</a>}
-            {!expenseDetail.file_dokumen && !expenseDetail.file_bukti_bayar && <span className="text-muted-foreground">Belum ada dokumen terlampir.</span>}
+      <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+        <div className="border-b bg-muted/30 px-5 py-4 sm:px-6">
+          <h2 className="font-semibold">Dokumen LHU dan serah terima</h2>
+          <p className="mt-1 text-sm text-muted-foreground">LHU dapat dibuka setelah invoice lunas. Bukti dan catatan serah terima tersimpan di sini.</p>
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+          <div className="min-w-0 rounded-xl border p-4">
+            <p className="text-sm font-semibold">Laporan Hasil Uji (LHU)</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {job.nomor_lhu || "Nomor LHU belum dicatat"}
+              {job.tanggal_lhu ? ` · ${dateLabel(job.tanggal_lhu)}` : ""}
+            </p>
+            {job.file_lhu && isInvoicePaid ? (
+              <a className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline" href={fileUrl(String(job.file_lhu))} target="_blank" rel="noreferrer">
+                <FileText size={15} /> Buka / unduh LHU
+              </a>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">{job.file_lhu ? "LHU tersedia setelah invoice lunas." : "File LHU belum diunggah."}</p>
+            )}
           </div>
-          {supportError && <Alert variant="destructive"><AlertDescription>{supportError}</AlertDescription></Alert>}
-        </ModalSection>
-        {reviewMode && <label className="grid gap-1 text-sm">{expenseDetail.status === "DIAJUKAN" ? "Catatan KARWAS" : expenseDetail.status === "DISETUJUI_KARWAS" ? "Catatan validasi Keuangan" : "Catatan persetujuan Kabag"}<span className="text-xs text-muted-foreground">Wajib diisi jika pengajuan ditolak.</span><textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Catatan pemeriksaan atau alasan penolakan" /></label>}
-        {reviewError && <Alert variant="destructive"><AlertDescription>{reviewError}</AlertDescription></Alert>}
-      </>}
-    </Modal>
-
-    <Modal
-      open={Boolean(paymentExpense)}
-      onClose={() => { setPaymentExpense(null); setPaymentError(""); }}
-      title="Catat Pembayaran Belanja Retail"
-      description={paymentExpense ? `${paymentExpense.nomor_pengajuan} · ${paymentExpense.nama_kegiatan} · ${formatRupiah(paymentExpense.jumlah)}` : undefined}
-      size="md"
-      bodyClassName="space-y-4"
-      footer={<><Button variant="outline" onClick={() => setPaymentExpense(null)}>Batal</Button><Button disabled={payExpenseMutation.isPending} onClick={payExpense}>{payExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <CircleDollarSign size={15} />} Simpan Pembayaran</Button></>}
-    >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">Nomor pembayaran *<Input maxLength={100} value={paymentForm.nomor_pembayaran} onChange={(event) => setPaymentForm((current) => ({ ...current, nomor_pembayaran: event.target.value }))} /></label>
-        <label className="grid gap-1 text-sm">Tanggal bayar *<Input type="date" value={paymentForm.tanggal_bayar} onChange={(event) => setPaymentForm((current) => ({ ...current, tanggal_bayar: event.target.value }))} /></label>
-        <label className="grid gap-1 text-sm sm:col-span-2">Bukti pembayaran *<Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setPaymentFile(event.target.files?.[0] ?? null)} /></label>
-        <label className="grid gap-1 text-sm sm:col-span-2">Catatan<textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" maxLength={500} value={paymentForm.catatan} onChange={(event) => setPaymentForm((current) => ({ ...current, catatan: event.target.value }))} /></label>
-      </div>
-      {paymentError && <Alert variant="destructive"><AlertDescription>{paymentError}</AlertDescription></Alert>}
-    </Modal>
-
-    <Modal open={lhuOpen} onClose={() => setLhuOpen(false)} title="Input LHU dan Siapkan Tagihan" description={`${job.nomor_job} · ${job.nama_pelanggan}`} size="md" bodyClassName="space-y-4" footer={<><Button variant="outline" onClick={() => setLhuOpen(false)}>Batal</Button><Button disabled={readyInvoiceMutation.isPending} onClick={submitLhu}>{readyInvoiceMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <FileCheck2 size={15} />} Simpan LHU · Siap Ditagih</Button></>}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">Nomor LHU *<Input maxLength={100} value={lhuNumber} onChange={(event) => setLhuNumber(event.target.value)} /></label>
-        <label className="grid gap-1 text-sm">Tanggal LHU *<Input type="date" value={lhuDate} onChange={(event) => setLhuDate(event.target.value)} /></label>
-        <div className="sm:col-span-2">
-          <DocumentUploadField
-            label="File LHU *"
-            accept=".pdf,.jpg,.jpeg,.png"
-            value={lhuFile}
-            onChange={setLhuFile}
-            disabled={readyInvoiceMutation.isPending}
-            className="p-3 sm:p-3"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">Unggah file LHU dalam format PDF, JPG, atau PNG (maks. 10 MB).</p>
+          <div className="min-w-0 rounded-xl border p-4">
+            <p className="text-sm font-semibold">Bukti serah terima</p>
+            {handoverDocument ? (
+              <>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Diterima oleh {handoverDocument.nama_penerima || "—"} · {dateLabel(handoverDocument.tanggal_serah_terima)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Dicatat oleh {handoverDocument.pengunggah?.nama || "—"} · {dateLabel(handoverDocument.created_at)}
+                </p>
+                <a className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline" href={fileUrl(String(handoverDocument.path_file))} target="_blank" rel="noreferrer">
+                  <Paperclip size={15} /> {handoverDocument.nama_file || "Buka bukti serah terima"}
+                </a>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">Belum ada bukti serah terima yang diunggah.</p>
+            )}
+          </div>
         </div>
-      </div>
-      {lhuError && <Alert variant="destructive"><AlertDescription>{lhuError}</AlertDescription></Alert>}
-    </Modal>
+      </section>
 
-    <Modal
-      open={handoverOpen}
-      onClose={() => setHandoverOpen(false)}
-      title="Catat Serah Terima LHU"
-      description={`${job.nomor_job} · LHU ${job.nomor_lhu ?? "—"}`}
-      size="md"
-      bodyClassName="space-y-4"
-      footer={<><Button variant="outline" onClick={() => setHandoverOpen(false)}>Batal</Button><Button disabled={handoverMutation.isPending} onClick={submitHandover}>{handoverMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <FileCheck2 size={15} />} Simpan Serah Terima</Button></>}
-    >
-      <p className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm text-emerald-900">Invoice sudah lunas. Catat penerima dan unggah tanda terima atau berita acara untuk menyelesaikan order.</p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">Tanggal serah terima *<Input type="date" value={handoverForm.tanggal_serah_terima} onChange={(event) => setHandoverForm((current) => ({ ...current, tanggal_serah_terima: event.target.value }))} /></label>
-        <label className="grid gap-1 text-sm">Nama penerima *<Input maxLength={200} value={handoverForm.nama_penerima} onChange={(event) => setHandoverForm((current) => ({ ...current, nama_penerima: event.target.value }))} placeholder="Nama penerima LHU" /></label>
-        <div className="sm:col-span-2">
-          <DocumentUploadField label="Bukti serah terima *" accept=".pdf,.jpg,.jpeg,.png" value={handoverFile} onChange={setHandoverFile} disabled={handoverMutation.isPending} className="p-3 sm:p-3" />
-          <p className="mt-1 text-xs text-muted-foreground">Unggah tanda terima atau berita acara (PDF, JPG, atau PNG; maks. 10 MB).</p>
+      <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+        <div className="border-b bg-muted/30 px-5 py-4 sm:px-6">
+          <h2 className="font-semibold">Daftar sampel dan rincian pengujian</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Rincian perconto yang dicatat dari tanda terima sampel.</p>
         </div>
-      </div>
-      {handoverError && <Alert variant="destructive"><AlertDescription>{handoverError}</AlertDescription></Alert>}
-    </Modal>
-  </section>;
+        {serviceItems.length ? (
+          <div className="overflow-x-auto p-4 sm:p-5">
+            <table className="w-full min-w-[52rem] text-left text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="w-12 p-3">No.</th>
+                  <th className="p-3">Nama</th>
+                  <th className="w-24 p-3 text-right">Jumlah</th>
+                  <th className="w-32 p-3">Satuan</th>
+                  <th className="w-40 p-3">ID sampel</th>
+                  <th className="min-w-64 p-3">Keterangan / analisa</th>
+                </tr>
+              </thead>
+              <tbody>
+                {serviceItems.map((item, index) => (
+                  <tr key={String(item.id ?? index)} className="border-b last:border-0 align-top">
+                    <td className="p-3 text-muted-foreground">{index + 1}</td>
+                    <td className="p-3 font-medium">{item.nama_layanan || "—"}</td>
+                    <td className="p-3 text-right tabular-nums">{item.jumlah ?? 1}</td>
+                    <td className="p-3">{item.satuan || "—"}</td>
+                    <td className="p-3">{item.id_sampel || "—"}</td>
+                    <td className="whitespace-pre-wrap p-3 text-muted-foreground">{item.catatan || item.parameter_uji || item.metode_uji || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-sm text-muted-foreground sm:px-6">{job.detail_perconto || "Belum ada rincian sampel yang dicatat."}</div>
+        )}
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-5 py-4 sm:px-6">
+          <div>
+            <h2 className="font-semibold">Pengajuan belanja bahan</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Riwayat kebutuhan bahan untuk order ini dan status pemeriksaan/pembayarannya.</p>
+          </div>
+          {canManage && status === "PENGUJIAN" && (
+            <Button
+              onClick={() => {
+                setExpenseForm(blankExpense());
+                setExpenseError("");
+                setExpenseOpen(true);
+              }}
+            >
+              <Wallet size={15} /> Ajukan Belanja
+            </Button>
+          )}
+        </div>
+        {expenses.length ? (
+          <div className="overflow-x-auto p-4 sm:p-5">
+            <table className="w-full min-w-[54rem] text-left text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="rounded-l-lg p-3">Pengajuan</th>
+                  <th className="p-3">Kebutuhan</th>
+                  <th className="p-3 text-right">Nominal</th>
+                  <th className="p-3">Status</th>
+                  <th className="rounded-r-lg p-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.map((expense) => {
+                  const value = expenseStatus(String(expense.status ?? ""));
+                  return (
+                    <tr key={String(expense.id)} className="border-b last:border-0">
+                      <td className="p-3">
+                        <p className="font-medium">{expense.nomor_pengajuan}</p>
+                        <p className="text-xs text-muted-foreground">{dateLabel(expense.tanggal)}</p>
+                      </td>
+                      <td className="p-3">
+                        <p>{expense.nama_kegiatan}</p>
+                        {expense.keterangan && <p className="mt-0.5 text-xs text-muted-foreground">{expense.keterangan}</p>}
+                      </td>
+                      <td className="p-3 text-right font-medium tabular-nums">{formatRupiah(expense.jumlah)}</td>
+                      <td className="p-3">
+                        <StatusBadge status={value.tone}>{value.label}</StatusBadge>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setExpenseDetail(expense);
+                              setReviewMode(false);
+                              setReviewNote("");
+                              setReviewError("");
+                            }}
+                          >
+                            <Eye size={14} /> Rincian
+                          </Button>
+                          {((canReviewKarwas && expense.status === "DIAJUKAN") || (canReviewKeuangan && expense.status === "DISETUJUI_KARWAS") || (canReviewKabag && expense.status === "DISETUJUI_KEUANGAN")) && (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setExpenseDetail(expense);
+                                setReviewMode(true);
+                                setReviewNote("");
+                                setReviewError("");
+                              }}
+                            >
+                              <Check size={14} /> Review
+                            </Button>
+                          )}
+                          {canPayExpense && expense.status === "DISETUJUI_KABAG" && (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setPaymentExpense(expense);
+                                setPaymentForm(blankPayment());
+                                setPaymentFile(null);
+                                setPaymentError("");
+                              }}
+                            >
+                              <CircleDollarSign size={14} /> Catat Bayar
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-5 py-10 text-center text-sm text-muted-foreground">Belum ada pengajuan belanja bahan untuk order ini.</div>
+        )}
+      </section>
+
+      <Modal
+        open={expenseOpen}
+        onClose={() => setExpenseOpen(false)}
+        title="Ajukan Belanja Layanan Retail"
+        description={`${job.nomor_job} · ${job.nama_pelanggan} · sumber dana OPS_KANTOR`}
+        size="md"
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setExpenseOpen(false)}>
+              Batal
+            </Button>
+            <Button disabled={createExpenseMutation.isPending} onClick={submitExpense}>
+              {createExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Wallet size={15} />} Kirim ke KARWAS
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Barang / kebutuhan *
+            <Input maxLength={200} value={expenseForm.nama_kegiatan} onChange={(event) => setExpenseForm((current) => ({ ...current, nama_kegiatan: event.target.value }))} placeholder="Contoh: reagen untuk pengujian sampel" />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Tanggal pengajuan *<Input type="date" value={expenseForm.tanggal} onChange={(event) => setExpenseForm((current) => ({ ...current, tanggal: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Nominal *<MoneyInput value={expenseForm.jumlah} onValueChange={(value) => setExpenseForm((current) => ({ ...current, jumlah: value }))} placeholder="0" />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Rincian dan alasan
+            <textarea
+              className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              maxLength={500}
+              value={expenseForm.keterangan}
+              onChange={(event) => setExpenseForm((current) => ({ ...current, keterangan: event.target.value }))}
+              placeholder="Jumlah dan satuan barang untuk order ini"
+            />
+          </label>
+        </div>
+        <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">Saldo OPS_KANTOR dicadangkan setelah KARWAS menyetujui. Bendahara mencatat pengeluaran setelah pembayaran dilakukan.</p>
+        {expenseError && (
+          <Alert variant="destructive">
+            <AlertDescription>{expenseError}</AlertDescription>
+          </Alert>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(expenseDetail)}
+        onClose={() => {
+          setExpenseDetail(null);
+          setReviewMode(false);
+          setReviewError("");
+        }}
+        title={reviewMode ? (expenseDetail?.status === "DIAJUKAN" ? "Validasi KARWAS" : expenseDetail?.status === "DISETUJUI_KARWAS" ? "Validasi Keuangan" : "Persetujuan Kabag") : "Rincian Pengajuan Belanja Retail"}
+        description={expenseDetail ? `${expenseDetail.nomor_pengajuan} · ${job.nomor_job} · ${job.nama_pelanggan}` : undefined}
+        size="lg"
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setExpenseDetail(null);
+                setReviewMode(false);
+              }}
+            >
+              Tutup
+            </Button>
+            {expenseDetail && !reviewMode && canManage && expenseDetail.status === "DIAJUKAN" && (
+              <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm hover:bg-muted">
+                <Paperclip size={14} />
+                {supportFile ? supportFile.name : "Lampirkan dokumen"}
+                <input
+                  className="sr-only"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(event) => {
+                    setSupportFile(event.target.files?.[0] ?? null);
+                    setSupportError("");
+                  }}
+                />
+              </label>
+            )}
+            {expenseDetail && !reviewMode && supportFile && (
+              <Button variant="outline" disabled={uploadSupportMutation.isPending} onClick={() => uploadSupportMutation.mutate({ id: String(expenseDetail.id), file: supportFile })}>
+                {uploadSupportMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Paperclip size={15} />} Unggah
+              </Button>
+            )}
+            {expenseDetail &&
+              reviewMode &&
+              canReviewExpense &&
+              ((canReviewKarwas && expenseDetail.status === "DIAJUKAN") || (canReviewKeuangan && expenseDetail.status === "DISETUJUI_KARWAS") || (canReviewKabag && expenseDetail.status === "DISETUJUI_KEUANGAN")) && (
+                <>
+                  <Button variant="destructive" disabled={reviewExpenseMutation.isPending} onClick={() => reviewExpense(false)}>
+                    {reviewExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <X size={15} />} Tolak
+                  </Button>
+                  <Button disabled={reviewExpenseMutation.isPending} onClick={() => reviewExpense(true)}>
+                    {reviewExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Check size={15} />}{" "}
+                    {expenseDetail.status === "DIAJUKAN" ? "Setujui & Reservasi" : expenseDetail.status === "DISETUJUI_KARWAS" ? "Setujui Validasi Keuangan" : "Setujui sebagai Kabag"}
+                  </Button>
+                </>
+              )}
+          </>
+        }
+      >
+        {expenseDetail && (
+          <>
+            <ModalSection title="Rincian kebutuhan dan sumber dana">
+              <dl className="grid gap-x-6 sm:grid-cols-2">
+                {[
+                  ["Nomor pengajuan", expenseDetail.nomor_pengajuan],
+                  ["Status", expenseStatus(String(expenseDetail.status ?? "")).label],
+                  ["Order retail", `${job.nomor_job} · ${job.nama_pelanggan}`],
+                  ["Unit pelaksana", job.unit_pelaksana?.nama_unit ?? "—"],
+                  ["Barang / kebutuhan", expenseDetail.nama_kegiatan],
+                  ["Tanggal pengajuan", dateLabel(expenseDetail.tanggal)],
+                  ["Nominal", formatRupiah(expenseDetail.jumlah)],
+                  ["Sumber dana", `OPS_KANTOR · TA ${job.tahun_fiscal ?? "—"}`],
+                  ["Diajukan oleh", expenseDetail.pembuat?.nama ?? "—"],
+                  ["Keterangan", expenseDetail.keterangan ?? "—"],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="border-b py-2.5">
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className="mt-1 break-words text-sm font-medium tabular-nums">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </ModalSection>
+            <ModalSection title="Riwayat persetujuan dan pembayaran" description="Rincian pemeriksa, catatan keputusan, dan pembayaran untuk setiap tahap.">
+              <dl className="grid gap-x-6 sm:grid-cols-2">
+                <div className="border-b py-2.5">
+                  <dt className="text-xs text-muted-foreground">Validasi KARWAS</dt>
+                  <dd className="mt-1 text-sm font-medium">{expenseDetail.pemeriksa?.nama ? `${expenseDetail.pemeriksa.nama} · ${dateLabel(expenseDetail.diperiksa_pada)}` : "Belum diproses"}</dd>
+                  <dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_pemeriksa || "Tidak ada catatan."}</dd>
+                </div>
+                <div className="border-b py-2.5">
+                  <dt className="text-xs text-muted-foreground">Validasi Keuangan</dt>
+                  <dd className="mt-1 text-sm font-medium">{expenseDetail.validator_keuangan?.nama ? `${expenseDetail.validator_keuangan.nama} · ${dateLabel(expenseDetail.divalidasi_keuangan_pada)}` : "Belum diproses"}</dd>
+                  <dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_keuangan || "Tidak ada catatan."}</dd>
+                </div>
+                <div className="border-b py-2.5">
+                  <dt className="text-xs text-muted-foreground">Persetujuan Kabag</dt>
+                  <dd className="mt-1 text-sm font-medium">{expenseDetail.validator_kabag?.nama ? `${expenseDetail.validator_kabag.nama} · ${dateLabel(expenseDetail.divalidasi_kabag_pada)}` : "Belum diproses"}</dd>
+                  <dd className="mt-1 text-xs text-muted-foreground">{expenseDetail.catatan_kabag || "Tidak ada catatan."}</dd>
+                </div>
+                <div className="border-b py-2.5">
+                  <dt className="text-xs text-muted-foreground">Nomor pembayaran</dt>
+                  <dd className="mt-1 text-sm font-medium">{expenseDetail.nomor_pembayaran ?? "Belum dibayar"}</dd>
+                </div>
+                <div className="border-b py-2.5">
+                  <dt className="text-xs text-muted-foreground">Tanggal bayar / Bendahara</dt>
+                  <dd className="mt-1 text-sm font-medium">{expenseDetail.tanggal_bayar ? `${dateLabel(expenseDetail.tanggal_bayar)} · ${expenseDetail.pembayar?.nama ?? "—"}` : "—"}</dd>
+                </div>
+              </dl>
+              <div className="flex flex-wrap gap-3 text-sm">
+                {expenseDetail.file_dokumen && (
+                  <a className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline" href={fileUrl(String(expenseDetail.file_dokumen))} target="_blank" rel="noreferrer">
+                    <Paperclip size={14} /> Dokumen pendukung
+                  </a>
+                )}
+                {expenseDetail.file_bukti_bayar && (
+                  <a className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline" href={fileUrl(String(expenseDetail.file_bukti_bayar))} target="_blank" rel="noreferrer">
+                    <FileText size={14} /> Bukti pembayaran
+                  </a>
+                )}
+                {!expenseDetail.file_dokumen && !expenseDetail.file_bukti_bayar && <span className="text-muted-foreground">Belum ada dokumen terlampir.</span>}
+              </div>
+              {supportError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{supportError}</AlertDescription>
+                </Alert>
+              )}
+            </ModalSection>
+            {reviewMode && (
+              <label className="grid gap-1 text-sm">
+                {expenseDetail.status === "DIAJUKAN" ? "Catatan KARWAS" : expenseDetail.status === "DISETUJUI_KARWAS" ? "Catatan validasi Keuangan" : "Catatan persetujuan Kabag"}
+                <span className="text-xs text-muted-foreground">Wajib diisi jika pengajuan ditolak.</span>
+                <textarea
+                  className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  maxLength={500}
+                  value={reviewNote}
+                  onChange={(event) => setReviewNote(event.target.value)}
+                  placeholder="Catatan pemeriksaan atau alasan penolakan"
+                />
+              </label>
+            )}
+            {reviewError && (
+              <Alert variant="destructive">
+                <AlertDescription>{reviewError}</AlertDescription>
+              </Alert>
+            )}
+          </>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(paymentExpense)}
+        onClose={() => {
+          setPaymentExpense(null);
+          setPaymentError("");
+        }}
+        title="Catat Pembayaran Belanja Retail"
+        description={paymentExpense ? `${paymentExpense.nomor_pengajuan} · ${paymentExpense.nama_kegiatan} · ${formatRupiah(paymentExpense.jumlah)}` : undefined}
+        size="md"
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPaymentExpense(null)}>
+              Batal
+            </Button>
+            <Button disabled={payExpenseMutation.isPending} onClick={payExpense}>
+              {payExpenseMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <CircleDollarSign size={15} />} Simpan Pembayaran
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm">
+            Nomor pembayaran
+            <Input maxLength={100} placeholder={paymentNomor.placeholder} value={paymentForm.nomor_pembayaran ?? ""} onChange={(event) => setPaymentForm((current) => ({ ...current, nomor_pembayaran: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Tanggal bayar *<Input type="date" value={paymentForm.tanggal_bayar} onChange={(event) => setPaymentForm((current) => ({ ...current, tanggal_bayar: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Bukti pembayaran *<Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setPaymentFile(event.target.files?.[0] ?? null)} />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            Catatan
+            <textarea
+              className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              maxLength={500}
+              value={paymentForm.catatan}
+              onChange={(event) => setPaymentForm((current) => ({ ...current, catatan: event.target.value }))}
+            />
+          </label>
+        </div>
+        {!(paymentForm.nomor_pembayaran ?? "").trim() && <NomorPembayaranPreview nomor={paymentNomor.nomorOtomatis} />}
+        {paymentError && (
+          <Alert variant="destructive">
+            <AlertDescription>{paymentError}</AlertDescription>
+          </Alert>
+        )}
+      </Modal>
+
+      <Modal
+        open={lhuOpen}
+        onClose={() => setLhuOpen(false)}
+        title="Input LHU dan Siapkan Tagihan"
+        description={`${job.nomor_job} · ${job.nama_pelanggan}`}
+        size="md"
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setLhuOpen(false)}>
+              Batal
+            </Button>
+            <Button disabled={readyInvoiceMutation.isPending} onClick={submitLhu}>
+              {readyInvoiceMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <FileCheck2 size={15} />} Simpan LHU · Siap Ditagih
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm">
+            Nomor LHU *<Input maxLength={100} value={lhuNumber} onChange={(event) => setLhuNumber(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Tanggal LHU *<Input type="date" value={lhuDate} onChange={(event) => setLhuDate(event.target.value)} />
+          </label>
+          <div className="sm:col-span-2">
+            <DocumentUploadField label="File LHU *" accept=".pdf,.jpg,.jpeg,.png" value={lhuFile} onChange={setLhuFile} disabled={readyInvoiceMutation.isPending} className="p-3 sm:p-3" />
+            <p className="mt-1 text-xs text-muted-foreground">Unggah file LHU dalam format PDF, JPG, atau PNG (maks. 10 MB).</p>
+          </div>
+        </div>
+        {lhuError && (
+          <Alert variant="destructive">
+            <AlertDescription>{lhuError}</AlertDescription>
+          </Alert>
+        )}
+      </Modal>
+
+      <Modal
+        open={handoverOpen}
+        onClose={() => setHandoverOpen(false)}
+        title="Catat Serah Terima LHU"
+        description={`${job.nomor_job} · LHU ${job.nomor_lhu ?? "—"}`}
+        size="md"
+        bodyClassName="space-y-4"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setHandoverOpen(false)}>
+              Batal
+            </Button>
+            <Button disabled={handoverMutation.isPending} onClick={submitHandover}>
+              {handoverMutation.isPending ? <LoaderCircle className="animate-spin" size={16} /> : <FileCheck2 size={15} />} Simpan Serah Terima
+            </Button>
+          </>
+        }
+      >
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm text-emerald-900">Invoice sudah lunas. Catat penerima dan unggah tanda terima atau berita acara untuk menyelesaikan order.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm">
+            Tanggal serah terima *<Input type="date" value={handoverForm.tanggal_serah_terima} onChange={(event) => setHandoverForm((current) => ({ ...current, tanggal_serah_terima: event.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Nama penerima *<Input maxLength={200} value={handoverForm.nama_penerima} onChange={(event) => setHandoverForm((current) => ({ ...current, nama_penerima: event.target.value }))} placeholder="Nama penerima LHU" />
+          </label>
+          <div className="sm:col-span-2">
+            <DocumentUploadField label="Bukti serah terima *" accept=".pdf,.jpg,.jpeg,.png" value={handoverFile} onChange={setHandoverFile} disabled={handoverMutation.isPending} className="p-3 sm:p-3" />
+            <p className="mt-1 text-xs text-muted-foreground">Unggah tanda terima atau berita acara (PDF, JPG, atau PNG; maks. 10 MB).</p>
+          </div>
+        </div>
+        {handoverError && (
+          <Alert variant="destructive">
+            <AlertDescription>{handoverError}</AlertDescription>
+          </Alert>
+        )}
+      </Modal>
+    </section>
+  );
 }
