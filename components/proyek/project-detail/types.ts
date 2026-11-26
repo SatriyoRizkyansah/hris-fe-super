@@ -25,7 +25,10 @@ export type ProjectExtensionRow = {
   diperiksa_oleh?: { nama?: string } | null;
   catatan_pemeriksa?: string | null;
 };
-export type ProjectDetail = Omit<ProyekItemDto, "job_list" | "ro_list" | "riwayat_revisi"> & {
+export type ProjectDetail = Omit<ProyekItemDto, "job_list" | "ro_list" | "riwayat_revisi" | "status_proyek" | "unit_terlibat"> & {
+  status_proyek: string;
+  nomor_order_pilt?: string | null;
+  unit_akun_proyek_id?: string | null;
   file_bast?: string | null;
   selesai_oleh_id?: string | null;
   selesai_pada?: string | null;
@@ -69,5 +72,5 @@ export type ProjectDetail = Omit<ProyekItemDto, "job_list" | "ro_list" | "riwaya
     unit_kolaborasi_ids?: string[];
   }>;
   termin_list?: Array<{ id: string; nomor_termin: number; persentase: number; nilai_termin: number; has_invoice?: boolean }>;
-  unit_terlibat?: Array<{ id: string; peran?: string; nama_unit?: string }>;
+  unit_terlibat?: Array<{ id: string; kode_unit?: string; peran?: string; nama_unit?: string; alokasi_dikirim_pada?: string | null }>;
 };

@@ -18,10 +18,20 @@ export function ProjectApprovalSection({ project, status, workflowVersion, isLay
   onWorkflow: (action: Exclude<Workflow, null>) => void;
   onRevision: () => void;
 }) {
-  const steps = workflowVersion >= 2
+  const steps = workflowVersion >= 3
+    ? ["Inisiasi PILT", "Alokasi Job/RO DPM", "Pemeriksaan Koordinator Layanan", "Rapat dan unggah notulen", "Validasi Bagian Umum", "Persetujuan Pimpinan", "Pelaksanaan dan BAST"]
+    : workflowVersion >= 2
     ? ["Pengajuan proyek", "Pemeriksaan Koordinator Layanan", "Rapat dan unggah notulen", "Validasi Bagian Umum", "Persetujuan Pimpinan", "Pelaksanaan dan BAST"]
     : ["Pengajuan proyek", "Validasi Bagian Umum", "Unggah notulen", "Persetujuan Pimpinan", "Pelaksanaan dan BAST"];
-  const currentIndex = workflowVersion >= 2
+  const currentIndex = workflowVersion >= 3
+    ? status === "MENUNGGU_ALOKASI_DPM" ? 1
+      : status === "MENUNGGU_VALIDASI_LAYANAN" || status === "PERLU_REVISI_LAYANAN" ? 2
+      : status === "MENUNGGU_NOTULEN" ? 3
+      : status === "MENUNGGU_VALIDASI_UMUM" || status === "PERLU_REVISI_UMUM" ? 4
+      : status === "MENUNGGU_VALIDASI_PIMPINAN" || status === "PERLU_REVISI_PIMPINAN" ? 5
+      : status === "DISETUJUI_PIMPINAN" ? 6
+      : status === "SELESAI" ? 7 : 0
+    : workflowVersion >= 2
     ? status === "MENUNGGU_VALIDASI_LAYANAN" || status === "PERLU_REVISI_LAYANAN" ? 1
       : status === "MENUNGGU_NOTULEN" ? 2
       : status === "MENUNGGU_VALIDASI_UMUM" || status === "PERLU_REVISI_UMUM" ? 3
@@ -55,7 +65,7 @@ export function ProjectApprovalSection({ project, status, workflowVersion, isLay
           <p className="text-sm font-semibold">Alur persetujuan proyek</p>
           <p className="text-xs text-muted-foreground">Proses berjalan berurutan. Rencana Operasional (RO) aktif setelah persetujuan pimpinan.</p>
         </div>
-        <ol className={`grid grid-cols-1 gap-0 sm:grid-cols-5 ${workflowVersion >= 2 ? "xl:grid-cols-6" : ""}`}>
+        <ol className={`grid grid-cols-1 gap-0 sm:grid-cols-5 ${workflowVersion >= 3 ? "xl:grid-cols-7" : workflowVersion >= 2 ? "xl:grid-cols-6" : ""}`}>
           {steps.map((step, index) => {
             const complete = !rejected && index < currentIndex;
             const active = !rejected && index === currentIndex && currentIndex < steps.length;

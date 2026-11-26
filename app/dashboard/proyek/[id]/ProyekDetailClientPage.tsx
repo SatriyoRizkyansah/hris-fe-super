@@ -10,6 +10,7 @@ import { ProjectRoSection } from "@/components/proyek/ProjectRoSection";
 import { ProjectApplicationModal } from "@/components/proyek/ProjectApplicationModal";
 import { ProjectDetailHeader } from "@/components/proyek/project-detail/ProjectDetailHeader";
 import { ProjectApprovalSection } from "@/components/proyek/project-detail/ProjectApprovalSection";
+import { ProjectDpmAllocationSection } from "@/components/proyek/project-detail/ProjectDpmAllocationSection";
 import { ProjectExtensionSection } from "@/components/proyek/project-detail/ProjectExtensionSection";
 import { ProjectDocumentsSection } from "@/components/proyek/project-detail/ProjectDocumentsSection";
 import { ProjectMarginSection } from "@/components/proyek/project-detail/ProjectMarginSection";
@@ -28,6 +29,7 @@ type Workflow = ProjectWorkflowAction;
 type LookupRow = { id: string; [key: string]: unknown };
 type Option = { value: string; label: string };
 const blankProjectForm = (): ProjectForm => ({
+  nomor_order_pilt: "",
   no_kontrak: "",
   nama_proyek: "",
   tahun_fiscal: String(new Date().getFullYear()),
@@ -241,7 +243,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
     .toLocaleUpperCase("id-ID");
   const isLayanan = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(serviceUnitCode) && currentUnitCode === serviceUnitCode);
   const isUmum = identity.role === "superadmin" || (identity.role === "koordinator" && Boolean(umumUnitCode) && currentUnitCode === umumUnitCode);
-  const isSubmitter = identity.role === "superadmin" || (identity.role === "koordinator" && identity.userId === String(project?.diajukan_oleh_id ?? ""));
+  const isSubmitter = identity.role === "superadmin" || (["koordinator", "subkoor"].includes(identity.role ?? "") && identity.userId === String(project?.diajukan_oleh_id ?? ""));
 
   async function reserveRevisionJobNumber(jobKey: string) {
     if (reservationRequests.current.has(jobKey)) return;
@@ -668,6 +670,7 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const status = String(project.status_proyek);
   const workflowVersion = Number(project.alur_proyek_version ?? 1);
   const isRevisionPending = status.startsWith("PERLU_REVISI_");
+  const isDpmAllocationPending = status === "MENUNGGU_ALOKASI_DPM";
   const isNotulenUploader = isSubmitter || (workflowVersion >= 2 && isLayanan);
   const hasProjectActions = (extensionOpenForSubmission && !pendingExtension) || (isSubmitter && statusIsApproved(status)) || Boolean(pendingExtension && isSubmitter);
   const roPlan = roRows.reduce((total, row) => total + (Number(row.nilai_rencana) || Number(row.total_plafon) || 0), 0);
@@ -717,47 +720,61 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
         }}
         onWorkflow={openWorkflow}
       />
-      <ProjectApprovalSection
-        project={project}
-        status={status}
-        workflowVersion={workflowVersion}
-        isLayanan={isLayanan}
-        isUmum={isUmum}
-        isNotulenUploader={isNotulenUploader}
-        isSubmitter={isSubmitter}
-        isRevisionPending={isRevisionPending}
-        isPimpinan={identity.role === "pimpinan" || identity.role === "superadmin"}
-        onWorkflow={openWorkflow}
-        onRevision={openRevisionForm}
-      />
-      <ProjectExtensionSection
-        rows={extensionRows}
-        isKarwas={isKarwas}
-        isSubmitter={isSubmitter}
-        extensionOpenForSubmission={extensionOpenForSubmission}
-        pendingExtension={Boolean(pendingExtension)}
-        projectEndDate={projectEndDate}
-        isExpired={Boolean(projectEndDate && jakartaToday() > projectEndDate)}
-        onReview={(item) => {
-          setReviewingExtension(item);
-          setExtensionApproved(true);
-          setExtensionReviewNote("");
-          setExtensionReviewError("");
-        }}
-      />
-      <ProjectFinancialSections
-        summary={{ contract, directCost, margin, marginDistributed, roPlan, approvedRoBudget, roUsed, roCashReceived, roCashPosition, roRemainingRight, usedPercent, marginPercent }}
-        roRows={roRows}
-        termRows={termRows}
-        termTotal={termTotal}
-        termPaid={termPaid}
-        termRemaining={termRemaining}
-        roCount={roRows.length}
-        hasRestrictedRos={hasRestrictedRos}
-      />
-      <ProjectRoSection roGroups={roGroups} roRows={roRows} project={project} roDetails={roDetails} roLoading={roLoading} expandedRos={expandedRos} toggleRo={toggleRo} />
+      {isDpmAllocationPending ? (
+        <ProjectDpmAllocationSection
+          project={project}
+          identity={identity}
+          unitAkunProyekId={String(project.unit_akun_proyek_id ?? "")}
+          units={unitOptions.map((row) => ({ id: row.id, kode_unit: String(row.kode_unit ?? ""), nama_unit: String(row.nama_unit ?? "") }))}
+          maks={makOptions.map((row) => ({ id: row.id, kode_mak: String(row.kode_mak ?? ""), nama_mak: String(row.nama_mak ?? "") }))}
+          accounts={rekeningOptions.map((row) => ({ id: row.id, nama_bank: String(row.nama_bank ?? ""), nama_rekening: String(row.nama_rekening ?? ""), nomor_rekening: String(row.nomor_rekening ?? "") }))}
+          onChanged={invalidate}
+        />
+      ) : (
+        <>
+          <ProjectApprovalSection
+            project={project}
+            status={status}
+            workflowVersion={workflowVersion}
+            isLayanan={isLayanan}
+            isUmum={isUmum}
+            isNotulenUploader={isNotulenUploader}
+            isSubmitter={isSubmitter}
+            isRevisionPending={isRevisionPending}
+            isPimpinan={identity.role === "pimpinan" || identity.role === "superadmin"}
+            onWorkflow={openWorkflow}
+            onRevision={openRevisionForm}
+          />
+          <ProjectExtensionSection
+            rows={extensionRows}
+            isKarwas={isKarwas}
+            isSubmitter={isSubmitter}
+            extensionOpenForSubmission={extensionOpenForSubmission}
+            pendingExtension={Boolean(pendingExtension)}
+            projectEndDate={projectEndDate}
+            isExpired={Boolean(projectEndDate && jakartaToday() > projectEndDate)}
+            onReview={(item) => {
+              setReviewingExtension(item);
+              setExtensionApproved(true);
+              setExtensionReviewNote("");
+              setExtensionReviewError("");
+            }}
+          />
+          <ProjectFinancialSections
+            summary={{ contract, directCost, margin, marginDistributed, roPlan, approvedRoBudget, roUsed, roCashReceived, roCashPosition, roRemainingRight, usedPercent, marginPercent }}
+            roRows={roRows}
+            termRows={termRows}
+            termTotal={termTotal}
+            termPaid={termPaid}
+            termRemaining={termRemaining}
+            roCount={roRows.length}
+            hasRestrictedRos={hasRestrictedRos}
+          />
+          <ProjectRoSection roGroups={roGroups} roRows={roRows} project={project} roDetails={roDetails} roLoading={roLoading} expandedRos={expandedRos} toggleRo={toggleRo} />
+        </>
+      )}
       <ProjectDocumentsSection project={project} />
-      <ProjectMarginSection settings={settingRows} distributions={distributionRows} margin={margin} distributed={marginDistributed} percentage={marginPercent} remaining={marginRemaining} />
+      {!isDpmAllocationPending && <ProjectMarginSection settings={settingRows} distributions={distributionRows} margin={margin} distributed={marginDistributed} percentage={marginPercent} remaining={marginRemaining} />}
       <ProjectApplicationModal
         open={revisionOpen}
         closeModal={() => !revisionMutation.isPending && setRevisionOpen(false)}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Check, Eye, LoaderCircle, Plus, Trash2, FilePenLine, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -17,6 +18,7 @@ import { browserApi } from "@/lib/api/browser-client";
 import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
+import { useCurrentUser } from "@/lib/api/hooks";
 import { envelopeRows, unwrapEnvelope, apiErrorMessage, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
@@ -32,6 +34,7 @@ type LegacyRoDraft = RoDraft & { nomor_job?: string };
 type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; jobs?: JobDraft[]; ros?: LegacyRoDraft[]; terms: TerminDraft[]; unitPengusulId?: string; unitKolaborasiIds?: string[] };
 const DRAFTS_STORAGE_KEY = "lemigas:proyek:drafts:v1";
 const PROJECT_STATUS_FILTERS = [
+  { label: "Menunggu alokasi Job/RO DPM", value: "MENUNGGU_ALOKASI_DPM" },
   { label: "Menunggu pemeriksaan Koordinator Layanan", value: "MENUNGGU_VALIDASI_LAYANAN" },
   { label: "Menunggu notulen", value: "MENUNGGU_NOTULEN" },
   { label: "Menunggu validasi Bagian Umum", value: "MENUNGGU_VALIDASI_UMUM" },
@@ -51,6 +54,7 @@ const normalizeUnitId = (value: unknown) =>
     .trim()
     .toLocaleLowerCase("en-US");
 const blankForm = (): ProjectForm => ({
+  nomor_order_pilt: "",
   nama_proyek: "",
   tahun_fiscal: String(currentYear),
   mulai_kontrak: "",
@@ -117,8 +121,9 @@ function responseRows<T extends LookupRow>(response: unknown): T[] {
 }
 
 export default function ProyekClientPage() {
+  const router = useRouter();
   const [identity, setIdentity] = useState<ReturnType<typeof browserIdentity>>({ role: null, userId: "", unitKerjaId: "", token: "" });
-  const canCreate = identity.role === "superadmin" || identity.role === "koordinator";
+  const currentUser = useCurrentUser({}, Boolean(identity.token));
   const [search, setSearch] = useState("");
   const [tahun, setTahun] = useState("__all");
   const [koordinator, setKoordinator] = useState("__all");
@@ -183,7 +188,7 @@ export default function ProyekClientPage() {
   useEffect(() => {
     const activeIdentity = browserIdentity();
     setIdentity(activeIdentity);
-    setUnitPengusulId(activeIdentity.unitKerjaId);
+    setUnitPengusulId("");
     try {
       const saved = localStorage.getItem(DRAFTS_STORAGE_KEY);
       const parsed: unknown = saved ? JSON.parse(saved) : [];
@@ -196,10 +201,7 @@ export default function ProyekClientPage() {
   useEffect(() => {
     if (!open) return;
     if (!form.no_kontrak_reservasi_id) void reserveContractNumber();
-    for (const job of jobs) {
-      if (!job.id && !job.nomor_job_reservasi_id) void reserveJobNumber(job.key);
-    }
-  }, [open, jobs, form.no_kontrak_reservasi_id]);
+  }, [open, form.no_kontrak_reservasi_id]);
 
   const list = use_query({
     tag: "masterProyek",
@@ -251,6 +253,10 @@ export default function ProyekClientPage() {
   const makOptions = responseRows<MakOption>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const rekeningOptions = responseRows<AccountOption>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const currentUnit = unitOptions.find((unit) => unit.id === identity.unitKerjaId);
+  const piltUnitCode = (process.env.NEXT_PUBLIC_PILT_UNIT_CODE ?? process.env.NEXT_PUBLIC_RETAIL_PILT_UNIT_CODE ?? "ORG-UMUM-HUKUM").trim().toLocaleUpperCase("id-ID");
+  const activeRole = String(currentUser.data?.role ?? identity.role ?? "").toLocaleLowerCase("id-ID");
+  const activeUnitCode = String(currentUser.data?.unitKerjaKode ?? currentUnit?.kode_unit ?? "").trim().toLocaleUpperCase("id-ID");
+  const canCreate = activeRole === "superadmin" || (["koordinator", "subkoor"].includes(activeRole) && activeUnitCode === piltUnitCode);
   const serviceUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_LAYANAN ?? "").trim().toLocaleUpperCase("id-ID");
   const umumUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_KABAG ?? "").trim().toLocaleUpperCase("id-ID");
   const isServiceValidator =
@@ -304,11 +310,15 @@ export default function ProyekClientPage() {
 
   const workflowActions: ProjectWorkflowAction[] = [
     {
-      label: canCreate ? "Ajukan proyek" : "Lihat daftar proyek",
+      label: canCreate ? "Inisiasi proyek PILT" : "Lihat daftar proyek",
       onClick: () => {
         if (!canCreate) return showProjectQueue("__all");
         openNewApplication();
       },
+    },
+    {
+      label: ["koordinator", "subkoor"].includes(identity.role ?? "") ? "Isi alokasi DPM" : "Lihat alokasi DPM",
+      onClick: () => showProjectQueue("MENUNGGU_ALOKASI_DPM"),
     },
     {
       label: isServiceValidator ? "Tinjau rencana" : "Lihat antrean",
@@ -331,10 +341,11 @@ export default function ProyekClientPage() {
   const create = use_mutation({
     tag: "masterProyek",
     method: "create",
-    mutationFn: async (payload: CreateProyekDto & { no_kontrak_reservasi_id: string }) => {
+    mutationFn: async (payload: Record<string, unknown>) => {
       setBrowserToken();
-      return browserApi.masterProyek.proyekCreateControllerCreate(payload as CreateProyekDto);
+      return requestHrisApi("/api/proyek", { method: "POST", body: JSON.stringify(payload) });
     },
+    successMessage: "Draft proyek berhasil dibuat dan menunggu alokasi dari unit DPM.",
     invalidateKeys: [["api", "masterProyek"]],
   });
 
@@ -373,6 +384,7 @@ export default function ProyekClientPage() {
   const contractDatesRequired = roRows.some((row) => row.detailMode === "detail");
   const contractDateRangeValid = (!form.mulai_kontrak && !form.berakhir_kontrak && !contractDatesRequired) || Boolean(form.mulai_kontrak && form.berakhir_kontrak && form.berakhir_kontrak >= form.mulai_kontrak);
   const valid = Boolean(
+    form.nomor_order_pilt.trim() &&
     form.nama_proyek &&
     form.tahun_fiscal &&
     form.nilai_kontrak !== "" &&
@@ -381,19 +393,16 @@ export default function ProyekClientPage() {
     contractOk &&
     contractDateRangeValid &&
     unitPengusulId &&
-    collaborationAssigned &&
-    allocationsValid &&
-    roTotal === numeric("total_direct_cost") &&
     terms.length &&
     terms.every((term) => Number(term.persentaseText) > 0) &&
     termsTotal === 100,
   );
 
   function resetForm() {
-    const initialJob = blankJob(identity.unitKerjaId);
+    const initialJob = blankJob("");
     setForm(blankForm());
     setJobs([initialJob]);
-    setUnitPengusulId(identity.unitKerjaId);
+    setUnitPengusulId("");
     setUnitKolaborasiIds([]);
     setTerms([blankTermin("100")]);
     setSk(null);
@@ -403,8 +412,7 @@ export default function ProyekClientPage() {
     return initialJob;
   }
   function openNewApplication() {
-    const initialJob = resetForm();
-    void reserveJobNumber(initialJob.key);
+    resetForm();
     setOpen(true);
   }
   function persistDrafts(drafts: ProjectLocalDraft[]) {
@@ -592,22 +600,21 @@ export default function ProyekClientPage() {
     }
     if (!valid || create.isPending) {
       setFormError(
-        !unitPengusulId
-          ? "Pilih unit pengusul proyek."
-          : !form.no_kontrak_reservasi_id
-            ? "Nomor kontrak otomatis belum siap. Coba tutup dan buka kembali form."
-            : !collaborationAssigned
-              ? `Unit kolaborator berikut belum ditugaskan ke RO: ${unassignedCollaboratorIds.map((unitId) => unitComboboxOptions.find((option) => normalizeUnitId(option.value) === normalizeUnitId(unitId))?.label ?? unitId).join(", ")}. Pilih sebagai pemilik RO atau tambahkan sebagai kolaborator RO.`
-              : !allocationsValid
-                ? "Lengkapi nomor Job otomatis, nama, kategori, dan seluruh alokasi RO di dalamnya."
-                : "Lengkapi data. Kontrak = direct cost + margin, plafon RO = direct cost, termin = 100%.",
+        !form.nomor_order_pilt.trim()
+          ? "Nomor order PILT wajib diisi."
+          : !unitPengusulId
+            ? "Pilih DPM utama proyek."
+            : !form.no_kontrak_reservasi_id
+              ? "Nomor kontrak otomatis belum siap. Coba tutup dan buka kembali form."
+              : "Lengkapi data proyek. Nilai kontrak harus sama dengan direct cost ditambah margin; termin harus tepat 100%.",
       );
       return;
     }
     setFormError("");
     try {
-      const payload: CreateProyekDto & { no_kontrak_reservasi_id: string } = {
+      const payload: Record<string, unknown> = {
         ...form,
+        nomor_order_pilt: form.nomor_order_pilt.trim(),
         sumber_pendanaan: "BLU",
         tahun_fiscal: Number(form.tahun_fiscal),
         mulai_kontrak: form.mulai_kontrak || undefined,
@@ -619,19 +626,6 @@ export default function ProyekClientPage() {
         no_kontrak_reservasi_id: form.no_kontrak_reservasi_id!,
         unit_pengusul_id: normalizeUnitId(unitPengusulId),
         unit_kolaborasi_ids: unitKolaborasiIds.map(normalizeUnitId),
-        job_list: jobs.map((job) => ({
-          nama_job: job.nama_job.trim(),
-          kategori_job: job.kategori_job as KategoriJob,
-          ...(!job.id && job.nomor_job_reservasi_id ? { nomor_job_reservasi_id: job.nomor_job_reservasi_id } : {}),
-          ro_list: job.ros.map((row) => ({
-            mak_id: row.mak_id,
-            id_unit_koordinator: normalizeUnitId(row.id_unit_koordinator),
-            ...(row.rekening_id ? { rekening_id: row.rekening_id } : {}),
-            plafon: Number(row.plafonText),
-            unit_kolaborasi_ids: (row.unit_kolaborasi_ids ?? []).map(normalizeUnitId),
-            ...(row.detailMode === "detail" ? { pj: row.pj } : {}),
-          })),
-        })),
         termin_list: terms.map(({ key, persentaseText }, index) => ({ nomor_termin: index + 1, persentase: Number(persentaseText) })),
       };
       const response = await create.mutateAsync(payload);
@@ -649,8 +643,9 @@ export default function ProyekClientPage() {
         if (sk) await uploadHrisFile(`/api/proyek/${project.id}/sk`, sk);
         if (rab) await uploadHrisFile(`/api/proyek/${project.id}/rab`, rab);
       } catch (error) {
-        setFormError(`Proyek tersimpan. ${apiErrorMessage(error, "Unggah dokumen gagal.")} Unggah ulang dari detail proyek.`);
+        window.dispatchEvent(new CustomEvent("api:error", { detail: { error: new Error(`Draft proyek dibuat, tetapi dokumen gagal diunggah. ${apiErrorMessage(error, "Silakan unggah ulang dari detail proyek.")}`) } }));
       }
+      router.push(`/dashboard/proyek/${project.id}`);
     } catch (error) {
       setFormError(apiErrorMessage(error, "Gagal mengajukan proyek."));
     }
@@ -666,7 +661,7 @@ export default function ProyekClientPage() {
         </div>
         {canCreate && (
           <Button onClick={openNewApplication}>
-            <Plus size={16} /> Ajukan Proyek
+            <Plus size={16} /> Inisiasi Proyek PILT
           </Button>
         )}
       </header>
@@ -721,6 +716,9 @@ export default function ProyekClientPage() {
                   className: "min-w-[15rem]",
                   render: (row: ProyekItemDto) => (
                     <div className="space-y-1">
+                      {(row as ProyekItemDto & { nomor_order_pilt?: string | null }).nomor_order_pilt && (
+                        <p className="text-xs text-muted-foreground">Order PILT · {(row as ProyekItemDto & { nomor_order_pilt?: string | null }).nomor_order_pilt}</p>
+                      )}
                       <p className="font-medium">{String(row.no_kontrak ?? "")}</p>
                       <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
                       {row.unit_terlibat?.length ? (
@@ -790,7 +788,14 @@ export default function ProyekClientPage() {
                   key: "status",
                   header: "Status",
                   className: "min-w-[14rem] whitespace-nowrap",
-                  render: (row: ProyekItemDto) => <StatusBadge status={projectStatusTone(row.status_proyek)}>{projectStatusLabel(row.status_proyek)}</StatusBadge>,
+                  render: (row: ProyekItemDto) => {
+                    const participants = (row as Omit<ProyekItemDto, "unit_terlibat"> & { unit_terlibat?: Array<{ id: string; alokasi_dikirim_pada?: string | null }> }).unit_terlibat ?? [];
+                    const submitted = participants.filter((unit) => Boolean(unit.alokasi_dikirim_pada)).length;
+                    return <div className="space-y-1.5">
+                      <StatusBadge status={projectStatusTone(row.status_proyek)}>{projectStatusLabel(row.status_proyek)}</StatusBadge>
+                      {String(row.status_proyek) === "MENUNGGU_ALOKASI_DPM" && <p className="text-xs text-muted-foreground">Alokasi DPM {submitted}/{participants.length} unit dikirim</p>}
+                    </div>;
+                  },
                 },
                 {
                   key: "aksi",
@@ -977,6 +982,7 @@ export default function ProyekClientPage() {
       <ProjectApplicationModal
         open={open}
         closeModal={closeApplicationModal}
+        piltInitiation
         form={form}
         setForm={setForm}
         contractDatesRequired={contractDatesRequired}

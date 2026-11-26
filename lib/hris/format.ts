@@ -28,6 +28,7 @@ export function humanizeStatus(status?: string) {
 }
 
 export function projectStatusLabel(status?: string) {
+  if (status === "MENUNGGU_ALOKASI_DPM") return "Menunggu alokasi Job/RO DPM";
   if (status === "MENUNGGU_VALIDASI_LAYANAN") return "Menunggu pemeriksaan Koordinator Layanan";
   if (status === "MENUNGGU_NOTULEN") return "Menunggu notulen";
   if (status === "MENUNGGU_VALIDASI_UMUM") return "Menunggu validasi Bagian Umum";

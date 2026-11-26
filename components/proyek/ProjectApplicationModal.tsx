@@ -18,6 +18,7 @@ type Props = {
   open: boolean;
   closeModal: () => void;
   mode?: "create" | "revision";
+  piltInitiation?: boolean;
   revisionNote?: string;
   currentSk?: string | null;
   currentRab?: string | null;
@@ -88,7 +89,7 @@ function Field({ label, value, onChange, type = "text", required = false }: { la
 export function ProjectApplicationModal(props: Props) {
   const {
     open, closeModal, form, setForm, contractDatesRequired, editingDraftId,
-    mode = "create", revisionNote, currentSk, currentRab,
+    mode = "create", piltInitiation = false, revisionNote, currentSk, currentRab,
     identity, currentUnit, unitComboboxOptions, unitPengusulId, changeLeadUnit,
     availableCollaboratorOptions, addCollaborator, unitKolaborasiIds, assignedRoUnitIds,
     normalizeUnitId, removeCollaborator, numeric, contractOk, jobs, addJob, removeJob,
@@ -101,8 +102,8 @@ export function ProjectApplicationModal(props: Props) {
     <Modal
         open={open}
         onClose={closeModal}
-        title={mode === "revision" ? "Perbaiki Pengajuan Proyek" : "Ajukan Proyek"}
-        description={mode === "revision" ? "Perbarui informasi proyek, unit, Job/RO, anggaran, termin, dan dokumen. Setelah dikirim ulang, pengajuan kembali ke pemeriksaan Koordinator Layanan dan menjalani urutan persetujuan dari awal." : undefined}
+        title={mode === "revision" ? "Perbaiki Pengajuan Proyek" : piltInitiation ? "Inisiasi Proyek melalui PILT" : "Ajukan Proyek"}
+        description={mode === "revision" ? "Perbarui informasi proyek, unit, Job/RO, anggaran, termin, dan dokumen. Setelah dikirim ulang, pengajuan kembali ke pemeriksaan Koordinator Layanan dan menjalani urutan persetujuan dari awal." : piltInitiation ? "PILT mencatat order dan informasi induk. Unit DPM yang dilibatkan melengkapi Job serta alokasi RO sebelum pemeriksaan proyek dimulai." : undefined}
         size={mode === "revision" ? "xl" : "md"}
         bodyClassName="space-y-4"
         footer={
@@ -116,15 +117,15 @@ export function ProjectApplicationModal(props: Props) {
               </Button>
             )}
             <Button disabled={submitting} onClick={submit}>
-              {submitting && <LoaderCircle className="animate-spin" size={16} />} {mode === "revision" ? "Ajukan Ulang" : "Simpan Pengajuan"}
+              {submitting && <LoaderCircle className="animate-spin" size={16} />} {mode === "revision" ? "Ajukan Ulang" : piltInitiation ? "Buat Draft Proyek" : "Simpan Pengajuan"}
             </Button>
           </>
         }
       >
         {mode === "create" ? <div className="space-y-3">
           <Alert>
-            <AlertTitle>Tahapan persetujuan</AlertTitle>
-            <AlertDescription>Pengajuan → pemeriksaan Koordinator Layanan → rapat dan unggah notulen → validasi Bagian Umum → persetujuan Pimpinan. RO aktif setelah disetujui Pimpinan.</AlertDescription>
+            <AlertTitle>{piltInitiation ? "Tahap inisiasi PILT" : "Tahapan persetujuan"}</AlertTitle>
+            <AlertDescription>{piltInitiation ? "PILT membuat draft proyek dan memilih unit DPM. Masing-masing DPM mengisi Job/RO miliknya; setelah semua lengkap, proyek masuk ke urutan pemeriksaan dan persetujuan yang berlaku." : "Pengajuan → pemeriksaan Koordinator Layanan → rapat dan unggah notulen → validasi Bagian Umum → persetujuan Pimpinan. RO aktif setelah disetujui Pimpinan."}</AlertDescription>
           </Alert>
           <p className="text-xs text-muted-foreground">Perubahan otomatis disimpan sebagai draft saat modal ditutup.</p>
           {editingDraftId && (
@@ -137,13 +138,14 @@ export function ProjectApplicationModal(props: Props) {
           <AlertTitle>Catatan pemeriksa</AlertTitle>
           <AlertDescription className="whitespace-pre-wrap">{revisionNote || "Pemeriksa meminta perbaikan pada pengajuan ini."}</AlertDescription>
         </Alert>}
-        <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">RO awal dan rencana termin wajib seimbang sebelum proyek dikirim.</div>
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">{piltInitiation ? "Draft proyek diteruskan ke unit DPM untuk mengisi Job dan alokasi RO." : "RO awal dan rencana termin wajib seimbang sebelum proyek dikirim."}</div>
         <section className="space-y-4 rounded-lg border p-4">
           <div>
             <h2 className="text-sm font-semibold">Informasi proyek</h2>
             <p className="mt-1 text-xs text-muted-foreground">Identitas dan penanggung jawab proyek.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
+            {piltInitiation && <Field label="Nomor order PILT" required value={form.nomor_order_pilt} onChange={(value) => setForm((current) => ({ ...current, nomor_order_pilt: value }))} />}
             <label className="grid gap-1.5 text-sm font-medium">
               <span>Nomor kontrak</span>
               <Input
@@ -176,9 +178,9 @@ export function ProjectApplicationModal(props: Props) {
           </div>
           <div className="grid min-w-0 items-start gap-4 md:grid-cols-2">
             <label className="grid min-w-0 gap-1.5 text-sm font-medium">
-              <span>Unit pengusul *</span>
-              {identity.role === "superadmin" ? (
-                <FilterCombobox options={unitComboboxOptions} value={unitPengusulId} onValueChange={changeLeadUnit} label="Pilih unit pengusul" />
+              <span>{piltInitiation ? "DPM utama proyek *" : "Unit pengusul *"}</span>
+              {identity.role === "superadmin" || piltInitiation ? (
+                <FilterCombobox options={unitComboboxOptions} value={unitPengusulId} onValueChange={changeLeadUnit} label={piltInitiation ? "Pilih DPM utama" : "Pilih unit pengusul"} />
               ) : (
                 <div title={[currentUnit?.kode_unit, currentUnit?.nama_unit].filter(Boolean).join(" — ")} className="flex h-10 min-w-0 items-center overflow-hidden rounded-lg border bg-muted/30 px-3 text-sm font-normal text-muted-foreground">
                   <span className="min-w-0 truncate">{[currentUnit?.kode_unit, currentUnit?.nama_unit].filter(Boolean).join(" · ") || "Unit akun belum tersedia"}</span>
@@ -186,8 +188,8 @@ export function ProjectApplicationModal(props: Props) {
               )}
             </label>
             <div className="grid min-w-0 gap-1.5 text-sm font-medium">
-              <span>Tambah unit kolaborator</span>
-              <FilterCombobox options={availableCollaboratorOptions} value="" onValueChange={addCollaborator} label="Pilih unit untuk ditambahkan" />
+              <span>{piltInitiation ? "Tambah DPM yang terlibat" : "Tambah unit kolaborator"}</span>
+              <FilterCombobox options={availableCollaboratorOptions} value="" onValueChange={addCollaborator} label={piltInitiation ? "Pilih DPM untuk ditambahkan" : "Pilih unit untuk ditambahkan"} />
               <span className="text-xs font-normal leading-4 text-muted-foreground">Unit yang dipilih langsung masuk ke daftar.</span>
             </div>
           </div>
@@ -202,7 +204,7 @@ export function ProjectApplicationModal(props: Props) {
                   const unitLabel = unitComboboxOptions.find((option) => option.value === unitPengusulId)?.label ?? "Unit pengusul";
                   return (
                     <div title={unitLabel} className="inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs">
-                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 font-semibold text-primary">Pengusul</span>
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 font-semibold text-primary">{piltInitiation ? "DPM utama" : "Pengusul"}</span>
                       <span className="max-w-[min(60vw,32rem)] truncate text-foreground">{unitLabel}</span>
                     </div>
                   );
@@ -211,7 +213,7 @@ export function ProjectApplicationModal(props: Props) {
                   const unitLabel = unitComboboxOptions.find((option) => option.value === unitId)?.label ?? "Unit kolaborator";
                   return (
                     <div key={unitId} title={unitLabel} className="inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-full border bg-background px-2.5 py-1.5 text-xs">
-                      <span className="shrink-0 rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground">Kolaborator</span>
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground">{piltInitiation ? "DPM terlibat" : "Kolaborator"}</span>
                       <span className="max-w-[min(52vw,28rem)] truncate">{unitLabel}</span>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${assignedRoUnitIds.has(normalizeUnitId(unitId)) ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                         {assignedRoUnitIds.has(normalizeUnitId(unitId)) ? "Ada di RO" : "Belum di RO"}
@@ -239,7 +241,7 @@ export function ProjectApplicationModal(props: Props) {
             Kontrak {formatRupiah(numeric("nilai_kontrak"))} = direct cost {formatRupiah(numeric("total_direct_cost"))} + margin {formatRupiah(numeric("total_margin"))}
           </p>
         </section>
-        <section className="space-y-4 rounded-lg border p-4">
+        {!piltInitiation && <section className="space-y-4 rounded-lg border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">Job dan alokasi RO</h2>
@@ -368,7 +370,7 @@ export function ProjectApplicationModal(props: Props) {
             );
           })}
           <p className={roTotal === numeric("total_direct_cost") ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total plafon RO: {formatRupiah(roTotal)}. Harus sama dengan direct cost.</p>
-        </section>
+        </section>}
         <section className="space-y-4 rounded-lg border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>

@@ -39,6 +39,7 @@ export function ProjectDetailHeader({
             {String(project.no_kontrak ?? "")} · Tahun {project.tahun_fiscal} · Diajukan {formatDate(project.created_at)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {project.nomor_order_pilt && <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor order PILT · {project.nomor_order_pilt}</span>}
             <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor kontrak · {display(project.no_kontrak)}</span>
             <span className="rounded-md bg-muted px-2.5 py-1.5">
               Periode kontrak · {formatDate(String(project.mulai_kontrak ?? ""))} – {formatDate(String(project.berakhir_kontrak ?? ""))}
@@ -83,7 +84,7 @@ export function ProjectDetailHeader({
         )}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
           <span className="text-xs font-medium text-muted-foreground">Laporan proyek</span>
-          <ProjectFinalReportButton project={project} />
+          {status !== "MENUNGGU_ALOKASI_DPM" && <ProjectFinalReportButton project={project} />}
         </div>
       </div>
     </header>

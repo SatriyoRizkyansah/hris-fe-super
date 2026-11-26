@@ -1,6 +1,7 @@
 import type { RoInputDto, TerminInputDto } from "@/lib/api/generated/api-generated";
 
 export type ProjectForm = {
+  nomor_order_pilt: string;
   nama_proyek: string;
   tahun_fiscal: string;
   mulai_kontrak: string;
