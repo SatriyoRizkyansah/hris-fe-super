@@ -66,7 +66,7 @@ function jakartaToday() {
 }
 
 export default function ProyekDetailClientPage({ id }: { id: string }) {
-  const identity = useMemo(browserIdentity, []);
+  const [identity, setIdentity] = useState<ReturnType<typeof browserIdentity>>({ role: null, userId: "", unitKerjaId: "", token: "" });
   const [workflow, setWorkflow] = useState<Workflow>(null);
   const [approved, setApproved] = useState(true);
   const [requestRevision, setRequestRevision] = useState(false);
@@ -96,6 +96,10 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const [extensionApproved, setExtensionApproved] = useState(true);
   const [extensionReviewNote, setExtensionReviewNote] = useState("");
   const [extensionReviewError, setExtensionReviewError] = useState("");
+
+  useEffect(() => {
+    setIdentity(browserIdentity());
+  }, []);
 
   const detail = use_query({
     tag: "masterProyek",

@@ -19,7 +19,7 @@ import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { useCurrentUser } from "@/lib/api/hooks";
-import { envelopeRows, unwrapEnvelope, apiErrorMessage, requestHrisApi, uploadHrisFile } from "@/lib/hris/api";
+import { envelopeRows, unwrapEnvelope, apiErrorMessage, requestHrisApi } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import { createClientId } from "@/lib/utils/client-id";
@@ -140,7 +140,6 @@ export default function ProyekClientPage() {
   const [rab, setRab] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
   const jobNumberRequests = useRef(new Set<string>());
-  const contractNumberRequest = useRef(false);
   const [localDrafts, setLocalDrafts] = useState<ProjectLocalDraft[]>([]);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [validationProject, setValidationProject] = useState<ProyekItemDto | null>(null);
@@ -166,25 +165,6 @@ export default function ProyekClientPage() {
     }
   }
 
-  async function reserveContractNumber() {
-    if (contractNumberRequest.current) return;
-    contractNumberRequest.current = true;
-    try {
-      setBrowserToken();
-      const response = await requestHrisApi("/api/proyek/contract-number/reserve", { method: "POST" });
-      const result = unwrapEnvelope<{ id: string; no_kontrak: string }>(response);
-      const reservation = (result.data ?? result) as { id?: string; no_kontrak?: string };
-      if (!reservation?.id || !reservation.no_kontrak) {
-        throw new Error("Nomor kontrak tidak diterima dari server.");
-      }
-      setForm((current) => (current.no_kontrak_reservasi_id ? current : { ...current, no_kontrak: reservation.no_kontrak!, no_kontrak_reservasi_id: reservation.id! }));
-    } catch (error) {
-      setFormError(apiErrorMessage(error, "Nomor kontrak belum dapat disiapkan. Tutup lalu buka kembali form untuk mencoba lagi."));
-    } finally {
-      contractNumberRequest.current = false;
-    }
-  }
-
   useEffect(() => {
     const activeIdentity = browserIdentity();
     setIdentity(activeIdentity);
@@ -197,11 +177,6 @@ export default function ProyekClientPage() {
       setLocalDrafts([]);
     }
   }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    if (!form.no_kontrak_reservasi_id) void reserveContractNumber();
-  }, [open, form.no_kontrak_reservasi_id]);
 
   const list = use_query({
     tag: "masterProyek",
@@ -345,7 +320,7 @@ export default function ProyekClientPage() {
       setBrowserToken();
       return requestHrisApi("/api/proyek", { method: "POST", body: JSON.stringify(payload) });
     },
-    successMessage: "Draft proyek berhasil dibuat dan menunggu alokasi dari unit DPM.",
+    successMessage: "Draft proyek berhasil dibuat oleh PILT dan menunggu data dari DPM.",
     invalidateKeys: [["api", "masterProyek"]],
   });
 
@@ -383,20 +358,7 @@ export default function ProyekClientPage() {
     );
   const contractDatesRequired = roRows.some((row) => row.detailMode === "detail");
   const contractDateRangeValid = (!form.mulai_kontrak && !form.berakhir_kontrak && !contractDatesRequired) || Boolean(form.mulai_kontrak && form.berakhir_kontrak && form.berakhir_kontrak >= form.mulai_kontrak);
-  const valid = Boolean(
-    form.nomor_order_pilt.trim() &&
-    form.nama_proyek &&
-    form.tahun_fiscal &&
-    form.nilai_kontrak !== "" &&
-    form.total_direct_cost !== "" &&
-    form.total_margin !== "" &&
-    contractOk &&
-    contractDateRangeValid &&
-    unitPengusulId &&
-    terms.length &&
-    terms.every((term) => Number(term.persentaseText) > 0) &&
-    termsTotal === 100,
-  );
+  const valid = Boolean(form.nomor_order_pilt.trim() && form.nama_client.trim() && unitPengusulId);
 
   function resetForm() {
     const initialJob = blankJob("");
@@ -594,39 +556,23 @@ export default function ProyekClientPage() {
   }
 
   async function submit() {
-    if (!contractDateRangeValid) {
-      setFormError("Isi Mulai Kontrak dan Berakhir Kontrak secara lengkap; tanggal akhir tidak boleh sebelum tanggal mulai.");
-      return;
-    }
     if (!valid || create.isPending) {
       setFormError(
         !form.nomor_order_pilt.trim()
-          ? "Nomor order PILT wajib diisi."
-          : !unitPengusulId
-            ? "Pilih DPM utama proyek."
-            : !form.no_kontrak_reservasi_id
-              ? "Nomor kontrak otomatis belum siap. Coba tutup dan buka kembali form."
-              : "Lengkapi data proyek. Nilai kontrak harus sama dengan direct cost ditambah margin; termin harus tepat 100%.",
+          ? "Nomor Job PILT wajib diisi."
+          : !form.nama_client.trim()
+            ? "Nama klien wajib diisi."
+            : "Pilih DPM utama proyek.",
       );
       return;
     }
     setFormError("");
     try {
       const payload: Record<string, unknown> = {
-        ...form,
         nomor_order_pilt: form.nomor_order_pilt.trim(),
-        sumber_pendanaan: "BLU",
-        tahun_fiscal: Number(form.tahun_fiscal),
-        mulai_kontrak: form.mulai_kontrak || undefined,
-        berakhir_kontrak: form.berakhir_kontrak || undefined,
-        nilai_kontrak: numeric("nilai_kontrak"),
-        total_direct_cost: numeric("total_direct_cost"),
-        total_margin: numeric("total_margin"),
-        no_kontrak: form.no_kontrak || undefined,
-        no_kontrak_reservasi_id: form.no_kontrak_reservasi_id!,
+        nama_client: form.nama_client.trim(),
         unit_pengusul_id: normalizeUnitId(unitPengusulId),
         unit_kolaborasi_ids: unitKolaborasiIds.map(normalizeUnitId),
-        termin_list: terms.map(({ key, persentaseText }, index) => ({ nomor_termin: index + 1, persentase: Number(persentaseText) })),
       };
       const response = await create.mutateAsync(payload);
       const project = unwrapEnvelope<ProyekItemDto>(response).data;
@@ -638,13 +584,6 @@ export default function ProyekClientPage() {
       }
       setOpen(false);
       resetForm();
-
-      try {
-        if (sk) await uploadHrisFile(`/api/proyek/${project.id}/sk`, sk);
-        if (rab) await uploadHrisFile(`/api/proyek/${project.id}/rab`, rab);
-      } catch (error) {
-        window.dispatchEvent(new CustomEvent("api:error", { detail: { error: new Error(`Draft proyek dibuat, tetapi dokumen gagal diunggah. ${apiErrorMessage(error, "Silakan unggah ulang dari detail proyek.")}`) } }));
-      }
       router.push(`/dashboard/proyek/${project.id}`);
     } catch (error) {
       setFormError(apiErrorMessage(error, "Gagal mengajukan proyek."));
@@ -717,7 +656,7 @@ export default function ProyekClientPage() {
                   render: (row: ProyekItemDto) => (
                     <div className="space-y-1">
                       {(row as ProyekItemDto & { nomor_order_pilt?: string | null }).nomor_order_pilt && (
-                        <p className="text-xs text-muted-foreground">Order PILT · {(row as ProyekItemDto & { nomor_order_pilt?: string | null }).nomor_order_pilt}</p>
+                        <p className="text-xs text-muted-foreground">Job PILT · {(row as ProyekItemDto & { nomor_order_pilt?: string | null }).nomor_order_pilt}</p>
                       )}
                       <p className="font-medium">{String(row.no_kontrak ?? "")}</p>
                       <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>

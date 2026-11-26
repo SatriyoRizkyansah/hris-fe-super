@@ -131,7 +131,7 @@ export function ProjectApplicationModal(props: Props) {
           {editingDraftId && (
             <Alert>
               <AlertTitle>Draft tersimpan di browser ini</AlertTitle>
-              <AlertDescription>Draft tidak tersedia di browser, profil, atau perangkat lain. Berkas Kontrak Proyek dan RAB harus dipilih kembali sebelum pengajuan.</AlertDescription>
+              <AlertDescription>{piltInitiation ? "Draft tersimpan hanya di browser ini dan tidak tersedia di profil atau perangkat lain." : "Draft tidak tersedia di browser, profil, atau perangkat lain. Berkas Kontrak Proyek dan RAB harus dipilih kembali sebelum pengajuan."}</AlertDescription>
             </Alert>
           )}
         </div> : <Alert className="border-amber-200 bg-amber-50 text-amber-950">
@@ -139,13 +139,24 @@ export function ProjectApplicationModal(props: Props) {
           <AlertDescription className="whitespace-pre-wrap">{revisionNote || "Pemeriksa meminta perbaikan pada pengajuan ini."}</AlertDescription>
         </Alert>}
         <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">{piltInitiation ? "Draft proyek diteruskan ke unit DPM untuk mengisi Job dan alokasi RO." : "RO awal dan rencana termin wajib seimbang sebelum proyek dikirim."}</div>
-        <section className="space-y-4 rounded-lg border p-4">
-          <div>
-            <h2 className="text-sm font-semibold">Informasi proyek</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Identitas dan penanggung jawab proyek.</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {piltInitiation && <Field label="Nomor order PILT" required value={form.nomor_order_pilt} onChange={(value) => setForm((current) => ({ ...current, nomor_order_pilt: value }))} />}
+        {piltInitiation ? (
+          <section className="space-y-4 rounded-lg border p-4">
+            <div>
+              <h2 className="text-sm font-semibold">Informasi order PILT</h2>
+              <p className="mt-1 text-xs text-muted-foreground">PILT mencatat nomor Job dan identitas klien. Kontrak, nilai, serta rincian anggaran diisi DPM setelah draft diteruskan.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Nomor Job PILT" required value={form.nomor_order_pilt} onChange={(value) => setForm((current) => ({ ...current, nomor_order_pilt: value }))} />
+              <Field label="Nama klien" required value={form.nama_client} onChange={(value) => setForm((current) => ({ ...current, nama_client: value }))} />
+            </div>
+          </section>
+        ) : (
+          <section className="space-y-4 rounded-lg border p-4">
+            <div>
+              <h2 className="text-sm font-semibold">Informasi proyek</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Identitas dan penanggung jawab proyek.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
             <label className="grid gap-1.5 text-sm font-medium">
               <span>Nomor kontrak</span>
               <Input
@@ -168,9 +179,10 @@ export function ProjectApplicationModal(props: Props) {
             <Field label="PJ 2" value={form.pj_2} onChange={(value) => setForm((current) => ({ ...current, pj_2: value }))} />
             <Field label="Mulai Kontrak" type="date" required={contractDatesRequired} value={form.mulai_kontrak} onChange={(value) => setForm((current) => ({ ...current, mulai_kontrak: value }))} />
             <Field label="Berakhir Kontrak" type="date" required={contractDatesRequired} value={form.berakhir_kontrak} onChange={(value) => setForm((current) => ({ ...current, berakhir_kontrak: value }))} />
-          </div>
-          <p className="text-xs text-muted-foreground">Periode kontrak ini berlaku untuk seluruh RO. Wajib diisi jika detail administrasi RO dilengkapi sekarang.</p>
-        </section>
+            </div>
+            <p className="text-xs text-muted-foreground">Periode kontrak ini berlaku untuk seluruh RO. Wajib diisi jika detail administrasi RO dilengkapi sekarang.</p>
+          </section>
+        )}
         <section className="min-w-0 space-y-3 rounded-lg border p-4">
           <div className="space-y-1">
             <h2 className="text-sm font-semibold">Unit terlibat</h2>
@@ -227,7 +239,7 @@ export function ProjectApplicationModal(props: Props) {
           )}
           {!unitPengusulId && <p className="text-xs text-amber-700">Pilih unit pengusul sebelum menentukan pemilik RO.</p>}
         </section>
-        <section className="space-y-4 rounded-lg border p-4">
+        {!piltInitiation && <section className="space-y-4 rounded-lg border p-4">
           <div>
             <h2 className="text-sm font-semibold">Nilai proyek</h2>
             <p className="mt-1 text-xs text-muted-foreground">Pastikan nilai kontrak sama dengan direct cost dan margin.</p>
@@ -240,7 +252,7 @@ export function ProjectApplicationModal(props: Props) {
           <p className={`rounded-md px-3 py-2 text-xs ${contractOk ? "bg-emerald-50 text-emerald-700" : "bg-destructive/10 text-destructive"}`}>
             Kontrak {formatRupiah(numeric("nilai_kontrak"))} = direct cost {formatRupiah(numeric("total_direct_cost"))} + margin {formatRupiah(numeric("total_margin"))}
           </p>
-        </section>
+        </section>}
         {!piltInitiation && <section className="space-y-4 rounded-lg border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -371,7 +383,7 @@ export function ProjectApplicationModal(props: Props) {
           })}
           <p className={roTotal === numeric("total_direct_cost") ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total plafon RO: {formatRupiah(roTotal)}. Harus sama dengan direct cost.</p>
         </section>}
-        <section className="space-y-4 rounded-lg border p-4">
+        {!piltInitiation && <section className="space-y-4 rounded-lg border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">Rencana termin</h2>
@@ -396,8 +408,8 @@ export function ProjectApplicationModal(props: Props) {
             </div>
           ))}
           <p className={termsTotal === 100 ? "text-sm text-emerald-700" : "text-sm text-destructive"}>Total termin: {termsTotal}% / 100%.</p>
-        </section>
-        <section className="space-y-4 rounded-lg border p-4">
+        </section>}
+        {!piltInitiation && <section className="space-y-4 rounded-lg border p-4">
           <div>
             <h2 className="text-sm font-semibold">Dokumen pendukung</h2>
             <p className="mt-1 text-xs text-muted-foreground">Unggah dokumen opsional untuk melengkapi pengajuan.</p>
@@ -406,7 +418,7 @@ export function ProjectApplicationModal(props: Props) {
             <DocumentUploadField label="Kontrak Proyek" accept=".pdf" value={sk} onChange={setSk} currentFile={mode === "revision" ? currentSk : null} />
             <DocumentUploadField label="RAB Proyek" accept=".pdf,.xls,.xlsx" value={rab} onChange={setRab} currentFile={mode === "revision" ? currentRab : null} />
           </div>
-        </section>
+        </section>}
         {formError && (
           <Alert variant="destructive">
             <AlertDescription>{formError}</AlertDescription>

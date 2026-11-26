@@ -28,6 +28,18 @@ type Lookup = {
 };
 type AllocationRo = { key: string; mak_id: string; plafon: string; rekening_id: string; pj: string; unit_kolaborasi_ids: string[] };
 type AllocationJob = { key: string; job_proyek_id: string; nomor_job?: string; nomor_job_reservasi_id?: string; nama_job: string; kategori_job: string; ros: AllocationRo[] };
+type ProjectInfoForm = {
+  nama_proyek: string;
+  no_kontrak: string;
+  no_kontrak_reservasi_id: string;
+  mulai_kontrak: string;
+  berakhir_kontrak: string;
+  pj_1: string;
+  pj_2: string;
+  nilai_kontrak: string;
+  total_margin: string;
+  termin_list: Array<{ key: string; persentase: string }>;
+};
 const categories = [
   ["LABORATORIUM", "Laboratorium"], ["STUDI", "Studi"], ["KAJIAN", "Kajian"],
   ["DOMINAN_LAB", "Dominan Lab"], ["DOMINAN_STUDI", "Dominan Studi"],
@@ -39,6 +51,24 @@ function newRo(): AllocationRo {
 
 function newJob(): AllocationJob {
   return { key: createClientId(), job_proyek_id: "", nama_job: "", kategori_job: "", ros: [newRo()] };
+}
+
+function projectInfoFrom(project: ProjectDetail): ProjectInfoForm {
+  const existingTerms = project.termin_list ?? [];
+  return {
+    nama_proyek: String(project.nama_proyek ?? ""),
+    no_kontrak: String(project.no_kontrak ?? ""),
+    no_kontrak_reservasi_id: "",
+    mulai_kontrak: String(project.mulai_kontrak ?? "").slice(0, 10),
+    berakhir_kontrak: String(project.berakhir_kontrak ?? "").slice(0, 10),
+    pj_1: String(project.pj_1 ?? ""),
+    pj_2: String(project.pj_2 ?? ""),
+    nilai_kontrak: project.nilai_kontrak ? String(project.nilai_kontrak) : "",
+    total_margin: project.total_margin !== undefined && project.total_margin !== null ? String(project.total_margin) : "",
+    termin_list: existingTerms.length
+      ? existingTerms.map((term) => ({ key: createClientId(), persentase: String(term.persentase) }))
+      : [{ key: createClientId(), persentase: "100" }],
+  };
 }
 
 export function ProjectDpmAllocationSection({
@@ -61,14 +91,17 @@ export function ProjectDpmAllocationSection({
   const [open, setOpen] = useState(false);
   const [targetUnitId, setTargetUnitId] = useState("");
   const [jobs, setJobs] = useState<AllocationJob[]>([]);
+  const [projectInfo, setProjectInfo] = useState<ProjectInfoForm>(() => projectInfoFrom(project));
   const [error, setError] = useState("");
   const reservationRequests = useRef(new Set<string>());
+  const contractReservation = useRef<{ id: string; number: string } | null>(null);
   const participants = project.unit_terlibat ?? [];
   const isAdmin = identity.role === "superadmin";
   const isSubmitter = isAdmin || identity.userId === String(project.diajukan_oleh_id ?? "");
   const currentParticipant = participants.find((unit) => unit.id === (unitAkunProyekId || identity.unitKerjaId));
   const mayEdit = isAdmin || (["koordinator", "subkoor"].includes(identity.role ?? "") && Boolean(currentParticipant));
   const selectedUnit = participants.find((unit) => unit.id === targetUnitId);
+  const isLeadUnit = selectedUnit?.peran === "PENGUSUL";
   const selectedUnitLabel = selectedUnit ? [selectedUnit.kode_unit, selectedUnit.nama_unit].filter(Boolean).join(" — ") : "Unit belum tersedia";
   const participantsAsOptions: Option[] = participants.map((unit) => ({ value: unit.id, label: [unit.kode_unit, unit.nama_unit].filter(Boolean).join(" — ") }));
   const makOptions: Option[] = maks.map((row) => ({ value: row.id, label: [row.kode_mak, row.nama_mak].filter(Boolean).join(" — ") }));
@@ -76,8 +109,15 @@ export function ProjectDpmAllocationSection({
   const existingJobs = project.job_list ?? [];
   const jobTotals = (project.ro_list ?? []).reduce((sum, ro) => sum + Number(ro.plafon ?? 0), 0);
   const allSubmitted = participants.length > 0 && participants.every((unit) => Boolean(unit.alokasi_dikirim_pada));
-  const directCost = Number(project.total_direct_cost ?? 0);
-  const totalsMatch = jobTotals === directCost;
+  const currentUnitTotal = jobs.reduce((sum, job) => sum + job.ros.reduce((jobSum, ro) => jobSum + (Number(ro.plafon) || 0), 0), 0);
+  const otherUnitsTotal = (project.ro_list ?? []).filter((ro) => ro.id_unit_koordinator !== targetUnitId).reduce((sum, ro) => sum + Number(ro.plafon ?? 0), 0);
+  const plannedDirectCost = targetUnitId ? otherUnitsTotal + currentUnitTotal : jobTotals;
+  const totalMargin = Number(projectInfo.total_margin) || 0;
+  const contractValue = Number(projectInfo.nilai_kontrak) || 0;
+  const termsTotal = projectInfo.termin_list.reduce((sum, term) => sum + (Number(term.persentase) || 0), 0);
+  const projectInfoValid = Boolean(projectInfo.nama_proyek.trim() && projectInfo.no_kontrak && contractValue > 0 && totalMargin >= 0 && termsTotal === 100 && (Boolean(projectInfo.mulai_kontrak) === Boolean(projectInfo.berakhir_kontrak)) && (!projectInfo.mulai_kontrak || projectInfo.berakhir_kontrak >= projectInfo.mulai_kontrak));
+  const totalsMatch = contractValue > 0 && contractValue === plannedDirectCost + totalMargin;
+  const readyToSubmit = allSubmitted && projectInfoValid && totalsMatch;
   const pendingUnits = participants.filter((unit) => !unit.alokasi_dikirim_pada);
   async function reserveJobNumber(key: string) {
     if (reservationRequests.current.has(key)) return;
@@ -95,8 +135,26 @@ export function ProjectDpmAllocationSection({
     }
   }
 
+  async function reserveProjectContractNumber() {
+    if (contractReservation.current) return contractReservation.current;
+    setBrowserToken();
+    const response = await requestHrisApi<{ data?: { id: string; no_kontrak: string } }>(`/api/proyek/${project.id}/contract-number/reserve`, { method: "POST" });
+    const reservation = envelopeData<{ id: string; no_kontrak: string }>(response);
+    if (!reservation?.id || !reservation.no_kontrak) throw new Error("Nomor kontrak tidak diterima dari server.");
+    contractReservation.current = { id: reservation.id, number: reservation.no_kontrak };
+    setProjectInfo((current) => ({ ...current, no_kontrak: reservation.no_kontrak, no_kontrak_reservasi_id: reservation.id }));
+    return contractReservation.current;
+  }
+
   function loadUnitAllocation(unitId: string) {
     setTargetUnitId(unitId);
+    const participant = participants.find((unit) => unit.id === unitId);
+    const nextProjectInfo = projectInfoFrom(project);
+    if (participant?.peran === "PENGUSUL" && !project.no_kontrak && contractReservation.current) {
+      nextProjectInfo.no_kontrak = contractReservation.current.number;
+      nextProjectInfo.no_kontrak_reservasi_id = contractReservation.current.id;
+    }
+    setProjectInfo(nextProjectInfo);
     const rows: AllocationJob[] = existingJobs.flatMap((job) => {
       const ownedRos = (job.ro_list ?? []).filter((ro) => ro.id_unit_koordinator === unitId);
       if (!ownedRos.length) return [];
@@ -120,6 +178,9 @@ export function ProjectDpmAllocationSection({
     setJobs(initialJobs);
     setError("");
     for (const job of initialJobs) if (!job.job_proyek_id && !job.nomor_job_reservasi_id) void reserveJobNumber(job.key);
+    if (participant?.peran === "PENGUSUL" && !project.no_kontrak && !contractReservation.current) {
+      void reserveProjectContractNumber().catch((cause) => setError(apiErrorMessage(cause, "Nomor kontrak belum dapat disiapkan.")));
+    }
   }
 
   useEffect(() => {
@@ -143,11 +204,23 @@ export function ProjectDpmAllocationSection({
           unit_kolaborasi_ids: ro.unit_kolaborasi_ids,
         })),
       }));
-      return requestHrisApi(`/api/proyek/${project.id}/alokasi-unit`, { method: "PUT", body: JSON.stringify({ ...(isAdmin ? { unit_kerja_id: targetUnitId } : {}), job_list }) });
+      const informasi_proyek = isLeadUnit ? {
+        nama_proyek: projectInfo.nama_proyek.trim(),
+        ...(projectInfo.no_kontrak_reservasi_id ? { no_kontrak_reservasi_id: projectInfo.no_kontrak_reservasi_id } : {}),
+        mulai_kontrak: projectInfo.mulai_kontrak || undefined,
+        berakhir_kontrak: projectInfo.berakhir_kontrak || undefined,
+        pj_1: projectInfo.pj_1.trim() || undefined,
+        pj_2: projectInfo.pj_2.trim() || undefined,
+        nilai_kontrak: Number(projectInfo.nilai_kontrak),
+        total_margin: Number(projectInfo.total_margin),
+        termin_list: projectInfo.termin_list.map((term, index) => ({ nomor_termin: index + 1, persentase: Number(term.persentase) })),
+      } : undefined;
+      return requestHrisApi(`/api/proyek/${project.id}/alokasi-unit`, { method: "PUT", body: JSON.stringify({ ...(isAdmin ? { unit_kerja_id: targetUnitId } : {}), ...(informasi_proyek ? { informasi_proyek } : {}), job_list }) });
     },
     successMessage: "Alokasi Job dan RO unit berhasil dikirim.",
     invalidateKeys: [["api", "masterProyek"]],
     onSuccess: async () => {
+      if (isLeadUnit) contractReservation.current = null;
       await onChanged();
       setOpen(false);
     },
@@ -196,6 +269,7 @@ export function ProjectDpmAllocationSection({
     if (!targetUnitId || !jobs.length) return setError("Pilih unit DPM dan tambahkan minimal satu Job.");
     if (jobs.some((job) => !job.ros.length || job.ros.some((ro) => !ro.mak_id || Number(ro.plafon) <= 0))) return setError("Setiap RO harus memiliki MAK dan plafon lebih dari nol.");
     if (jobs.some((job) => !job.job_proyek_id && (!job.nomor_job_reservasi_id || !job.nama_job.trim() || !job.kategori_job))) return setError("Lengkapi nama, kategori, dan nomor Job otomatis.");
+    if (isLeadUnit && !projectInfoValid) return setError("Lengkapi informasi proyek, kontrak, nilai, dan termin dengan benar.");
     void saveAllocation.mutateAsync().catch((cause) => setError(apiErrorMessage(cause, "Alokasi unit gagal disimpan.")));
   }
 
@@ -237,16 +311,17 @@ export function ProjectDpmAllocationSection({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-2 text-sm">
-        <p className="text-muted-foreground">Total plafon RO: <strong className="text-foreground">{formatRupiah(jobTotals)}</strong> dari direct cost {formatRupiah(directCost)}.</p>
+        <p className="text-muted-foreground">Total plafon RO saat ini: <strong className="text-foreground">{formatRupiah(jobTotals)}</strong>.</p>
         {isSubmitter && (
-          <Button type="button" size="sm" disabled={!allSubmitted || !totalsMatch || submitFinal.isPending} onClick={() => void submitFinal.mutateAsync().catch(() => undefined)}>
+          <Button type="button" size="sm" disabled={!readyToSubmit || submitFinal.isPending} onClick={() => void submitFinal.mutateAsync().catch(() => undefined)}>
             {submitFinal.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Send size={15} />}
             Kirim ke pemeriksaan
           </Button>
         )}
       </div>
       {isSubmitter && !allSubmitted && <p className="text-xs text-amber-800">Menunggu alokasi dari {pendingUnits.length} unit DPM.</p>}
-      {allSubmitted && !totalsMatch && <p className="text-xs text-destructive">Total plafon semua RO harus sama dengan direct cost sebelum proyek dikirim.</p>}
+      {allSubmitted && !projectInfoValid && <p className="text-xs text-amber-800">DPM utama perlu melengkapi informasi kontrak, nilai proyek, dan termin.</p>}
+      {allSubmitted && projectInfoValid && !totalsMatch && <p className="text-xs text-destructive">Nilai kontrak {formatRupiah(contractValue)} harus sama dengan total plafon RO {formatRupiah(plannedDirectCost)} ditambah margin {formatRupiah(totalMargin)}.</p>}
 
       <Modal
         open={open}
@@ -257,7 +332,7 @@ export function ProjectDpmAllocationSection({
         bodyClassName="space-y-4"
         footer={<>
           <Button type="button" variant="outline" disabled={saveAllocation.isPending} onClick={() => setOpen(false)}>Batal</Button>
-          <Button type="button" disabled={saveAllocation.isPending} onClick={submitAllocation}>{saveAllocation.isPending && <LoaderCircle className="animate-spin" size={15} />} Kirim alokasi unit</Button>
+          <Button type="button" disabled={saveAllocation.isPending} onClick={submitAllocation}>{saveAllocation.isPending && <LoaderCircle className="animate-spin" size={15} />} {isLeadUnit ? "Simpan data proyek & alokasi" : "Kirim alokasi unit"}</Button>
         </>}
       >
         <section className="space-y-2 rounded-lg border bg-muted/20 p-3">
@@ -265,6 +340,29 @@ export function ProjectDpmAllocationSection({
           {isAdmin ? <FilterCombobox options={participantsAsOptions} value={targetUnitId} onValueChange={loadUnitAllocation} label="Pilih unit DPM" /> : <p className="text-sm text-muted-foreground">{selectedUnitLabel}</p>}
           <p className="text-xs text-muted-foreground">RO yang dibuat pada formulir ini otomatis dimiliki unit tersebut.</p>
         </section>
+
+        {isLeadUnit && <section className="space-y-4 rounded-lg border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Informasi proyek dan kontrak</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Diisi DPM utama setelah order dari PILT diterima. Direct cost dihitung dari total plafon seluruh RO.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2"><span>Nama proyek *</span><Input value={projectInfo.nama_proyek} onChange={(event) => setProjectInfo((current) => ({ ...current, nama_proyek: event.target.value }))} /></label>
+            <label className="grid gap-1.5 text-sm font-medium"><span>Nomor kontrak *</span><Input value={projectInfo.no_kontrak} readOnly className="bg-muted/30 font-mono" placeholder="Menyiapkan nomor kontrak..." /></label>
+            <p className="self-end pb-2 text-xs text-muted-foreground">Nomor dibuat otomatis untuk DPM utama.</p>
+            <label className="grid gap-1.5 text-sm font-medium"><span>Mulai kontrak</span><Input type="date" value={projectInfo.mulai_kontrak} onChange={(event) => setProjectInfo((current) => ({ ...current, mulai_kontrak: event.target.value }))} /></label>
+            <label className="grid gap-1.5 text-sm font-medium"><span>Berakhir kontrak</span><Input type="date" value={projectInfo.berakhir_kontrak} onChange={(event) => setProjectInfo((current) => ({ ...current, berakhir_kontrak: event.target.value }))} /></label>
+            <label className="grid gap-1.5 text-sm font-medium"><span>PJ 1</span><Input value={projectInfo.pj_1} onChange={(event) => setProjectInfo((current) => ({ ...current, pj_1: event.target.value }))} /></label>
+            <label className="grid gap-1.5 text-sm font-medium"><span>PJ 2</span><Input value={projectInfo.pj_2} onChange={(event) => setProjectInfo((current) => ({ ...current, pj_2: event.target.value }))} /></label>
+            <label className="grid gap-1.5 text-sm font-medium"><span>Nilai kontrak *</span><MoneyInput value={projectInfo.nilai_kontrak} onValueChange={(value) => setProjectInfo((current) => ({ ...current, nilai_kontrak: value }))} /></label>
+            <label className="grid gap-1.5 text-sm font-medium"><span>Total margin *</span><MoneyInput value={projectInfo.total_margin} onValueChange={(value) => setProjectInfo((current) => ({ ...current, total_margin: value }))} /></label>
+          </div>
+          <div className="space-y-2 rounded-md bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-medium">Rencana termin *</p><p className="text-xs text-muted-foreground">Persentase termin harus berjumlah 100%.</p></div><Button type="button" size="sm" variant="outline" onClick={() => setProjectInfo((current) => ({ ...current, termin_list: [...current.termin_list, { key: createClientId(), persentase: "" }] }))}><Plus size={13} /> Tambah</Button></div>
+            {projectInfo.termin_list.map((term, index) => <div key={term.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2"><label className="grid gap-1 text-sm"><span className="text-xs text-muted-foreground">Termin {String(index + 1).padStart(2, "0")} (%)</span><Input type="number" min="1" max="100" value={term.persentase} onChange={(event) => setProjectInfo((current) => ({ ...current, termin_list: current.termin_list.map((item) => item.key === term.key ? { ...item, persentase: event.target.value } : item) }))} /></label>{projectInfo.termin_list.length > 1 && <Button type="button" size="sm" variant="ghost" aria-label="Hapus termin" onClick={() => setProjectInfo((current) => ({ ...current, termin_list: current.termin_list.filter((item) => item.key !== term.key) }))}><Trash2 size={14} /></Button>}</div>)}
+            <p className={`text-xs ${termsTotal === 100 ? "text-emerald-700" : "text-amber-800"}`}>Total termin: {termsTotal}% / 100%. Direct cost sementara {formatRupiah(plannedDirectCost)}; margin {formatRupiah(totalMargin)}.</p>
+          </div>
+        </section>}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h3 className="text-sm font-semibold">Job dan alokasi RO</h3><p className="text-xs text-muted-foreground">Gunakan Job baru atau pilih Job untuk berbagi nomor Job dengan unit lain.</p></div>

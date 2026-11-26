@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Edit, Eye, LoaderCircle, Plus, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -37,7 +37,10 @@ function missing(row: RoItemDto) {
 }
 
 export default function RoDetailClientPage({ id }: { id: string }) {
-  const identity = useMemo(browserIdentity, []);
+  const [identity, setIdentity] = useState<ReturnType<typeof browserIdentity>>({ role: null, userId: "", unitKerjaId: "", token: "" });
+  useEffect(() => {
+    setIdentity(browserIdentity());
+  }, []);
   const canManage = identity.role === "superadmin" || identity.role === "koordinator";
   const canCreateRequest = ["superadmin", "koordinator", "subkoor"].includes(identity.role ?? "");
   const [tab, setTab] = useState<"ledger" | "alokasi">("ledger");
