@@ -26,6 +26,7 @@ type Props = {
   setForm: Dispatch<SetStateAction<ProjectForm>>;
   contractDatesRequired: boolean;
   editingDraftId: string | null;
+  nomorOrderPreview?: string;
   identity: { role: string | null };
   currentUnit?: { kode_unit?: string; nama_unit?: string };
   unitComboboxOptions: Option[];
@@ -88,7 +89,7 @@ function Field({ label, value, onChange, type = "text", required = false }: { la
 
 export function ProjectApplicationModal(props: Props) {
   const {
-    open, closeModal, form, setForm, contractDatesRequired, editingDraftId,
+    open, closeModal, form, setForm, contractDatesRequired, editingDraftId, nomorOrderPreview,
     mode = "create", piltInitiation = false, revisionNote, currentSk, currentRab,
     identity, currentUnit, unitComboboxOptions, unitPengusulId, changeLeadUnit,
     availableCollaboratorOptions, addCollaborator, unitKolaborasiIds, assignedRoUnitIds,
@@ -103,7 +104,7 @@ export function ProjectApplicationModal(props: Props) {
         open={open}
         onClose={closeModal}
         title={mode === "revision" ? "Perbaiki Pengajuan Proyek" : piltInitiation ? "Inisiasi Proyek melalui PILT" : "Ajukan Proyek"}
-        description={mode === "revision" ? "Perbarui informasi proyek, unit, Job/RO, anggaran, termin, dan dokumen. Setelah dikirim ulang, pengajuan kembali ke pemeriksaan Koordinator Layanan dan menjalani urutan persetujuan dari awal." : piltInitiation ? "PILT mencatat order dan informasi induk. Unit DPM yang dilibatkan melengkapi Job serta alokasi RO sebelum pemeriksaan proyek dimulai." : undefined}
+        description={mode === "revision" ? "Perbarui informasi proyek, unit, Job/RO, anggaran, termin, dan dokumen. Setelah dikirim ulang, pengajuan kembali ke pemeriksaan Koordinator Layanan dan menjalani urutan persetujuan dari awal." : piltInitiation ? "PILT mencatat order dan memilih satu DPM utama. Setelah draft dibuat, DPM utama dapat menambahkan DPM kolaborator." : undefined}
         size={mode === "revision" ? "xl" : "md"}
         bodyClassName="space-y-4"
         footer={
@@ -125,7 +126,7 @@ export function ProjectApplicationModal(props: Props) {
         {mode === "create" ? <div className="space-y-3">
           <Alert>
             <AlertTitle>{piltInitiation ? "Tahap inisiasi PILT" : "Tahapan persetujuan"}</AlertTitle>
-            <AlertDescription>{piltInitiation ? "PILT membuat draft proyek dan memilih unit DPM. Masing-masing DPM mengisi Job/RO miliknya; setelah semua lengkap, proyek masuk ke urutan pemeriksaan dan persetujuan yang berlaku." : "Pengajuan → pemeriksaan Koordinator Layanan → rapat dan unggah notulen → validasi Bagian Umum → persetujuan Pimpinan. RO aktif setelah disetujui Pimpinan."}</AlertDescription>
+            <AlertDescription>{piltInitiation ? "PILT mencatat nomor order dan data klien, lalu memilih satu DPM utama. DPM utama melengkapi informasi proyek, Job, dan RO setelah draft dibuat." : "Pengajuan → pemeriksaan Koordinator Layanan → rapat dan unggah notulen → validasi Bagian Umum → persetujuan Pimpinan. RO aktif setelah disetujui Pimpinan."}</AlertDescription>
           </Alert>
           <p className="text-xs text-muted-foreground">Perubahan otomatis disimpan sebagai draft saat modal ditutup.</p>
           {editingDraftId && (
@@ -138,15 +139,19 @@ export function ProjectApplicationModal(props: Props) {
           <AlertTitle>Catatan pemeriksa</AlertTitle>
           <AlertDescription className="whitespace-pre-wrap">{revisionNote || "Pemeriksa meminta perbaikan pada pengajuan ini."}</AlertDescription>
         </Alert>}
-        <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">{piltInitiation ? "Draft proyek diteruskan ke unit DPM untuk mengisi Job dan alokasi RO." : "RO awal dan rencana termin wajib seimbang sebelum proyek dikirim."}</div>
+        {!piltInitiation && <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">RO awal dan rencana termin wajib seimbang sebelum proyek dikirim.</div>}
         {piltInitiation ? (
           <section className="space-y-4 rounded-lg border p-4">
             <div>
-              <h2 className="text-sm font-semibold">Informasi order PILT</h2>
-              <p className="mt-1 text-xs text-muted-foreground">PILT mencatat nomor Job dan identitas klien. Kontrak, nilai, serta rincian anggaran diisi DPM setelah draft diteruskan.</p>
+              <h2 className="text-sm font-semibold">Informasi order</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Nomor order disiapkan saat form dibuka. DPM utama melengkapi data proyek dan alokasi setelah draft dibuat.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Nomor Job PILT" required value={form.nomor_order_pilt} onChange={(value) => setForm((current) => ({ ...current, nomor_order_pilt: value }))} />
+              <label className="grid gap-1.5 text-sm font-medium">
+                <span>Nomor Order</span>
+                <Input value={nomorOrderPreview ?? ""} readOnly className="bg-muted/30 font-mono" placeholder="Menyiapkan preview nomor order..." />
+                <span className="text-xs font-normal text-muted-foreground">Format tahunan YYYYNNNN. Nomor dikunci saat draft dibuat.</span>
+              </label>
               <Field label="Nama klien" required value={form.nama_client} onChange={(value) => setForm((current) => ({ ...current, nama_client: value }))} />
             </div>
           </section>
@@ -186,9 +191,9 @@ export function ProjectApplicationModal(props: Props) {
         <section className="min-w-0 space-y-3 rounded-lg border p-4">
           <div className="space-y-1">
             <h2 className="text-sm font-semibold">Unit terlibat</h2>
-            <p className="max-w-3xl text-xs leading-5 text-muted-foreground">Daftarkan unit pengusul dan unit kerja yang terlibat. Pilih unit pemilik di tiap RO; beberapa RO dapat memakai nomor Job yang sama untuk membagi alokasi.</p>
+              <p className="max-w-3xl text-xs leading-5 text-muted-foreground">Pilih DPM utama yang akan mengisi data proyek dan alokasi. DPM utama dapat menambahkan unit kolaborator setelah draft dibuat.</p>
           </div>
-          <div className="grid min-w-0 items-start gap-4 md:grid-cols-2">
+          <div className={`grid min-w-0 items-start gap-4 ${piltInitiation ? "md:grid-cols-1" : "md:grid-cols-2"}`}>
             <label className="grid min-w-0 gap-1.5 text-sm font-medium">
               <span>{piltInitiation ? "DPM utama proyek *" : "Unit pengusul *"}</span>
               {identity.role === "superadmin" || piltInitiation ? (
@@ -199,13 +204,18 @@ export function ProjectApplicationModal(props: Props) {
                 </div>
               )}
             </label>
-            <div className="grid min-w-0 gap-1.5 text-sm font-medium">
+            {!piltInitiation && <div className="grid min-w-0 gap-1.5 text-sm font-medium">
               <span>{piltInitiation ? "Tambah DPM yang terlibat" : "Tambah unit kolaborator"}</span>
               <FilterCombobox options={availableCollaboratorOptions} value="" onValueChange={addCollaborator} label={piltInitiation ? "Pilih DPM untuk ditambahkan" : "Pilih unit untuk ditambahkan"} />
               <span className="text-xs font-normal leading-4 text-muted-foreground">Unit yang dipilih langsung masuk ke daftar.</span>
-            </div>
+            </div>}
           </div>
-          {(unitPengusulId || unitKolaborasiIds.length > 0) && (
+          {piltInitiation && unitPengusulId && (
+            <div className="rounded-md bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              DPM utama: <strong className="text-foreground">{unitComboboxOptions.find((option) => option.value === unitPengusulId)?.label ?? "Unit terpilih"}</strong>
+            </div>
+          )}
+          {!piltInitiation && (unitPengusulId || unitKolaborasiIds.length > 0) && (
             <div className="space-y-2 border-t pt-3">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <span>Unit pada proyek</span>
@@ -237,7 +247,7 @@ export function ProjectApplicationModal(props: Props) {
               </div>
             </div>
           )}
-          {!unitPengusulId && <p className="text-xs text-amber-700">Pilih unit pengusul sebelum menentukan pemilik RO.</p>}
+          {!unitPengusulId && <p className="text-xs text-amber-700">Pilih DPM utama sebelum order dibuat.</p>}
         </section>
         {!piltInitiation && <section className="space-y-4 rounded-lg border p-4">
           <div>

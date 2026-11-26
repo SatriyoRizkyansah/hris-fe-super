@@ -20,7 +20,7 @@ import { browserApi } from "@/lib/api/browser-client";
 import { setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
-import { apiErrorMessage, envelopeData, envelopeRows, requestHrisApi, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
+import { apiErrorMessage, bodyData, envelopeData, envelopeRows, requestHrisApi, unwrapEnvelope, uploadHrisFile } from "@/lib/hris/api";
 import { browserIdentity } from "@/lib/hris/identity";
 import { createClientId } from "@/lib/utils/client-id";
 import type { JobDraft, JobMetadataField, KategoriJob, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
@@ -29,7 +29,6 @@ type Workflow = ProjectWorkflowAction;
 type LookupRow = { id: string; [key: string]: unknown };
 type Option = { value: string; label: string };
 const blankProjectForm = (): ProjectForm => ({
-  nomor_order_pilt: "",
   no_kontrak: "",
   nama_proyek: "",
   tahun_fiscal: String(new Date().getFullYear()),
@@ -191,7 +190,10 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
   const distributionRows = envelopeRows<Row>(distribution.data);
   const settingsData = envelopeData<Row>(settings.data);
   const settingRows = Array.isArray(settingsData?.list) ? (settingsData.list as Row[]) : [];
-  const unitOptions = envelopeRows<LookupRow>(units.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
+  // This lookup uses requestHrisApi directly, whose response is the raw
+  // `{ status, message, data, pagination }` envelope. `envelopeRows` is for
+  // generated-client responses and unwraps one layer too far here.
+  const unitOptions = (bodyData<LookupRow[]>(units.data) ?? []).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const makOptions = envelopeRows<LookupRow & { kode_mak?: string; nama_mak?: string; tipe_akun?: string }>(makLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const rekeningOptions = envelopeRows<LookupRow>(rekeningLookup.data).filter((row) => !row.status_aktif || row.status_aktif === "AKTIF");
   const currentUnit = unitOptions.find((unit) => String(unit.id) === identity.unitKerjaId);
@@ -730,6 +732,9 @@ export default function ProyekDetailClientPage({ id }: { id: string }) {
           identity={identity}
           unitAkunProyekId={String(project.unit_akun_proyek_id ?? "")}
           units={unitOptions.map((row) => ({ id: row.id, kode_unit: String(row.kode_unit ?? ""), nama_unit: String(row.nama_unit ?? "") }))}
+          unitsLoading={units.isLoading}
+          unitsError={units.isError}
+          reloadUnits={() => { void units.refetch(); }}
           maks={makOptions.map((row) => ({ id: row.id, kode_mak: String(row.kode_mak ?? ""), nama_mak: String(row.nama_mak ?? "") }))}
           accounts={rekeningOptions.map((row) => ({ id: row.id, nama_bank: String(row.nama_bank ?? ""), nama_rekening: String(row.nama_rekening ?? ""), nomor_rekening: String(row.nomor_rekening ?? "") }))}
           onChanged={invalidate}

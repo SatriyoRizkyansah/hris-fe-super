@@ -231,6 +231,8 @@ export interface ProyekUnitDto {
   kode_unit: string;
   nama_unit: string;
   peran: "PENGUSUL" | "KOLABORATOR";
+  /** Waktu unit DPM mengirim alokasi Job dan RO */
+  alokasi_dikirim_pada?: object | null;
 }
 
 export interface ProyekRoAlokasiDto {
@@ -289,6 +291,8 @@ export interface ProyekExtensionItemDto {
 
 export interface ProyekItemDto {
   id: string;
+  /** Nomor order awal dari PILT untuk proyek */
+  nomor_order_pilt?: object | null;
   nama_proyek: string;
   tahun_fiscal: number;
   sumber_pendanaan?: object | null;
@@ -312,6 +316,7 @@ export interface ProyekItemDto {
   /** @example 250000000 */
   total_margin?: number;
   status_proyek:
+    | "MENUNGGU_ALOKASI_DPM"
     | "MENUNGGU_VALIDASI_LAYANAN"
     | "MENUNGGU_VALIDASI_UMUM"
     | "MENUNGGU_NOTULEN"
@@ -331,6 +336,8 @@ export interface ProyekItemDto {
   alur_proyek_version?: number;
   riwayat_revisi?: object[];
   diajukan_oleh_id?: object | null;
+  /** Unit koordinator dari akun yang sedang melihat detail proyek */
+  unit_akun_proyek_id?: object | null;
   nama_pengaju?: object | null;
   nama_unit_pengaju?: object | null;
   divalidasi_umum_pada?: object | null;
@@ -352,6 +359,18 @@ export interface ProyekItemDto {
   created_at?: string;
   /** @format date-time */
   updated_at?: string;
+}
+
+export interface CreateProyekDraftDto {
+  /**
+   * Nama klien untuk identitas awal order
+   * @example "PT Contoh Migas Indonesia"
+   */
+  nama_client: string;
+  /** DPM utama yang akan mengisi data proyek dan alokasi RO */
+  unit_pengusul_id: string;
+  /** ID reservasi preview nomor order yang disiapkan server */
+  nomor_order_reservasi_id: string;
 }
 
 export interface RoInputDto {
@@ -399,60 +418,6 @@ export interface TerminInputDto {
    * @example 50
    */
   persentase: number;
-}
-
-export interface CreateProyekDto {
-  /** @example "Pengembangan Infrastruktur Migas" */
-  nama_proyek: string;
-  /** @example 2026 */
-  tahun_fiscal: number;
-  /**
-   * Tanggal mulai kontrak proyek yang berlaku untuk seluruh RO
-   * @example "2026-01-01"
-   */
-  mulai_kontrak?: string;
-  /**
-   * Tanggal akhir kontrak proyek yang berlaku untuk seluruh RO
-   * @example "2026-12-31"
-   */
-  berakhir_kontrak?: string;
-  /** @example "APBN 2026" */
-  sumber_pendanaan?: string;
-  /** @example "Nama Penanggung Jawab 1" */
-  pj_1?: string;
-  /** @example "Nama Penanggung Jawab 2" */
-  pj_2?: string;
-  /** @example "PT Contoh Migas Indonesia" */
-  nama_client?: string;
-  /** Nomor kontrak bersama untuk seluruh RO proyek */
-  no_kontrak?: string;
-  /** ID reservasi nomor kontrak otomatis untuk proyek baru */
-  no_kontrak_reservasi_id?: string;
-  /** Unit pengusul proyek; untuk Koordinator harus sama dengan unit pada token */
-  unit_pengusul_id?: string;
-  /** Unit koordinator yang berkolaborasi dalam proyek */
-  unit_kolaborasi_ids?: string[];
-  /**
-   * Nilai kontrak total
-   * @example 1000000000
-   */
-  nilai_kontrak?: number;
-  /**
-   * Total direct cost
-   * @example 750000000
-   */
-  total_direct_cost?: number;
-  /**
-   * Total margin yang akan didistribusikan ke 5 kamar
-   * @example 250000000
-   */
-  total_margin?: number;
-  /** Daftar RO awal — total plafon harus = total_direct_cost */
-  ro_list?: RoInputDto[];
-  /** Job proyek sebagai parent untuk satu atau beberapa alokasi RO */
-  job_list: JobProyekInputDto[];
-  /** Rencana termin; total persentase harus 100% */
-  termin_list: TerminInputDto[];
 }
 
 export interface UpdateProyekDto {
@@ -503,6 +468,72 @@ export interface ProyekContractNumberReservationDto {
   id: string;
   /** @example "202602694" */
   no_kontrak: string;
+}
+
+export interface ProyekOrderNumberReservationDto {
+  /** @format uuid */
+  id: string;
+  /** @example "20260001" */
+  nomor_order: string;
+}
+
+export interface DpmProjectInfoDto {
+  /** @example "Pengujian Rheology" */
+  nama_proyek: string;
+  /** Reservasi nomor kontrak yang dibuat oleh sistem */
+  no_kontrak_reservasi_id?: string;
+  /** @example "2026-01-01" */
+  mulai_kontrak?: string;
+  /** @example "2026-12-31" */
+  berakhir_kontrak?: string;
+  /** @example "Nama Penanggung Jawab 1" */
+  pj_1?: string;
+  /** @example "Nama Penanggung Jawab 2" */
+  pj_2?: string;
+  /** @example 1000000000 */
+  nilai_kontrak: number;
+  /**
+   * Nilai Direct Cost; harus sesuai dengan total plafon RO saat proyek dikirim
+   * @example 750000000
+   */
+  total_direct_cost?: number;
+  /** Rencana termin; total persentase harus 100% */
+  termin_list: TerminInputDto[];
+}
+
+export interface UnitJobAllocationDto {
+  /** Job yang sudah dibuat dalam proyek ini untuk alokasi RO split */
+  job_proyek_id?: string;
+  /** Reservasi nomor Job untuk Job baru */
+  nomor_job_reservasi_id?: string;
+  /** @example "Pengujian Rheology" */
+  nama_job?: string;
+  kategori_job?:
+    | "LABORATORIUM"
+    | "STUDI"
+    | "KAJIAN"
+    | "DOMINAN_LAB"
+    | "DOMINAN_STUDI";
+  /** RO yang menjadi alokasi unit pemilik */
+  ro_list: RoInputDto[];
+}
+
+export interface SaveProyekUnitAllocationDto {
+  /** Diisi Superadmin saat menginput alokasi atas nama DPM */
+  unit_kerja_id?: string;
+  /** DPM kolaborator yang ditambahkan oleh DPM utama proyek */
+  unit_kolaborasi_ids?: string[];
+  /** Data kontrak dan nilai proyek yang diisi oleh DPM utama */
+  informasi_proyek?: DpmProjectInfoDto;
+  job_list: UnitJobAllocationDto[];
+}
+
+export interface SubmitDpmAllocationsDto {
+  /**
+   * Direct Cost yang dihitung dari pilihan di form proyek; harus sama dengan total plafon seluruh RO
+   * @example 750000000
+   */
+  total_direct_cost?: number;
 }
 
 export interface ProyekValidationDto {
@@ -2038,7 +2069,7 @@ export class Api<
      *
      * @tags Master - Unit Kerja
      * @name UnitKerjaGetProjectCollaboratorsControllerGetProjectCollaborators
-     * @summary Get unit koordinator untuk kolaborasi proyek (Superadmin, Koordinator)
+     * @summary Get unit koordinator untuk kolaborasi proyek (Superadmin, Koordinator, Subkoordinator)
      * @request GET:/api/unit-kerja/kolaborator-proyek
      * @secure
      */
@@ -2174,6 +2205,7 @@ export class Api<
         /** Filter proyek berdasarkan unit koordinator RO */
         id_unit_koordinator?: string;
         status_proyek?:
+          | "MENUNGGU_ALOKASI_DPM"
           | "MENUNGGU_VALIDASI_LAYANAN"
           | "MENUNGGU_NOTULEN"
           | "MENUNGGU_VALIDASI_UMUM"
@@ -2218,12 +2250,12 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekCreateControllerCreate
-     * @summary Ajukan proyek (Superadmin, Koordinator)
+     * @summary Inisiasi proyek dengan nomor order PILT (Superadmin, Koordinator, Subkoordinator)
      * @request POST:/api/proyek
      * @secure
      */
     proyekCreateControllerCreate: (
-      data: CreateProyekDto,
+      data: CreateProyekDraftDto,
       params: RequestParams = {},
     ) =>
       this.request<
@@ -2386,7 +2418,7 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekReserveJobNumberControllerReserve
-     * @summary Siapkan nomor Job otomatis (Superadmin, Koordinator)
+     * @summary Siapkan nomor Job otomatis (Superadmin, Koordinator, Subkoordinator)
      * @request POST:/api/proyek/job-number/reserve
      * @secure
      */
@@ -2409,11 +2441,12 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekReserveContractNumberControllerReserve
-     * @summary Siapkan nomor kontrak proyek otomatis (Superadmin, Koordinator)
-     * @request POST:/api/proyek/contract-number/reserve
+     * @summary DPM utama menyiapkan nomor kontrak proyek otomatis (Superadmin, Koordinator, Subkoordinator)
+     * @request POST:/api/proyek/{id}/contract-number/reserve
      * @secure
      */
     proyekReserveContractNumberControllerReserve: (
+      id: string,
       params: RequestParams = {},
     ) =>
       this.request<
@@ -2422,7 +2455,7 @@ export class Api<
         },
         void
       >({
-        path: `/api/proyek/contract-number/reserve`,
+        path: `/api/proyek/${id}/contract-number/reserve`,
         method: "POST",
         secure: true,
         format: "json",
@@ -2433,8 +2466,89 @@ export class Api<
      * No description
      *
      * @tags Master - Proyek
+     * @name ProyekReserveOrderNumberControllerReserve
+     * @summary Siapkan preview nomor order untuk inisiasi PILT (Superadmin, Koordinator, Subkoordinator)
+     * @request POST:/api/proyek/order-number/reserve
+     * @secure
+     */
+    proyekReserveOrderNumberControllerReserve: (params: RequestParams = {}) =>
+      this.request<
+        StandartResponseCreate & {
+          data?: ProyekOrderNumberReservationDto;
+        },
+        void
+      >({
+        path: `/api/proyek/order-number/reserve`,
+        method: "POST",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
+     * @name ProyekSaveUnitAllocationControllerSave
+     * @summary Kirim alokasi Job dan RO unit DPM (Superadmin, Koordinator, Subkoordinator)
+     * @request PUT:/api/proyek/{id}/alokasi-unit
+     * @secure
+     */
+    proyekSaveUnitAllocationControllerSave: (
+      id: string,
+      data: SaveProyekUnitAllocationDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        StandartResponse & {
+          data?: object;
+        },
+        void
+      >({
+        path: `/api/proyek/${id}/alokasi-unit`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
+     * @name ProyekSubmitAfterAllocationsControllerSubmit
+     * @summary Kirim proyek ke pemeriksaan setelah alokasi DPM lengkap (Superadmin, Koordinator, Subkoordinator)
+     * @request POST:/api/proyek/{id}/kirim-validasi
+     * @secure
+     */
+    proyekSubmitAfterAllocationsControllerSubmit: (
+      id: string,
+      data: SubmitDpmAllocationsDto,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        StandartResponse & {
+          data?: object;
+        },
+        void
+      >({
+        path: `/api/proyek/${id}/kirim-validasi`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Master - Proyek
      * @name ProyekUploadSkControllerUploadSk
-     * @summary Upload kontrak proyek (Superadmin, Koordinator)
+     * @summary Upload kontrak proyek (Superadmin, Koordinator, Subkoordinator)
      * @request POST:/api/proyek/{id}/sk
      * @secure
      */
@@ -2454,7 +2568,7 @@ export class Api<
      *
      * @tags Master - Proyek
      * @name ProyekUploadRabControllerUploadRab
-     * @summary Upload RAB proyek (Superadmin, Koordinator)
+     * @summary Upload RAB proyek (Superadmin, Koordinator, Subkoordinator)
      * @request POST:/api/proyek/{id}/rab
      * @secure
      */
@@ -4571,8 +4685,11 @@ export class Api<
     pengajuanBelanjaBayarControllerBayar: (
       id: string,
       data: {
-        /** @maxLength 100 */
-        nomor_pembayaran: string;
+        /**
+         * Opsional. Kosongkan agar sistem membuat nomor otomatis (tahun + 6 digit urutan, mis. 2026000001).
+         * @maxLength 100
+         */
+        nomor_pembayaran?: string;
         /** @format date */
         tanggal_bayar: string;
         /** @maxLength 500 */
@@ -4765,8 +4882,11 @@ export class Api<
     panjarDanaTambahanControllerBayar: (
       id: string,
       data: {
-        /** @maxLength 100 */
-        nomor_pembayaran: string;
+        /**
+         * Opsional. Kosongkan agar sistem membuat nomor otomatis (tahun + 6 digit urutan, mis. 2026000001).
+         * @maxLength 100
+         */
+        nomor_pembayaran?: string;
         /** @format date */
         tanggal_bayar: string;
         /** @format uuid */
@@ -4787,6 +4907,33 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.FormData,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Panjar Perjalanan
+     * @name PembayaranPreviewNumberControllerPreviewNumber
+     * @summary Pratinjau nomor pembayaran (Superadmin, Bendahara Pengeluaran)
+     * @request GET:/api/keuangan/pembayaran/nomor-preview
+     * @secure
+     */
+    pembayaranPreviewNumberControllerPreviewNumber: (
+      query?: {
+        /**
+         * Tanggal pembayaran yang direncanakan. Menentukan prefix tahun nomor.
+         * @example "2026-10-26"
+         */
+        tanggal?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/pembayaran/nomor-preview`,
+        method: "GET",
+        query: query,
+        secure: true,
         ...params,
       }),
   };
@@ -4917,6 +5064,43 @@ export class Api<
     ) =>
       this.request<void, any>({
         path: `/api/keuangan/invoice/ppn-titipan`,
+        method: "GET",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Keuangan - Invoice dan Settlement
+     * @name InvoicePreviewNumberControllerPreviewNumber
+     * @summary Pratinjau nomor invoice (Superadmin, Keuangan (Legacy), Keuangan - Billing)
+     * @request GET:/api/keuangan/invoice/nomor-preview
+     * @secure
+     */
+    invoicePreviewNumberControllerPreviewNumber: (
+      query: {
+        jenis: "PROYEK" | "RETAIL";
+        /** Termin proyek (untuk jenis PROYEK). */
+        termin_id?: string;
+        /** Retail job (untuk jenis RETAIL). */
+        retail_job_id?: string;
+        /**
+         * Kode program untuk generator nomor invoice (16 digit) dan kwitansi.
+         * @example "5.09"
+         */
+        kode_program?: string;
+        /**
+         * Tanggal terbit rencana; menentukan periode urutan (YYMM).
+         * @example "2026-10-26"
+         */
+        tanggal_terbit?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/keuangan/invoice/nomor-preview`,
         method: "GET",
         query: query,
         secure: true,
@@ -5633,7 +5817,8 @@ export class Api<
     retailPayExpenseControllerPayExpense: (
       id: string,
       data: {
-        nomor_pembayaran: string;
+        /** Opsional. Kosongkan agar sistem membuat nomor otomatis (tahun + 6 digit urutan, mis. 2026000001). */
+        nomor_pembayaran?: string;
         /** @format date */
         tanggal_bayar: string;
         catatan?: string;

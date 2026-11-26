@@ -6,8 +6,6 @@ import { ProjectFinalReportButton } from "@/components/proyek/ProjectFinalReport
 import { formatDate, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import type { ProjectDetail } from "./types";
 
-const display = (value: unknown) => (value == null || value === "" ? "—" : String(value));
-
 export function ProjectDetailHeader({
   project,
   status,
@@ -34,23 +32,23 @@ export function ProjectDetailHeader({
           <Button variant="ghost" size="sm" className="mb-2" render={<Link href="/dashboard/proyek" />}>
             <ArrowLeft size={16} /> Semua Proyek
           </Button>
-          <h1 className="text-2xl font-bold">{project.nama_proyek}</h1>
-          <p className="text-sm text-muted-foreground">
-            {String(project.no_kontrak ?? "")} · Tahun {project.tahun_fiscal} · Diajukan {formatDate(project.created_at)}
-          </p>
+          <h1 className="text-2xl font-bold">{project.nama_proyek || "Menunggu nama proyek dari DPM utama"}</h1>
+          {project.nama_client && <p className="text-sm text-muted-foreground">Klien: {project.nama_client}</p>}
+          <p className="text-sm text-muted-foreground">Tahun {project.tahun_fiscal} | Diajukan {formatDate(project.created_at)}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            {project.nomor_order_pilt && <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor order PILT · {project.nomor_order_pilt}</span>}
-            <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor kontrak · {display(project.no_kontrak)}</span>
-            <span className="rounded-md bg-muted px-2.5 py-1.5">
-              Periode kontrak · {formatDate(String(project.mulai_kontrak ?? ""))} – {formatDate(String(project.berakhir_kontrak ?? ""))}
-            </span>
+            {project.nomor_order_pilt && <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor order: {project.nomor_order_pilt}</span>}
+            {project.no_kontrak && <span className="rounded-md bg-muted px-2.5 py-1.5">Nomor kontrak: {String(project.no_kontrak)}</span>}
+            {(project.mulai_kontrak || project.berakhir_kontrak) && (
+              <span className="rounded-md bg-muted px-2.5 py-1.5">
+                Periode kontrak: {project.mulai_kontrak ? formatDate(String(project.mulai_kontrak)) : "Belum diatur"} - {project.berakhir_kontrak ? formatDate(String(project.berakhir_kontrak)) : "Belum diatur"}
+              </span>
+            )}
           </div>
           {project.unit_terlibat?.length ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {project.unit_terlibat.map((unit) => (
                 <span key={unit.id} className={`rounded-full px-2.5 py-1 text-xs ${unit.peran === "PENGUSUL" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                  {unit.nama_unit}
-                  {unit.peran === "PENGUSUL" ? " · Pengusul" : " · Kolaborator"}
+                  {unit.nama_unit}{unit.peran === "PENGUSUL" ? " | DPM utama" : " | Kolaborator"}
                 </span>
               ))}
             </div>
@@ -60,17 +58,17 @@ export function ProjectDetailHeader({
           <StatusBadge status={projectStatusTone(status)}>{projectStatusLabel(status)}</StatusBadge>
         </div>
       </div>
-      <div className="border-t border-border pt-4">
+      {(hasActions || status !== "MENUNGGU_ALOKASI_DPM") && <div className="border-t border-border pt-3">
         {hasActions && (
           <>
             <div className="mb-3">
               <p className="text-sm font-semibold">Tindakan proyek</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Ajukan perpanjangan masa SK atau unggah BAST untuk menyelesaikan proyek.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Ajukan perpanjangan masa kontrak atau unggah BAST untuk menyelesaikan proyek.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {canExtend && (
                 <Button type="button" size="sm" variant="outline" onClick={onExtend}>
-                  <FileClock size={15} /> Ajukan perpanjangan SK
+                  <FileClock size={15} /> Ajukan perpanjangan kontrak
                 </Button>
               )}
               {isSubmitter && status === "DISETUJUI_PIMPINAN" && (
@@ -78,15 +76,15 @@ export function ProjectDetailHeader({
                   <Upload size={15} /> Unggah BAST untuk menyelesaikan
                 </Button>
               )}
-              {pendingExtension && isSubmitter && <span className="rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">Perpanjangan SK sedang diperiksa KARWAS</span>}
+              {pendingExtension && isSubmitter && <span className="rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">Perpanjangan kontrak sedang diperiksa KARWAS</span>}
             </div>
           </>
         )}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+        {status !== "MENUNGGU_ALOKASI_DPM" && <div className={`${hasActions ? "mt-3 border-t border-border pt-3" : ""} flex flex-wrap items-center justify-between gap-2`}>
           <span className="text-xs font-medium text-muted-foreground">Laporan proyek</span>
-          {status !== "MENUNGGU_ALOKASI_DPM" && <ProjectFinalReportButton project={project} />}
-        </div>
-      </div>
+          <ProjectFinalReportButton project={project} />
+        </div>}
+      </div>}
     </header>
   );
 }

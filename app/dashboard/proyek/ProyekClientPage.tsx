@@ -19,11 +19,11 @@ import { apiData, setBrowserToken } from "@/lib/api/hooks";
 import { use_mutation } from "@/lib/api/use_mutation";
 import { use_query } from "@/lib/api/use_query";
 import { useCurrentUser } from "@/lib/api/hooks";
-import { envelopeRows, unwrapEnvelope, apiErrorMessage, requestHrisApi } from "@/lib/hris/api";
+import { bodyData, envelopeRows, unwrapEnvelope, apiErrorMessage, requestHrisApi } from "@/lib/hris/api";
 import { formatDate, formatRupiah, humanizeStatus, projectStatusLabel, projectStatusTone } from "@/lib/hris/format";
 import { browserIdentity } from "@/lib/hris/identity";
 import { createClientId } from "@/lib/utils/client-id";
-import type { CreateProyekDto, ProyekItemDto } from "@/lib/api/generated/api-generated";
+import type { ProyekItemDto } from "@/lib/api/generated/api-generated";
 import type { JobDraft, JobMetadataField, KategoriJob, ProjectForm, RoDraft, TerminDraft } from "@/components/proyek/project-form.types";
 
 type LookupRow = { id: string; [key: string]: unknown };
@@ -31,7 +31,7 @@ type UnitOption = LookupRow & { kode_unit?: string; nama_unit?: string; status_a
 type AccountOption = LookupRow & { nama_rekening?: string; nama_bank?: string; nomor_rekening?: string; status_aktif?: string };
 type MakOption = LookupRow & { kode_mak?: string; nama_mak?: string; tipe_akun?: string; status_aktif?: string };
 type LegacyRoDraft = RoDraft & { nomor_job?: string };
-type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; jobs?: JobDraft[]; ros?: LegacyRoDraft[]; terms: TerminDraft[]; unitPengusulId?: string; unitKolaborasiIds?: string[] };
+type ProjectLocalDraft = { id: string; savedAt: string; form: ProjectForm; jobs?: JobDraft[]; ros?: LegacyRoDraft[]; terms: TerminDraft[]; unitPengusulId?: string; unitKolaborasiIds?: string[]; orderReservation?: { id: string; nomor_order: string } };
 const DRAFTS_STORAGE_KEY = "lemigas:proyek:drafts:v1";
 const PROJECT_STATUS_FILTERS = [
   { label: "Menunggu alokasi Job/RO DPM", value: "MENUNGGU_ALOKASI_DPM" },
@@ -54,7 +54,6 @@ const normalizeUnitId = (value: unknown) =>
     .trim()
     .toLocaleLowerCase("en-US");
 const blankForm = (): ProjectForm => ({
-  nomor_order_pilt: "",
   nama_proyek: "",
   tahun_fiscal: String(currentYear),
   mulai_kontrak: "",
@@ -122,6 +121,7 @@ function responseRows<T extends LookupRow>(response: unknown): T[] {
 
 export default function ProyekClientPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [identity, setIdentity] = useState<ReturnType<typeof browserIdentity>>({ role: null, userId: "", unitKerjaId: "", token: "" });
   const currentUser = useCurrentUser({}, Boolean(identity.token));
   const [search, setSearch] = useState("");
@@ -135,11 +135,13 @@ export default function ProyekClientPage() {
   const [jobs, setJobs] = useState<JobDraft[]>([blankJob()]);
   const [unitPengusulId, setUnitPengusulId] = useState("");
   const [unitKolaborasiIds, setUnitKolaborasiIds] = useState<string[]>([]);
+  const [orderReservation, setOrderReservation] = useState<{ id: string; nomor_order: string } | null>(null);
   const [terms, setTerms] = useState<TerminDraft[]>([blankTermin("100")]);
   const [sk, setSk] = useState<File | null>(null);
   const [rab, setRab] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
   const jobNumberRequests = useRef(new Set<string>());
+  const orderNumberRequest = useRef(false);
   const [localDrafts, setLocalDrafts] = useState<ProjectLocalDraft[]>([]);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [validationProject, setValidationProject] = useState<ProyekItemDto | null>(null);
@@ -165,7 +167,25 @@ export default function ProyekClientPage() {
     }
   }
 
+  async function reserveOrderNumber() {
+    if (orderNumberRequest.current) return;
+    orderNumberRequest.current = true;
+    setFormError("");
+    try {
+      setBrowserToken();
+      const response = await requestHrisApi("/api/proyek/order-number/reserve", { method: "POST" });
+      const reservation = bodyData<{ id: string; nomor_order: string }>(response);
+      if (!reservation?.id || !reservation.nomor_order) throw new Error("Preview nomor order tidak diterima dari server.");
+      setOrderReservation(reservation);
+    } catch (error) {
+      setFormError(apiErrorMessage(error, "Preview nomor order belum dapat disiapkan."));
+    } finally {
+      orderNumberRequest.current = false;
+    }
+  }
+
   useEffect(() => {
+    setMounted(true);
     const activeIdentity = browserIdentity();
     setIdentity(activeIdentity);
     setUnitPengusulId("");
@@ -231,7 +251,7 @@ export default function ProyekClientPage() {
   const piltUnitCode = (process.env.NEXT_PUBLIC_PILT_UNIT_CODE ?? process.env.NEXT_PUBLIC_RETAIL_PILT_UNIT_CODE ?? "ORG-UMUM-HUKUM").trim().toLocaleUpperCase("id-ID");
   const activeRole = String(currentUser.data?.role ?? identity.role ?? "").toLocaleLowerCase("id-ID");
   const activeUnitCode = String(currentUser.data?.unitKerjaKode ?? currentUnit?.kode_unit ?? "").trim().toLocaleUpperCase("id-ID");
-  const canCreate = activeRole === "superadmin" || (["koordinator", "subkoor"].includes(activeRole) && activeUnitCode === piltUnitCode);
+  const canCreate = mounted && (activeRole === "superadmin" || (["koordinator", "subkoor"].includes(activeRole) && activeUnitCode === piltUnitCode));
   const serviceUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_LAYANAN ?? "").trim().toLocaleUpperCase("id-ID");
   const umumUnitCode = (process.env.NEXT_PUBLIC_UNIT_KODE_KABAG ?? "").trim().toLocaleUpperCase("id-ID");
   const isServiceValidator =
@@ -358,7 +378,7 @@ export default function ProyekClientPage() {
     );
   const contractDatesRequired = roRows.some((row) => row.detailMode === "detail");
   const contractDateRangeValid = (!form.mulai_kontrak && !form.berakhir_kontrak && !contractDatesRequired) || Boolean(form.mulai_kontrak && form.berakhir_kontrak && form.berakhir_kontrak >= form.mulai_kontrak);
-  const valid = Boolean(form.nomor_order_pilt.trim() && form.nama_client.trim() && unitPengusulId);
+  const valid = Boolean(form.nama_client.trim() && unitPengusulId && orderReservation?.id);
 
   function resetForm() {
     const initialJob = blankJob("");
@@ -366,6 +386,7 @@ export default function ProyekClientPage() {
     setJobs([initialJob]);
     setUnitPengusulId("");
     setUnitKolaborasiIds([]);
+    setOrderReservation(null);
     setTerms([blankTermin("100")]);
     setSk(null);
     setRab(null);
@@ -376,6 +397,7 @@ export default function ProyekClientPage() {
   function openNewApplication() {
     resetForm();
     setOpen(true);
+    void reserveOrderNumber();
   }
   function persistDrafts(drafts: ProjectLocalDraft[]) {
     setLocalDrafts(drafts);
@@ -408,7 +430,7 @@ export default function ProyekClientPage() {
   }
   function saveCurrentDraft() {
     if (!hasDraftContent()) return;
-    const draft: ProjectLocalDraft = { id: editingDraftId ?? createClientId(), savedAt: new Date().toISOString(), form, jobs, terms, unitPengusulId, unitKolaborasiIds };
+    const draft: ProjectLocalDraft = { id: editingDraftId ?? createClientId(), savedAt: new Date().toISOString(), form, jobs, terms, unitPengusulId, unitKolaborasiIds, orderReservation: orderReservation ?? undefined };
     persistDrafts([draft, ...localDrafts.filter((item) => item.id !== draft.id)]);
     setEditingDraftId(draft.id);
     setFormError("");
@@ -434,6 +456,7 @@ export default function ProyekClientPage() {
     const savedLeadId = draft.unitPengusulId ?? identity.unitKerjaId;
     setUnitPengusulId(savedLeadId);
     setUnitKolaborasiIds(draft.unitKolaborasiIds ?? []);
+    setOrderReservation(draft.orderReservation ?? null);
     setJobs(restoreJobDrafts(draft, savedLeadId));
     setTerms(draft.terms);
     setEditingDraftId(draft.id);
@@ -441,6 +464,7 @@ export default function ProyekClientPage() {
     setSk(null);
     setRab(null);
     setOpen(true);
+    if (!draft.orderReservation) void reserveOrderNumber();
   }
   function deleteDraft(id: string) {
     persistDrafts(localDrafts.filter((draft) => draft.id !== id));
@@ -558,25 +582,23 @@ export default function ProyekClientPage() {
   async function submit() {
     if (!valid || create.isPending) {
       setFormError(
-        !form.nomor_order_pilt.trim()
-          ? "Nomor Job PILT wajib diisi."
-          : !form.nama_client.trim()
+        !form.nama_client.trim()
             ? "Nama klien wajib diisi."
-            : "Pilih DPM utama proyek.",
+            : !unitPengusulId
+              ? "Pilih DPM utama proyek."
+              : "Nomor order sedang disiapkan. Tunggu sebentar lalu coba lagi.",
       );
       return;
     }
     setFormError("");
     try {
       const payload: Record<string, unknown> = {
-        nomor_order_pilt: form.nomor_order_pilt.trim(),
         nama_client: form.nama_client.trim(),
         unit_pengusul_id: normalizeUnitId(unitPengusulId),
-        unit_kolaborasi_ids: unitKolaborasiIds.map(normalizeUnitId),
+        nomor_order_reservasi_id: orderReservation!.id,
       };
       const response = await create.mutateAsync(payload);
-      const project = unwrapEnvelope<ProyekItemDto>(response).data;
-      if (!project?.id) throw new Error("Proyek tersimpan, tetapi ID proyek tidak diterima.");
+      const project = bodyData<ProyekItemDto>(response);
 
       const draftId = editingDraftId;
       if (draftId) {
@@ -584,7 +606,8 @@ export default function ProyekClientPage() {
       }
       setOpen(false);
       resetForm();
-      router.push(`/dashboard/proyek/${project.id}`);
+      if (project?.id) router.push(`/dashboard/proyek/${project.id}`);
+      else await list.refetch();
     } catch (error) {
       setFormError(apiErrorMessage(error, "Gagal mengajukan proyek."));
     }
@@ -656,10 +679,10 @@ export default function ProyekClientPage() {
                   render: (row: ProyekItemDto) => (
                     <div className="space-y-1">
                       {(row as ProyekItemDto & { nomor_order_pilt?: string | null }).nomor_order_pilt && (
-                        <p className="text-xs text-muted-foreground">Job PILT · {(row as ProyekItemDto & { nomor_order_pilt?: string | null }).nomor_order_pilt}</p>
+                        <p className="text-xs text-muted-foreground">Nomor order · {(row as ProyekItemDto & { nomor_order_pilt?: string | null }).nomor_order_pilt}</p>
                       )}
-                      <p className="font-medium">{String(row.no_kontrak ?? "")}</p>
-                      <p className="text-xs text-muted-foreground">{row.nama_proyek}</p>
+                      <p className="font-medium">{row.no_kontrak ? String(row.no_kontrak) : "Kontrak menunggu DPM utama"}</p>
+                      <p className="text-xs text-muted-foreground">{row.nama_proyek || "Nama proyek menunggu DPM utama"}</p>
                       {row.unit_terlibat?.length ? (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {row.unit_terlibat.map((unit) => (
@@ -922,6 +945,7 @@ export default function ProyekClientPage() {
         open={open}
         closeModal={closeApplicationModal}
         piltInitiation
+        nomorOrderPreview={orderReservation?.nomor_order}
         form={form}
         setForm={setForm}
         contractDatesRequired={contractDatesRequired}
